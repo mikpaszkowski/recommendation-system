@@ -1,0 +1,35 @@
+INFO - Total unique users: 1641026
+INFO - Average ratings per user: 7.4
+INFO - Median ratings per user: 5.0
+INFO -
+INFO - User AEIIRIHLIYKQGI7ZOCIJTRDF5NPQ: 936 ratings
+INFO - User AHMNA5UK3V66O2V3DZSBJA4FYMOA: 850 ratings
+INFO - User AHSV5AUFONH7QMMUPF7M6FUJRJ6Q_1: 748 ratings
+INFO - User AECTQQX663PTF5UQ2RA5TUL3BXVQ: 690 ratings
+INFO - User AFTZWAK3ZHAPCNSOT5GCKQDECBTQ: 627 ratings
+INFO - User AG73BVBKUOH22USSFJA5ZWL7AKXA: 540 ratings
+INFO - User AHPJHWUFX7DFIVS5B3XNEK7JLSAQ: 529 ratings
+INFO - User AGZZXSMMS4WRHHJRBUJZI4FZDHKQ: 514 ratings
+INFO - User AH37PMZUFFA52Z3KSD4KLUPJTJGA_1: 505 ratings
+INFO - User AG375WAXLZ7PIOQKIQ6KQB4J3JVQ: 500 ratings
+INFO -
+INFO - Total unique products: 367052
+INFO - Average ratings per product: 33.2
+INFO - Median ratings per product: 10.0
+INFO -
+INFO - Product B075X8471B: 38518 ratings
+INFO - Product B01K8B8YA8: 33582 ratings
+INFO - Product B07GZFM1ZM: 25713 ratings
+INFO - Product B010BWYDYA: 23440 ratings
+INFO - Product B07S764D9V: 18575 ratings
+INFO - Product B011BRUOMO: 15172 ratings
+INFO - Product B0791TX5P5: 15115 ratings
+INFO - Product B07H65KP63: 14353 ratings
+INFO - Product B07KTYJ769: 11934 ratings
+INFO - Product B083TH1B45: 11866 ratings
+INFO -
+INFO - Rating 1.0: 931850 ratings (7.6%)
+INFO - Rating 2.0: 543435 ratings (4.5%)
+INFO - Rating 3.0: 849540 ratings (7.0%)
+INFO - Rating 4.0: 1803339 ratings (14.8%)
+INFO - Rating 5.0: 8063320 ratings (66.1%)
