@@ -182,10 +182,15 @@ class AmazonDataProcessor:
         # Handle details
         details = metadata.get('details', {})
         if details and isinstance(details, dict):
-            # Extract most relevant details
-            for key in ['Brand', 'Material', 'Color', 'Size', 'Style']:
-                if key in details:
-                    processed[f'detail_{key.lower()}'] = details[key]
+            # Extract all details and add them as detail_{key} fields
+            for key, value in details.items():
+                # Skip if value is a dictionary or list
+                if isinstance(value, (dict, list)):
+                    continue
+                # Convert key to lowercase and remove any special characters
+                clean_key = '_'.join(key.lower().split())
+                if clean_key and clean_key != '_':  # Only add if we have a valid key
+                    processed[f'detail_{clean_key}'] = value
         
         # Generate combined text for recommendation engine
         processed['metadata_text'] = self._extract_metadata_text(metadata)
@@ -427,7 +432,7 @@ class AmazonDataProcessor:
                     self.metadata_weight, 
                     self.reviews_weight
                 )
-                
+                print(combined_text)
                 product_texts[asin] = combined_text
         
         # Create combined DataFrame
@@ -441,6 +446,7 @@ class AmazonDataProcessor:
                 'average_rating': metadata_row.get('average_rating', 0.0),
                 'price': metadata_row.get('price', 0.0),
                 'review_count': self.reviews_df[self.reviews_df['asin'] == asin].shape[0],
+                'store': metadata_row.get('store', ''),
                 'combined_text': combined_text
             })
         
@@ -509,6 +515,16 @@ class AmazonDataProcessor:
                                    if k in relevant_keys and v])
             if details_text:
                 text_parts.append(details_text)
+                
+        if details and isinstance(details, dict):
+            # Extract all details and add them as detail_{key} fields
+            for key, value in details.items():
+                # Skip if value is a dictionary or list
+                if isinstance(value, (dict, list)):
+                    continue
+                # Convert key to lowercase and remove any special characters
+                if key and key != '':  # Only add if we have a valid key
+                    text_parts.append(f'{key}: {value}')
         
         return ' '.join(text_parts)
     
@@ -616,8 +632,15 @@ class AmazonDataProcessor:
             logger.warning("No combined product data available")
             return {}, [], {}
         
-        # Convert DataFrame to dictionary format
+        # Convert DataFrame to dictionary format and print sample
         product_texts = dict(zip(self.combined_product_df['asin'], self.combined_product_df['combined_text']))
+        
+        # Print sample of combined text for first 2 products
+        logger.info("Sample of combined text for first 2 products:")
+        for i, (asin, text) in enumerate(list(product_texts.items())[:2]):
+            logger.info(f"\nProduct {i+1} (ASIN: {asin}):")
+            logger.info(f"Combined text sample (first 200 chars): {text[:200]}...")
+        
         product_asins = self.combined_product_df['asin'].tolist()
         
         # Create item details dictionary
@@ -630,8 +653,13 @@ class AmazonDataProcessor:
                 'average_rating': row.get('average_rating', 0.0),
                 'price': row.get('price', 0.0),
                 'review_count': row.get('review_count', 0),
-                # Add any other relevant fields
+                'store': row.get('store', ''),
+                'combined_text': row.get('combined_text', ''),
             }
+            # Add any detail fields from row
+            for col in row.index:
+                if col.startswith('detail_'):
+                    item_details[asin][col] = row[col]
             
             # Add reviews if available
             if self.reviews_df is not None:
@@ -859,38 +887,51 @@ def load_processed_data_for_recommender(
     return processor.get_processed_data()
 
 
-# Example usage with HybridContentRecommender
-def example_usage():
-    from hybrid_content_recommender import HybridContentRecommender
+def print_sample_data(file_path: str, num_samples: int = 5, data_type: str = 'metadata') -> None:
+    """
+    Print sample records from metadata or reviews JSONL file to inspect the data structure.
     
-    # Define file paths
-    metadata_file = "path/to/amazon_metadata.json"
-    reviews_file = "path/to/amazon_reviews.json"
-    output_dir = "processed_data"
+    Args:
+        file_path: Path to the JSONL file
+        num_samples: Number of sample records to print
+        data_type: Type of data ('metadata' or 'reviews')
+    """
+    logger.info(f"Printing {num_samples} sample records from {data_type} file")
     
-    # Process Amazon data
-    product_texts, product_asins, item_details = process_and_save_data(
-        metadata_file=metadata_file,
-        reviews_file=reviews_file,
-        output_dir=output_dir,
-        max_reviews_per_item=20,
-        min_reviews_per_item=5,
-        min_reviews_per_user=2
-    )
-    
-    # Initialize recommender
-    recommender = HybridContentRecommender()
-    
-    # Instead of calling load_reviews_jsonl, inject the processed data
-    recommender.product_texts = product_texts
-    recommender.product_asins = product_asins
-    
-    # Build matrices with the processed data
-    recommender._build_tfidf_matrix()
-    recommender._build_sbert_embeddings()
-    
-    # Now the recommender is ready for use
-    return recommender
+    try:
+        samples = []
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for i, line in enumerate(f):
+                if i >= num_samples:
+                    break
+                try:
+                    record = json.loads(line.strip())
+                    samples.append(record)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Could not parse line {i}: {e}")
+                    continue
+        
+        print(f"\n{'='*80}\nSample {data_type} records:\n{'='*80}")
+        
+        for i, record in enumerate(samples, 1):
+            print(f"\nRecord {i}:")
+            print(json.dumps(record, indent=2))
+            print(f"\nKeys found in record {i}:")
+            print(f"{'='*40}")
+            for key, value in record.items():
+                value_type = type(value).__name__
+                if isinstance(value, (list, dict)):
+                    value_len = len(value)
+                    print(f"- {key}: {value_type} with length {value_len}")
+                else:
+                    print(f"- {key}: {value_type}")
+            print(f"{'='*40}\n")
+            
+    except FileNotFoundError:
+        logger.error(f"File not found: {file_path}")
+    except Exception as e:
+        logger.error(f"Error reading file: {e}")
+
 
 
 if __name__ == "__main__":
@@ -909,6 +950,9 @@ if __name__ == "__main__":
         'processed_reviews.csv', 
         'combined_product_data.csv'
     ])
+    
+    print_sample_data(metadata_file, num_samples=5, data_type='metadata')
+    print_sample_data(reviews_file, num_samples=5, data_type='reviews')
     
     if csv_files_exist:
         print("Found existing processed data. Loading from CSV files...")

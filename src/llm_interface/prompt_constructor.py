@@ -1,4 +1,5 @@
 from typing import Dict, List, Any, Optional
+from langchain.schema import HumanMessage, SystemMessage, BaseMessage
 import json
 
 class PromptConstructor:
@@ -35,7 +36,7 @@ Follow these steps when responding to users:
                                       user_query: str,
                                       user_profile: Optional[Dict[str, Any]] = None,
                                       conversation_history: Optional[List[Dict[str, str]]] = None,
-                                      retrieved_items: Optional[List[Dict[str, Any]]] = None) -> str:
+                                      retrieved_items: Optional[List[Dict[str, Any]]] = None) -> List[BaseMessage]:
         """
         Construct a prompt for generating recommendations.
         
@@ -46,12 +47,10 @@ Follow these steps when responding to users:
             retrieved_items: Optional list of retrieved items
             
         Returns:
-            Constructed prompt
+            List of LangChain message objects ready for the LLM
         """
+        # Construct the human message content
         prompt_parts = []
-        
-        # Add system instruction
-        prompt_parts.append(f"[SYSTEM]\n{self.system_instruction}\n")
         
         # Add user profile if available
         if user_profile:
@@ -74,7 +73,14 @@ Follow these steps when responding to users:
         # Add current user query
         prompt_parts.append(f"[CURRENT USER REQUEST]\n{user_query}\n")
         
-        return "\n".join(prompt_parts)
+        # Combine all parts
+        human_message_content = "\n".join(prompt_parts)
+        
+        # Return as a list of LangChain message objects
+        return [
+            SystemMessage(content=self.system_instruction),
+            HumanMessage(content=human_message_content)
+        ]
     
     def _format_user_profile(self, user_profile: Dict[str, Any]) -> str:
         """
@@ -138,14 +144,15 @@ Follow these steps when responding to users:
         items_parts = []
         
         for i, item in enumerate(retrieved_items, 1):
+            details = item['details']
             items_parts.append(f"Item {i}:")
-            items_parts.append(f"- Title: {item.get('product_title', 'Unknown')}")
-            items_parts.append(f"- Category: {item.get('category', 'Unknown')}")
-            items_parts.append(f"- Brand: {item.get('brand', 'Unknown')}")
-            items_parts.append(f"- Price: ${item.get('price', 'Unknown')}")
-            items_parts.append(f"- Rating: {item.get('rating', 'Unknown')}/5.0")
-            items_parts.append(f"- Features: {item.get('features', 'None specified')}")
-            items_parts.append(f"- Match score: {item.get('score', 0):.2f}")
+            items_parts.append(f"- Title: {details.get('title', 'Unknown')}")
+            items_parts.append(f"- Category: {details.get('main_category', 'Unknown')}")
+            items_parts.append(f"- Brand: {details.get('store') or details.get('detail_brand') or details.get('detail_manufacturer', 'Unknown')}")
+            items_parts.append(f"- Price: ${details.get('price', 'Unknown')}")
+            items_parts.append(f"- Rating: {details.get('rating', 'Unknown')}/5.0")
+            items_parts.append(f"- Features: {details.get('features', 'None specified')}")
+            items_parts.append(f"- Match score: {details.get('score', 0):.2f}")
             items_parts.append("")
         
         return "\n".join(items_parts)
@@ -184,7 +191,7 @@ Follow these steps to recommend:
     def construct_explanation_prompt(self,
                                    user_id: str,
                                    item: Dict[str, Any],
-                                   user_profile: Optional[Dict[str, Any]] = None) -> str:
+                                   user_profile: Optional[Dict[str, Any]] = None) -> List[BaseMessage]:
         """
         Construct a prompt for generating an explanation for a recommendation.
         
@@ -194,12 +201,9 @@ Follow these steps to recommend:
             user_profile: Optional user profile information
             
         Returns:
-            Constructed prompt
+            List of LangChain message objects
         """
         prompt_parts = []
-        
-        # Add system instruction
-        prompt_parts.append(f"[SYSTEM]\nYou are a helpful recommendation assistant. Your task is to explain why a specific item was recommended to a user in a natural, conversational way.\n")
         
         # Add user profile if available
         if user_profile:
@@ -213,7 +217,14 @@ Follow these steps to recommend:
         # Add explanation instruction
         prompt_parts.append(f"[TASK]\nExplain why this item was recommended to the user. Focus on matching the item's features with the user's preferences. Make the explanation conversational and helpful.\n")
         
-        return "\n".join(prompt_parts)
+        # Combine all parts
+        human_message_content = "\n".join(prompt_parts)
+        
+        # Return as a list of LangChain message objects
+        return [
+            SystemMessage(content="You are a helpful recommendation assistant. Your task is to explain why a specific item was recommended to a user in a natural, conversational way."),
+            HumanMessage(content=human_message_content)
+        ]
     
     def _format_item_for_explanation(self, item: Dict[str, Any]) -> str:
         """

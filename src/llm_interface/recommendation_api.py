@@ -1,9 +1,14 @@
+import logging
 from typing import Dict, List, Any, Optional, Union
 import json
 
 from src.recommendation_engine.base import BaseRecommender
 from src.llm_interface.preference_parser import PreferenceParser
 from src.llm_interface.prompt_constructor import PromptConstructor
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 
 class RecommendationAPI:
     """
@@ -64,7 +69,8 @@ class RecommendationAPI:
         recommendations = self.recommender.recommend(
             user_id=user_id,
             user_preferences=formatted_preferences,
-            num_recommendations=num_recommendations
+            num_recommendations=num_recommendations,
+            query_text=query
         )
         
         
@@ -174,6 +180,7 @@ class RecommendationAPI:
         turn = {"user": user_message}
         if assistant_message:
             turn["assistant"] = assistant_message
+            logger.info(f"Updated conversation history: {self.conversation_history}")
             
         self.conversation_history[user_id].append(turn)
         

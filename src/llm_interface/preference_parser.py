@@ -1,6 +1,10 @@
+import logging
 from typing import Dict, Any, List, Optional
 import re
 import json
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class PreferenceParser:
     """
@@ -83,6 +87,7 @@ class PreferenceParser:
                         preferences[pref_type] = matches[0]
                     break
         
+        logger.info(f"Extracted preferences: {preferences}")
         return preferences
     
     def format_for_recommender(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,4 +124,5 @@ class PreferenceParser:
                 # Pass through other preference types
                 formatted[pref_type] = value
                 
+        logger.info(f"Formatted preferences: {formatted}")
         return formatted 
