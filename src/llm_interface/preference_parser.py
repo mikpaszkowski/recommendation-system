@@ -3,10 +3,12 @@ from typing import Dict, Any, List, Optional
 import re
 import json
 
+from src.llm_interface.abstract_preference_parser import PreferenceParserInterface
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class PreferenceParser:
+class PreferenceParser(PreferenceParserInterface):
     """
     Extracts structured preferences from natural language user inputs.
     """

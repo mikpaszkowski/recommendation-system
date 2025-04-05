@@ -2,7 +2,9 @@ from typing import Dict, List, Any, Optional
 from langchain.schema import HumanMessage, SystemMessage, BaseMessage
 import json
 
-class PromptConstructor:
+from src.llm_interface.abstract_prompt_constructor import PromptConstructorInterface
+
+class PromptConstructor(PromptConstructorInterface):
     """
     Constructs prompts for LLM integration with the recommendation system.
     """

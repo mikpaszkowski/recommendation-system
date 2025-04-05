@@ -4,11 +4,13 @@ from typing import Dict, Any, Optional, List, Union
 import os
 import logging
 
+from src.llm.abstract_llm_handler import LLMHandlerInterface
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class SimpleLLMHandler:
+class SimpleLLMHandler(LLMHandlerInterface):
     """
     A simple class to handle interactions with LLMs.
     This class only handles submitting messages to the LLM and returning responses,
@@ -48,8 +50,8 @@ class SimpleLLMHandler:
             Response from the LLM as a string
         """
         try:
-            # Get response from LLM
-            response = self.llm(messages)
+            # Use invoke() instead of direct call
+            response = self.llm.invoke(messages)
             return response.content
             
         except Exception as e:

@@ -12,7 +12,7 @@ import os
 from sklearn.model_selection import train_test_split as sklearn_train_test_split
 
 from src.recommendation_engine.base import BaseRecommender
-from .abstract_recommender_data_loader import AbstractRecommenderDataLoader
+from ..utils.abstract_recommender_data_loader import AbstractRecommenderDataLoader
 from surprise import Dataset, Reader
 from surprise import KNNWithMeans
 from surprise import accuracy

@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple, Optional, Union, Any
 import logging
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from src.recommendation_engine.recommenders.abstract_recommender_data_loader import AbstractRecommenderDataLoader
+from src.recommendation_engine.utils.abstract_recommender_data_loader import AbstractRecommenderDataLoader
 import torch
 from sentence_transformers import SentenceTransformer
 import pickle

@@ -2,9 +2,11 @@ import logging
 from typing import Dict, List, Any, Optional, Union
 import json
 
+from src.conversation.abstract_history_manager import AbstractHistoryManager
 from src.recommendation_engine.base import BaseRecommender
 from src.llm_interface.preference_parser import PreferenceParser
 from src.llm_interface.prompt_constructor import PromptConstructor
+from src.user.abstract_profile_manager import AbstractProfileManager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -19,7 +21,9 @@ class RecommendationAPI:
     def __init__(self, 
                 recommender: BaseRecommender,
                 preference_parser: Optional[PreferenceParser] = None,
-                prompt_constructor: Optional[PromptConstructor] = None):
+                prompt_constructor: Optional[PromptConstructor] = None,
+                profile_manager: Optional[AbstractProfileManager] = None,
+                history_manager: Optional[AbstractHistoryManager] = None):
         """
         Initialize the recommendation API.
         
