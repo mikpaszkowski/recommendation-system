@@ -1,3 +1,4 @@
+import json
 from langchain_community.chat_models import ChatOpenAI
 from langchain.schema import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from typing import Dict, Any, Optional, List, Union
@@ -88,3 +89,81 @@ class SimpleLLMHandler(LLMHandlerInterface):
         except Exception as e:
             logger.error(f"Error querying LLM with raw messages: {str(e)}")
             return f"Error: {str(e)}" 
+        
+    def extract_preferences(self, user_query: str) -> Dict:
+        """
+        Extract structured preferences from a user query using the LLM.
+        
+        Args:
+            user_query: Natural language query from user
+            
+        Returns:
+            Dictionary containing extracted preferences in standardized format
+        """
+        try:
+            # System prompt to structure the output
+            system_prompt = """Extract product preferences from the user query and return them in this JSON format:
+            {
+                "category": string or null,  # High level category like "Electronics", "Clothing" etc
+                "product_type": string or null,  # Specific product type like "Laptop", "Headphones" etc
+                "constraints": {
+                    "maxPrice": number or null,
+                    "minPrice": number or null
+                },
+                "use_case": string or null,  # The intended use or purpose
+                "attributes": {  # Key product attributes/features
+                    "key1": {
+                        "value": string,
+                        "importance": "must-have" | "nice-to-have" | "flexible"
+                    }
+                }
+            }
+            
+            Extract only what is explicitly mentioned or clearly implied. Use null for missing values.
+            """
+            
+            # Format messages
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_query)
+            ]
+            
+            # Get structured response
+            response = self.query(messages)
+            
+            # Parse JSON response
+            preferences = json.loads(response)
+            
+            # Validate basic structure
+            required_keys = ['category', 'product_type', 'constraints', 'use_case', 'attributes']
+            for key in required_keys:
+                if key not in preferences:
+                    preferences[key] = None
+                    
+            if 'constraints' in preferences and preferences['constraints']:
+                if 'maxPrice' not in preferences['constraints']:
+                    preferences['constraints']['maxPrice'] = None
+                if 'minPrice' not in preferences['constraints']:
+                    preferences['constraints']['minPrice'] = None
+            
+            return preferences
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing LLM response as JSON: {str(e)}")
+            return {
+                "category": None,
+                "product_type": None, 
+                "constraints": {"maxPrice": None, "minPrice": None},
+                "use_case": None,
+                "attributes": {}
+            }
+            
+        except Exception as e:
+            logger.error(f"Error extracting preferences: {str(e)}")
+            return {
+                "category": None,
+                "product_type": None,
+                "constraints": {"maxPrice": None, "minPrice": None}, 
+                "use_case": None,
+                "attributes": {}
+            }

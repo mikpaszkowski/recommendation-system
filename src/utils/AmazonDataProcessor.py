@@ -2,6 +2,7 @@ import json
 import os
 import logging
 import time
+import random
 from typing import Dict, List, Optional, Set, Tuple, Any
 from collections import defaultdict, Counter
 import pandas as pd
@@ -13,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATASET_DIR = PROJECT_ROOT / "datasets"
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class AmazonDataProcessor:
@@ -54,6 +55,14 @@ class AmazonDataProcessor:
         self.metadata_df = None
         self.reviews_df = None
         self.combined_product_df = None
+        
+        # Initialize error tracking
+        self.errors = {
+            'review_json': 0,
+            'review_processing': 0,
+            'metadata_json': 0,
+            'metadata_processing': 0
+        }
     
     def process_metadata_file(self, metadata_path: str, chunksize: int = 10000, frac: float = 1.0) -> None:
         """
@@ -175,22 +184,22 @@ class AmazonDataProcessor:
         }
         
         # Handle complex fields
-        processed['description_text'] = ' '.join(metadata.get('description', [])) if isinstance(metadata.get('description', []), list) else str(metadata.get('description', ''))
-        processed['features_text'] = ' '.join(metadata.get('features', [])) if isinstance(metadata.get('features', []), list) else str(metadata.get('features', ''))
-        processed['categories_text'] = ' '.join(metadata.get('categories', [])) if isinstance(metadata.get('categories', []), list) else str(metadata.get('categories', ''))
+        processed['description_text'] = ' | '.join(metadata.get('description', [])) if isinstance(metadata.get('description', []), list) else str(metadata.get('description', ''))
+        processed['features_text'] = ' | '.join(metadata.get('features', [])) if isinstance(metadata.get('features', []), list) else str(metadata.get('features', ''))
+        processed['categories_text'] = ' | '.join(metadata.get('categories', [])) if isinstance(metadata.get('categories', []), list) else str(metadata.get('categories', ''))
         
         # Handle details
-        details = metadata.get('details', {})
-        if details and isinstance(details, dict):
-            # Extract all details and add them as detail_{key} fields
-            for key, value in details.items():
-                # Skip if value is a dictionary or list
-                if isinstance(value, (dict, list)):
-                    continue
-                # Convert key to lowercase and remove any special characters
-                clean_key = '_'.join(key.lower().split())
-                if clean_key and clean_key != '_':  # Only add if we have a valid key
-                    processed[f'detail_{clean_key}'] = value
+        # details = metadata.get('details', {})
+        # if details and isinstance(details, dict):
+        #     # Extract all details and add them as detail_{key} fields
+        #     for key, value in details.items():
+        #         # Skip if value is a dictionary or list
+        #         if isinstance(value, (dict, list)):
+        #             continue
+        #         # Convert key to lowercase and remove any special characters
+        #         clean_key = '_'.join(key.lower().split())
+        #         if clean_key and clean_key != '_':  # Only add if we have a valid key
+        #             processed[f'detail_{clean_key}'] = value
         
         # Generate combined text for recommendation engine
         processed['metadata_text'] = self._extract_metadata_text(metadata)
@@ -814,6 +823,182 @@ class AmazonDataProcessor:
                     self.reviews_df['asin'] = self.reviews_df[alt]
                     break
 
+    def process_reviews_for_products(self, reviews_path: str, product_asins: Set[str], chunksize: int = 10000) -> None:
+        """
+        Process reviews file and extract only reviews for specified products.
+        Uses set-based lookups for optimal performance (O(1) complexity).
+        
+        Args:
+            reviews_path: Path to the reviews file (JSONL)
+            product_asins: Set of product ASINs to include reviews for
+            chunksize: Number of reviews to process in each chunk for progress reporting
+        """
+        logging.info(f"Processing reviews from {reviews_path} for {len(product_asins)} specific products")
+        
+        # Clear any existing reviews data before we start
+        self.reviews = {}
+        self.user_reviews = {}
+        
+        # Initialize counters for tracking progress
+        total_lines = self._count_lines(reviews_path)
+        processed_lines = 0
+        matching_reviews = 0
+        
+        # Ensure product_asins is a set for O(1) lookups
+        if not isinstance(product_asins, set):
+            product_asins = set(product_asins)
+            logging.info(f"Converted product_asins to a set with {len(product_asins)} items")
+        
+        # Initialize review containers for filtered products
+        for asin in product_asins:
+            self.reviews[asin] = []
+        
+        # Process the reviews file line by line
+        with open(reviews_path, 'r') as f:
+            for line in f:
+                # Update progress periodically
+                processed_lines += 1
+                if processed_lines % chunksize == 0:
+                    logging.info(f"Processed {processed_lines:,}/{total_lines:,} reviews " 
+                                f"({processed_lines/total_lines:.1%}), found {matching_reviews:,} matching reviews")
+                
+                # Parse the review JSON
+                try:
+                    review = json.loads(line.strip())
+                except json.JSONDecodeError:
+                    self.errors['review_json'] = self.errors.get('review_json', 0) + 1
+                    continue
+                
+                
+                asin = review.get('asin')
+                if not asin:
+                    logger.warning(f"Skipping review with no ASIN")
+                    continue
+                user_id = review.get('user_id')
+                if not user_id:
+                    logger.warning(f"Skipping review with no user ID")
+                    continue 
+                
+                # Check if this review is for one of our target products - O(1) lookup
+                product_id = review.get('asin')
+                if not product_id or product_id not in product_asins:
+                    continue
+                
+                # Process the review since it matches our target products
+                try:
+                    # Process review record
+                    processed_review = {
+                        'user_id': review.get('user_id', ''),
+                        'asin': review.get('asin', ''),
+                        'rating': review.get('rating', 0),
+                        'helpful_votes': review.get('helpful_votes', 0),
+                        'verified_purchase': review.get('verified_purchase', False),
+                        'title': review.get('title', ''),
+                        'text': review.get('text', ''),
+                        'parent_asin': review.get('parent_asin', ''),
+                        'sort_timestamp': review.get('sort_timestamp', 0)
+                    }
+                    if processed_review:
+                        matching_reviews += 1
+                        
+                        # Add to product reviews
+                        asin = processed_review['asin']
+                        self.reviews[asin].append(processed_review)
+                        
+                        # Add to user reviews dictionary
+                        user_id = processed_review['user_id']
+                        if user_id not in self.user_reviews:
+                            self.user_reviews[user_id] = []
+                        self.user_reviews[user_id].append(processed_review)
+                except Exception as e:
+                    self.errors['review_processing'] = self.errors.get('review_processing', 0) + 1
+                    logging.error(f"Error processing review: {str(e)}")
+                    continue
+        
+        # Log summary statistics
+        products_with_reviews = sum(1 for asin, reviews in self.reviews.items() if reviews)
+        num_users = len(self.user_reviews)
+        total_reviews = matching_reviews
+        
+        # Convert user_reviews dictionary to array of reviews
+        all_reviews = []
+        for user_reviews in self.user_reviews.values():
+            all_reviews.extend(user_reviews)
+            
+        # Convert array to DataFrame
+        self.reviews_df = pd.DataFrame(all_reviews)
+        
+        logging.info(f"Review processing complete:")
+        logging.info(f"- Found {total_reviews:,} reviews for {products_with_reviews:,}/{len(product_asins):,} products")
+        if products_with_reviews > 0:
+            logging.info(f"- Average {total_reviews / products_with_reviews:.1f} reviews per product with reviews")
+        
+        if num_users > 0:
+            logging.info(f"- {num_users:,} users contributed reviews, average {total_reviews / num_users:.1f} reviews per user")
+        
+        # Report any errors
+        if self.errors:
+            for error_type, count in self.errors.items():
+                if error_type.startswith('review_') and count > 0:
+                    logging.warning(f"- {count:,} {error_type} errors encountered")
+
+    def process_complete_product_data(self, metadata_path: str, reviews_path: str, output_dir: str, 
+                                     metadata_sample_frac: float = 0.1) -> Tuple[Dict[str, str], List[str], Dict[str, Dict[str, Any]]]:
+        """
+        Process a complete dataset by first sampling metadata, then collecting ALL reviews
+        for the selected products (without sampling reviews).
+        
+        Uses set-based operations for optimal performance.
+        
+        Args:
+            metadata_path: Path to the metadata file (JSONL)
+            reviews_path: Path to the reviews file (JSONL)
+            output_dir: Directory to save processed data
+            metadata_sample_frac: Fraction of metadata to sample (default 0.1)
+            
+        Returns:
+            Tuple of (product_texts, product_asins, item_details)
+        """
+        logging.info(f"Starting complete product data processing...")
+        
+        # Step 1: Process a sample of metadata to determine products to include
+        logging.info(f"Processing metadata with sampling fraction: {metadata_sample_frac}")
+        self.process_metadata_file(metadata_path, frac=metadata_sample_frac)
+        
+        # Get the set of ASINs from the sampled metadata (immediately as a set for O(1) lookups)
+        product_asins = set(self.metadata_df['asin'])
+        logging.info(f"Selected {len(product_asins)} products from metadata sampling")
+        
+        # Step 2: Process only reviews for the selected products using our optimized method
+        logging.info(f"Processing ALL reviews for the selected products...")
+        # Use the new optimized method that uses sets for O(1) lookups
+        self.process_reviews_for_products(reviews_path, product_asins)
+        
+        # Step 3: Apply filtering to ensure quality thresholds
+        logging.info(f"Filtering reviews and products...")
+        self._filter_reviews()
+        
+        # # Step 4: Combine product data
+        # logging.info(f"Combining metadata and reviews...")
+        # self.combine_product_data()
+        
+        # Step 5: Save processed data
+        logging.info(f"Saving processed data to {output_dir}...")
+        self.save_to_csv(output_dir)
+        
+        # Report final statistics
+        final_products = len(self.combined_product_df)
+        final_reviews = sum(len(reviews) for reviews in self.reviews.values())
+        
+        logging.info(f"Processing complete. Final dataset contains:")
+        logging.info(f"- {final_products:,} products")
+        logging.info(f"- {final_reviews:,} reviews")
+        if final_products > 0:
+            logging.info(f"- {final_reviews / final_products:.1f} reviews per product on average")
+        
+        # Return the processed data
+        return self.get_processed_data()
+
 
 # Function to integrate with HybridContentRecommender
 def process_and_save_data(
@@ -932,47 +1117,231 @@ def print_sample_data(file_path: str, num_samples: int = 5, data_type: str = 'me
     except Exception as e:
         logger.error(f"Error reading file: {e}")
 
+def analyze_processed_data(metadata_path: str, reviews_path: str) -> None:
+    """
+    Analyze processed metadata and reviews CSV files to generate insights and visualizations.
+    
+    Args:
+        metadata_path: Path to processed metadata CSV file
+        reviews_path: Path to processed reviews CSV file
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        # Read the CSV files
+        logger.info("Reading processed CSV files...")
+        metadata_df = pd.read_csv(metadata_path)
+        reviews_df = pd.read_csv(reviews_path)
+        
+        # Create figure with subplots
+        plt.figure(figsize=(15, 5))
+        
+        # 1. Rating Distribution
+        plt.subplot(1, 2, 1)
+        rating_counts = reviews_df['rating'].value_counts().sort_index()
+        sns.barplot(x=rating_counts.index, y=rating_counts.values)
+        plt.title('Distribution of Review Ratings')
+        plt.xlabel('Rating')
+        plt.ylabel('Number of Reviews')
+        
+        # Add count labels on top of bars
+        for i, count in enumerate(rating_counts.values):
+            plt.text(i, count, f'{count:,}', ha='center', va='bottom')
+            
+        # 2. Average Rating Distribution
+        plt.subplot(1, 2, 2)
+        avg_ratings = metadata_df['average_rating'].dropna()
+        sns.histplot(data=avg_ratings, bins=20)
+        plt.title('Distribution of Average Product Ratings')
+        plt.xlabel('Average Rating')
+        plt.ylabel('Number of Products')
+        
+        # Adjust layout and display
+        plt.tight_layout()
+        
+        # Save the plot
+        output_dir = Path("analysis_output")
+        output_dir.mkdir(exist_ok=True)
+        plt.savefig(output_dir / 'rating_analysis.png')
+        
+        # Print summary statistics
+        logger.info("\nSummary Statistics:")
+        logger.info(f"Total number of reviews: {len(reviews_df):,}")
+        logger.info(f"Total number of products: {len(metadata_df):,}")
+        logger.info("\nRating distribution:")
+        for rating in sorted(rating_counts.index):
+            percentage = (rating_counts[rating] / len(reviews_df)) * 100
+            logger.info(f"Rating {rating}: {rating_counts[rating]:,} reviews ({percentage:.1f}%)")
+        
+        logger.info(f"\nAverage product rating: {avg_ratings.mean():.2f}")
+        logger.info(f"Median product rating: {avg_ratings.median():.2f}")
+        
+    except ImportError as e:
+        logger.error(f"Required plotting libraries not found: {e}")
+        logger.error("Please install matplotlib and seaborn to generate visualizations")
+    except Exception as e:
+        logger.error(f"Error analyzing data: {e}")
+        
+def analyze_category_distribution(metadata_path: str) -> None:
+    """
+    Analyze and visualize the distribution of product categories in the metadata.
+    Shows the top 15 most common categories.
+
+    Args:
+        metadata_path: Path to the processed metadata CSV file
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import seaborn as sns   
+        
+        # Read metadata
+        logger.info("Reading metadata file for category analysis...")
+        metadata_df = pd.read_csv(metadata_path)
+        
+        if 'main_category' not in metadata_df.columns:
+            logger.error("No 'main_category' column found in metadata")
+            return
+            
+        # Get category counts
+        category_counts = metadata_df['main_category'].value_counts()
+        top_15_categories = category_counts.head(15)
+        
+        # Create figure
+        plt.figure(figsize=(12, 6))
+        
+        # Create bar plot
+        bars = plt.bar(range(len(top_15_categories)), top_15_categories.values)
+        plt.xticks(range(len(top_15_categories)), top_15_categories.index, rotation=45, ha='right')
+        
+        # Add value labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height):,}',
+                    ha='center', va='bottom')
+        
+        plt.title('Top 15 Product Categories')
+        plt.xlabel('Category')
+        plt.ylabel('Number of Products')
+        
+        # Adjust layout to prevent label cutoff
+        plt.tight_layout()
+        
+        # Save plot
+        output_dir = Path("analysis_output")
+        output_dir.mkdir(exist_ok=True)
+        plt.savefig(output_dir / 'category_distribution.png')
+        
+        # Print summary statistics
+        total_products = len(metadata_df)
+        logger.info("\nTop 15 Categories Summary:")
+        for category, count in top_15_categories.items():
+            percentage = (count / total_products) * 100
+            logger.info(f"{category}: {count:,} products ({percentage:.1f}%)")
+            
+        # Calculate coverage of top 15
+        top_15_coverage = (top_15_categories.sum() / total_products) * 100
+        logger.info(f"\nTop 15 categories cover {top_15_coverage:.1f}% of all products")
+        
+    except ImportError as e:
+        logger.error(f"Required plotting libraries not found: {e}")
+        logger.error("Please install matplotlib to generate visualizations")
+    except Exception as e:
+        logger.error(f"Error analyzing category distribution: {e}")
+        raise
+
+def analyze_metadata_keys(metadata_file_path):
+    """
+    Analyze and print all unique keys found in the details dictionary of metadata.
+    
+    Args:
+        metadata_file_path (Path): Path to the processed metadata CSV file
+    """
+    try:
+        import ast
+        # Read the metadata file
+        metadata_df = pd.read_csv(metadata_file_path)
+        
+        # Get all unique keys from the details dictionary
+        all_keys = set()
+        for details in metadata_df['details'].dropna():
+            try:
+                # Convert string representation of dictionary to actual dictionary
+                details_dict = ast.literal_eval(details)
+                all_keys.update(details_dict.keys())
+            except:
+                continue
+                
+        # Print all unique keys
+        logger.info("\nUnique keys found in product details:")
+        for key in sorted(all_keys):
+            logger.info(f"- {key}")
+            
+    except Exception as e:
+        logger.error(f"Error analyzing metadata keys: {e}")
+        raise
+
 
 
 if __name__ == "__main__":
     # Example usage
     metadata_file = DATASET_DIR / "meta_Electronics.jsonl"
     reviews_file = DATASET_DIR / "Electronics.jsonl"
-    processed_dir = DATASET_DIR / "processed_data"
+    processed_dir = DATASET_DIR / "processed_data_complete"
+    analyze_metadata_keys(processed_dir / "processed_metadata.csv")1
+    # analyze_processed_data(processed_dir / "processed_metadata.csv", processed_dir / "processed_reviews.csv")
+    # analyze_category_distribution(processed_dir / "processed_metadata.csv")
+    # processor = AmazonDataProcessor(
+    #     max_reviews_per_item=20,
+    #     min_reviews_per_item=5,
+    #     min_reviews_per_user=2,
+    #     include_low_ratings=True,
+    #     metadata_weight=1.5,
+    #     reviews_weight=1.0
+    # )
     
-    # Create processed directory if it doesn't exist
-    if not os.path.exists(processed_dir):
-        os.makedirs(processed_dir)
+    #  # Call the processor's complete product data processing method
+    # product_texts, product_asins, item_details = processor.process_complete_product_data(
+    #     metadata_path=metadata_file,
+    #     reviews_path=reviews_file,
+    #     output_dir=processed_dir,
+    #     metadata_sample_frac=0.1
+    # )
     
-    # Check if we have already processed data
-    csv_files_exist = all(os.path.exists(processed_dir / f) for f in [
-        'processed_metadata.csv', 
-        'processed_reviews.csv', 
-        'combined_product_data.csv'
-    ])
+    # # Create processed directory if it doesn't exist
+    # if not os.path.exists(processed_dir):
+    #     os.makedirs(processed_dir)
     
-    print_sample_data(metadata_file, num_samples=5, data_type='metadata')
-    print_sample_data(reviews_file, num_samples=5, data_type='reviews')
+    # # Check if we have already processed data
+    # csv_files_exist = all(os.path.exists(processed_dir / f) for f in [
+    #     'processed_metadata.csv', 
+    #     'processed_reviews.csv', 
+    #     'combined_product_data.csv'
+    # ])
     
-    if csv_files_exist:
-        print("Found existing processed data. Loading from CSV files...")
-        product_texts, product_asins, item_details = load_processed_data_for_recommender(processed_dir)
-        print(f"Loaded {len(product_asins)} products from processed CSV files")
-    elif os.path.exists(metadata_file) and os.path.exists(reviews_file):
-        print("Processing raw JSONL files...")
-        # Process only a portion of the data for faster testing
-        product_texts, product_asins, item_details = process_and_save_data(
-            metadata_file=metadata_file,
-            reviews_file=reviews_file,
-            output_dir=processed_dir,
-            frac=0.1  # Process only 20% of the data for faster testing
-        )
-        print(f"Processed {len(product_asins)} products from raw JSONL files")
-    else:
-        print("Neither processed data nor raw files found. Please check your paths.")
-        exit(1)
+    # print_sample_data(metadata_file, num_samples=5, data_type='metadata')
+    # print_sample_data(reviews_file, num_samples=5, data_type='reviews')
     
-    # Sample output to verify
-    if product_asins:
-        sample_asin = product_asins[0]
-        print(f"Sample text for {sample_asin}: {product_texts[sample_asin][:200]}...")
+    # if csv_files_exist:
+    #     print("Found existing processed data. Loading from CSV files...")
+    #     product_texts, product_asins, item_details = load_processed_data_for_recommender(processed_dir)
+    #     print(f"Loaded {len(product_asins)} products from processed CSV files")
+    # elif os.path.exists(metadata_file) and os.path.exists(reviews_file):
+    #     print("Processing raw JSONL files...")
+    #     # Process only a portion of the data for faster testing
+    #     product_texts, product_asins, item_details = process_and_save_data(
+    #         metadata_file=metadata_file,
+    #         reviews_file=reviews_file,
+    #         output_dir=processed_dir,
+    #         frac=0.1  # Process only 20% of the data for faster testing
+    #     )
+    #     print(f"Processed {len(product_asins)} products from raw JSONL files")
+    # else:
+    #     print("Neither processed data nor raw files found. Please check your paths.")
+    #     exit(1)
+    
+    # # Sample output to verify
+    # if product_asins:
+    #     sample_asin = product_asins[0]
+    #     print(f"Sample text for {sample_asin}: {product_texts[sample_asin][:200]}...")

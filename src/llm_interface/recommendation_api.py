@@ -3,10 +3,12 @@ from typing import Dict, List, Any, Optional, Union
 import json
 
 from src.conversation.abstract_history_manager import AbstractHistoryManager
+from src.conversation.history_manager import InMemoryConversationManager
 from src.recommendation_engine.base import BaseRecommender
 from src.llm_interface.preference_parser import PreferenceParser
 from src.llm_interface.prompt_constructor import PromptConstructor
 from src.user.abstract_profile_manager import AbstractProfileManager
+from src.user.profile_manager import InMemoryUserProfileManager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -35,12 +37,8 @@ class RecommendationAPI:
         self.recommender = recommender
         self.preference_parser = preference_parser or PreferenceParser()
         self.prompt_constructor = prompt_constructor or PromptConstructor()
-        
-        # Store conversation history
-        self.conversation_history = {}
-        
-        # Store user profiles
-        self.user_profiles = {}
+        self.history_manager = history_manager or InMemoryConversationManager()
+        self.profile_manager = profile_manager or InMemoryUserProfileManager()
         
     def process_query(self, 
                      user_id: str,
@@ -67,7 +65,7 @@ class RecommendationAPI:
         self.recommender.update_user_preferences(user_id, formatted_preferences)
         
         # Update user profile
-        self._update_user_profile(user_id, formatted_preferences)
+        self.profile_manager.update_profile(user_id, formatted_preferences)
         
         # Get recommendations
         recommendations = self.recommender.recommend(
@@ -79,13 +77,13 @@ class RecommendationAPI:
         
         
         # Update conversation history
-        self._update_conversation_history(user_id, query, None)
+        self.history_manager.add_turn(user_id, query, None)
         
         # Construct prompt for LLM
         prompt = self.prompt_constructor.construct_recommendation_prompt(
             user_query=query,
-            user_profile=self.user_profiles.get(user_id),
-            conversation_history=self.conversation_history.get(user_id),
+            user_profile=self.profile_manager.get_profile(user_id),
+            conversation_history=self.history_manager.get_history(user_id),
             retrieved_items=recommendations
         )
         
@@ -129,7 +127,7 @@ class RecommendationAPI:
         prompt = self.prompt_constructor.construct_explanation_prompt(
             user_id=user_id,
             item=item_details,
-            user_profile=self.user_profiles.get(user_id)
+            user_profile=self.profile_manager.get_profile(user_id)
         )
         
         return {
@@ -150,7 +148,7 @@ class RecommendationAPI:
             user_message: User message
             assistant_message: Assistant message
         """
-        self._update_conversation_history(user_id, user_message, assistant_message)
+        self.history_manager.add_turn(user_id, user_message, assistant_message)
         
         # Extract preferences from user message
         preferences = self.preference_parser.extract_preferences(user_message)
@@ -163,74 +161,4 @@ class RecommendationAPI:
             self.recommender.update_user_preferences(user_id, formatted_preferences)
             
             # Update user profile
-            self._update_user_profile(user_id, formatted_preferences)
-    
-    def _update_conversation_history(self, 
-                                   user_id: str,
-                                   user_message: str,
-                                   assistant_message: Optional[str]) -> None:
-        """
-        Update conversation history for a user.
-        
-        Args:
-            user_id: User identifier
-            user_message: User message
-            assistant_message: Optional assistant message
-        """
-        if user_id not in self.conversation_history:
-            self.conversation_history[user_id] = []
-        
-        # Add new turn
-        turn = {"user": user_message}
-        if assistant_message:
-            turn["assistant"] = assistant_message
-            logger.info(f"Updated conversation history: {self.conversation_history}")
-            
-        self.conversation_history[user_id].append(turn)
-        
-        # Limit history size
-        if len(self.conversation_history[user_id]) > 10:
-            self.conversation_history[user_id] = self.conversation_history[user_id][-10:]
-    
-    def _update_user_profile(self, 
-                           user_id: str,
-                           preferences: Dict[str, Any]) -> None:
-        """
-        Update user profile with new preferences.
-        
-        Args:
-            user_id: User identifier
-            preferences: Dictionary of preferences
-        """
-        if user_id not in self.user_profiles:
-            self.user_profiles[user_id] = {
-                "preferences": {},
-                "history": []
-            }
-        
-        # Update preferences
-        for key, value in preferences.items():
-            self.user_profiles[user_id]["preferences"][key] = value
-    
-    def update_interaction_history(self, 
-                                 user_id: str,
-                                 item: Dict[str, Any]) -> None:
-        """
-        Update user's interaction history with an item.
-        
-        Args:
-            user_id: User identifier
-            item: Item that the user interacted with
-        """
-        if user_id not in self.user_profiles:
-            self.user_profiles[user_id] = {
-                "preferences": {},
-                "history": []
-            }
-        
-        # Add item to history
-        self.user_profiles[user_id]["history"].insert(0, item)
-        
-        # Limit history size
-        if len(self.user_profiles[user_id]["history"]) > 20:
-            self.user_profiles[user_id]["history"] = self.user_profiles[user_id]["history"][:20] 
+            self.profile_manager.update_profile(user_id, formatted_preferences)

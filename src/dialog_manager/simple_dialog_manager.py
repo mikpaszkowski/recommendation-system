@@ -37,27 +37,4 @@ class SimpleDialogManager:
         Returns:
             Generated response to be displayed to the user
         """
-        try:
-            logger.info(f"Processing query for user {user_id}: {user_query}")
-            
-            # Step 1: Process the query through the recommendation API
-            api_result = self.recommendation_api.process_query(
-                user_id=user_id,
-                query=user_query,
-                num_recommendations=num_recommendations
-            )
-            
-            logger.info(f"Retrieved {len(api_result['recommendations'])} recommendations")
-            
-            # Step 2: Get the prompt prepared by the recommendation API
-            prompt = api_result['prompt']
-            
-            # Step 3: Send the prompt to the LLM for response generation
-            llm_response = self.llm_handler.query(prompt)
-            
-            # Step 4: Return the generated response
-            return llm_response
-            
-        except Exception as e:
-            logger.error(f"Error in dialog management: {str(e)}")
-            return f"I'm sorry, I encountered an error while processing your request: {str(e)}"
+       
