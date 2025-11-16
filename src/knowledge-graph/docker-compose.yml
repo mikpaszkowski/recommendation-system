@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.14.0
+    container_name: neo4j-recommendation
+    ports:
+      # HTTP Browser interface
+      - "7474:7474"
+      # Bolt protocol
+      - "7687:7687"
+    environment:
+      # Authentication
+      - NEO4J_AUTH=none
+      
+      # Memory settings (adjust based on your system)
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=2G
+      - NEO4J_server_memory_pagecache_size=1G
+      
+      # APOC plugin configuration
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
+      
+      # Performance tuning
+      - NEO4J_dbms_transaction_timeout=60s
+      - NEO4J_dbms_lock_acquisition_timeout=60s
+      
+      # Logging
+      - NEO4J_dbms_logs_debug_level=INFO
+      
+      # Allow connections from any host (development only)
+      - NEO4J_dbms_connector_bolt_listen__address=0.0.0.0:7687
+      - NEO4J_dbms_connector_http_listen__address=0.0.0.0:7474
+    volumes:
+      # Persist data
+      - neo4j_data:/data
+      # Persist logs
+      - neo4j_logs:/logs
+      # Import directory for bulk data loading
+      - neo4j_import:/var/lib/neo4j/import
+      # Plugins directory
+      - neo4j_plugins:/plugins
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - recommendation-network
+
+volumes:
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  neo4j_import:
+    driver: local
+  neo4j_plugins:
+    driver: local
+
+networks:
+  recommendation-network:
+    driver: bridge
+

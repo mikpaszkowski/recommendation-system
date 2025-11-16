@@ -23,7 +23,30 @@ This will install:
 
 ## Step 2: Start Neo4j Database
 
-### Using Docker (Easiest)
+### Using Docker Compose (Recommended)
+
+We provide a Docker Compose configuration that includes APOC and Graph Data Science plugins:
+
+```bash
+cd src/knowledge-graph
+docker-compose up -d
+```
+
+Wait for Neo4j to start (about 30 seconds), then verify it's running:
+
+```bash
+docker-compose ps
+```
+
+You should see the `neo4j-recommendation` container with status "Up (healthy)".
+
+Access Neo4j Browser at: http://localhost:7474
+
+**See [DOCKER.md](DOCKER.md) for detailed Docker setup instructions, troubleshooting, and configuration options.**
+
+### Using Docker (Manual)
+
+Alternatively, you can run Neo4j directly with Docker:
 
 ```bash
 docker run \
@@ -33,16 +56,6 @@ docker run \
     -d \
     neo4j:latest
 ```
-
-Wait a few seconds for Neo4j to start, then verify it's running:
-
-```bash
-docker ps
-```
-
-You should see the `neo4j-recommendation` container running.
-
-Access Neo4j Browser at: http://localhost:7474
 
 ### Using Neo4j Desktop
 

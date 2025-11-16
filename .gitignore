@@ -1,4 +1,4 @@
-env
+.env
 __pycache__
 *.csv
 McAuley-Lab_Amazon-Reviews-2023-metadata-Electronics

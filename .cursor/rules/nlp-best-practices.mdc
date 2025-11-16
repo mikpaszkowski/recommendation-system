@@ -1,0 +1,11 @@
+---
+name: nlp-best-practices.mdc
+description: Best practices for Natural Language Processing (NLP) in data pipelines
+globs: **/*.py
+---
+
+- Preprocess text data (tokenization, normalization) to improve model performance.
+- Use pre-trained models for common tasks to save time and resources.
+- Implement batch processing for NLP tasks to handle large volumes of data efficiently.
+- Regularly evaluate model performance and retrain with new data as necessary.
+- Ensure that the NLP pipeline is modular for easy updates and maintenance.

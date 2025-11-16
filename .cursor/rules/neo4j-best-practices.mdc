@@ -1,0 +1,11 @@
+---
+name: neo4j-best-practices.mdc
+description: Best practices for Neo4j database management and query optimization
+globs: **/*.cypher
+---
+
+- Use uniqueness constraints to ensure data integrity and improve query performance.
+- Create appropriate indexes on frequently queried properties to speed up lookups.
+- Utilize the `MERGE` command to avoid duplicate nodes and relationships.
+- Optimize Cypher queries by using pattern matching and avoiding Cartesian products.
+- Regularly monitor and analyze query performance using the Neo4j query log.

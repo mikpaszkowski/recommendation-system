@@ -29,7 +29,25 @@ NEO4J_DATABASE=neo4j
 
 ### 3. Install and Run Neo4j
 
-#### Option A: Using Docker (Recommended)
+#### Option A: Using Docker Compose (Recommended)
+
+We provide a complete Docker Compose setup with APOC and Graph Data Science plugins:
+
+```bash
+cd src/knowledge-graph
+docker-compose up -d
+```
+
+This will start Neo4j with:
+
+- APOC plugin for utility functions
+- Graph Data Science plugin for algorithms
+- Persistent volumes for data
+- Health checks and auto-restart
+
+**See [DOCKER.md](DOCKER.md) for detailed setup instructions.**
+
+#### Option B: Using Docker (Manual)
 
 ```bash
 docker run \
@@ -40,14 +58,14 @@ docker run \
     neo4j:latest
 ```
 
-#### Option B: Using Neo4j Desktop
+#### Option C: Using Neo4j Desktop
 
 1. Download Neo4j Desktop from https://neo4j.com/download/
 2. Create a new database
 3. Start the database
 4. Update your `.env` file with the connection details
 
-#### Option C: Using Neo4j Aura (Cloud)
+#### Option D: Using Neo4j Aura (Cloud)
 
 1. Sign up at https://neo4j.com/cloud/aura/
 2. Create a new database instance
