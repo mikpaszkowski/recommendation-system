@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 from pandas import DataFrame
@@ -113,6 +113,35 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=5_000,
         help="Number of records per Neo4j transaction.",
+    )
+    parser.add_argument(
+        "--aspects-path",
+        type=Path,
+        default=None,
+        help="JSONL produced by aspect_pipeline.py containing aspect triplets.",
+    )
+    parser.add_argument(
+        "--aggregate-preferences",
+        action="store_true",
+        help="Aggregate user preference edges (PREFERS/DISLIKES) from aspect sentiments.",
+    )
+    parser.add_argument(
+        "--min-opinions",
+        type=int,
+        default=3,
+        help="Minimum positive+negative mentions before emitting PREFERS/DISLIKES.",
+    )
+    parser.add_argument(
+        "--preference-threshold",
+        type=float,
+        default=0.70,
+        help="Positive ratio threshold for PREFERS edges.",
+    )
+    parser.add_argument(
+        "--dislike-threshold",
+        type=float,
+        default=0.70,
+        help="Negative ratio threshold for DISLIKES edges.",
     )
     parser.add_argument(
         "--dry-run",
@@ -230,28 +259,12 @@ def load_reviews(
 def load_metadata(path: Path) -> DataFrame:
     LOGGER.info("Loading metadata from %s", path)
     frames = []
-    adjust_chunk: Optional[Callable[[DataFrame], DataFrame]] = None
     chunk_idx = 0
     for chunk in _read_jsonl_chunks(path, chunksize=50_000):
         chunk_idx += 1
-        if adjust_chunk is None:
-            column_set = set(chunk.columns)
-            has_asin = "asin" in column_set
-            has_parent_asin = "parent_asin" in column_set
-            if not has_asin and not has_parent_asin:
-                raise KeyError(
-                    "Metadata payload must include either 'asin' or 'parent_asin' columns."
-                )
-
-            def _adjust(df: DataFrame) -> DataFrame:
-                if has_asin:
-                    if has_parent_asin:
-                        df["asin"] = df["asin"].fillna(df["parent_asin"])
-                    return df
-                return df.assign(asin=df["parent_asin"])
-
-            adjust_chunk = _adjust
-        frames.append(adjust_chunk(chunk))
+        if "parent_asin" not in chunk.columns:
+            raise KeyError("Metadata payload must include 'parent_asin' column.")
+        frames.append(chunk)
         LOGGER.debug("Processed metadata chunk %d containing %d rows", chunk_idx, len(chunk))
     if not frames:
         return pd.DataFrame()
@@ -312,6 +325,13 @@ def derive_reviews(reviews: DataFrame, ingest_batch_id: str) -> List[Dict]:
     return df[fields].to_dict(orient="records")
 
 
+def derive_variants_from_reviews(reviews: DataFrame) -> List[Dict]:
+    df = reviews[["asin", "parent_asin"]].drop_duplicates().copy()
+    df["ingested_at"] = datetime.utcnow().isoformat()
+    fields = ["asin", "parent_asin", "ingested_at"]
+    return df[fields].to_dict(orient="records")
+
+
 def _safe_float(value) -> Optional[float]:
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
@@ -354,6 +374,22 @@ def derive_products(metadata: DataFrame, review_stats: DataFrame, ingest_batch_i
     return df[existing_fields].drop_duplicates("asin").to_dict(orient="records")
 
 
+def derive_parent_products(metadata: DataFrame, ingest_batch_id: str) -> List[Dict]:
+    df = metadata[metadata["parent_asin"].notna()].copy()
+    if df.empty:
+        return []
+    df = df.sort_values(["parent_asin"]).drop_duplicates("parent_asin")
+    df["price"] = df["price"].apply(_safe_float) if "price" in df.columns else None
+    df["avg_rating"] = df["average_rating"].apply(_safe_float) if "average_rating" in df.columns else None
+    if "rating_number" in df.columns:
+        df["review_count"] = df["rating_number"].apply(lambda x: int(x) if pd.notna(x) else None)
+    df["ingested_at"] = datetime.utcnow().isoformat()
+    df["ingest_batch_id"] = ingest_batch_id
+    fields = ["parent_asin", "title", "price", "avg_rating", "review_count", "ingested_at", "ingest_batch_id"]
+    existing = [f for f in fields if f in df.columns]
+    return df[existing].to_dict(orient="records")
+
+
 def define_price_buckets() -> List[PriceBucket]:
     return [
         PriceBucket(0.0, 50.0, "$0-$50"),
@@ -390,7 +426,7 @@ def assign_price_ranges(products: List[Dict], buckets: Sequence[PriceBucket]) ->
             if price >= bucket.lower and (bucket.upper is None or price < bucket.upper):
                 relations.append(
                     {
-                        "asin": product["asin"],
+                        "parent_asin": product["parent_asin"],
                         "range_id": bucket.range_id,
                     }
                 )
@@ -446,7 +482,7 @@ def derive_categories(metadata: DataFrame) -> Tuple[List[Dict], List[Dict]]:
 def derive_category_memberships(metadata: DataFrame) -> List[Dict]:
     relations = []
     for _, row in metadata.iterrows():
-        asin = row.get("asin") or row.get("parent_asin")
+        asin = row.get("parent_asin")
         categories = row.get("categories")
         if not asin or not categories:
             continue
@@ -468,7 +504,7 @@ def derive_category_memberships(metadata: DataFrame) -> List[Dict]:
                 category_id = hashlib.sha1(canonical.encode("utf-8")).hexdigest()
                 relations.append(
                     {
-                        "asin": asin,
+                        "parent_asin": asin,
                         "category_id": category_id,
                         "primary": level == len(path) - 1,
                     }
@@ -487,36 +523,9 @@ def derive_attributes(metadata: DataFrame) -> Tuple[List[Dict], List[Dict]]:
     product_attribute_edges: List[Dict] = []
 
     for _, row in metadata.iterrows():
-        asin = row.get("asin") or row.get("parent_asin")
+        asin = row.get("parent_asin")
         if not asin:
             continue
-
-        # Brand as attribute
-        brand = row.get("brand")
-        if isinstance(brand, str) and brand:
-            key, norm_value = _normalise_attribute("brand", brand)
-            attribute_id = hashlib.sha1(f"{key}|{norm_value}".encode("utf-8")).hexdigest()
-            attribute_nodes.setdefault(
-                attribute_id,
-                {
-                    "attribute_id": attribute_id,
-                    "attribute_name": key,
-                    "attribute_value": brand,
-                    "normalized_value": norm_value.lower(),
-                    "value_type": "categorical",
-                    "source": "metadata",
-                    "ingested_at": datetime.utcnow().isoformat(),
-                },
-            )
-            product_attribute_edges.append(
-                {
-                    "asin": asin,
-                    "attribute_id": attribute_id,
-                    "value_origin": "brand",
-                    "raw_value": brand,
-                    "confidence": 0.95,
-                }
-            )
 
         # Details dictionary
         details = row.get("details") or {}
@@ -546,7 +555,7 @@ def derive_attributes(metadata: DataFrame) -> Tuple[List[Dict], List[Dict]]:
                 )
                 product_attribute_edges.append(
                     {
-                        "asin": asin,
+                        "parent_asin": asin,
                         "attribute_id": attribute_id,
                         "value_origin": "details",
                         "raw_value": str(value),
@@ -585,7 +594,7 @@ def derive_attributes(metadata: DataFrame) -> Tuple[List[Dict], List[Dict]]:
             )
             product_attribute_edges.append(
                 {
-                    "asin": asin,
+                    "parent_asin": asin,
                     "attribute_id": attribute_id,
                     "value_origin": "feature_bullet",
                     "raw_value": value.strip(),
@@ -596,13 +605,62 @@ def derive_attributes(metadata: DataFrame) -> Tuple[List[Dict], List[Dict]]:
     return list(attribute_nodes.values()), product_attribute_edges
 
 
+def derive_brands(metadata: DataFrame) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+    brand_nodes: Dict[str, Dict] = {}
+    product_brand_edges: List[Dict] = []
+    parent_brand_edges: List[Dict] = []
+
+    for _, row in metadata.iterrows():
+        # Prefer top-level brand, else fallback to details["Brand"] (common in metadata)
+        brand_candidates = []
+        top_brand = row.get("brand")
+        if isinstance(top_brand, str) and top_brand.strip():
+            brand_candidates.append(top_brand.strip())
+
+        details = row.get("details") or {}
+        if isinstance(details, str):
+            try:
+                details = json.loads(details)
+            except json.JSONDecodeError:
+                details = {}
+
+        if isinstance(details, dict):
+            for key in ["Brand", "brand", "Brand Name", "Brand_Name"]:
+                val = details.get(key)
+                if isinstance(val, str) and val.strip():
+                    brand_candidates.append(val.strip())
+                    break
+
+        if not brand_candidates:
+            continue
+
+        norm = brand_candidates[0]
+        brand_id = hashlib.sha1(norm.lower().encode("utf-8")).hexdigest()
+        brand_nodes.setdefault(
+            brand_id,
+            {"brand_id": brand_id, "name": norm, "ingested_at": datetime.utcnow().isoformat()},
+        )
+        parent_asin = row.get("parent_asin")
+        if parent_asin:
+            parent_brand_edges.append(
+                {
+                    "parent_asin": parent_asin,
+                    "brand_id": brand_id,
+                    "source": "metadata",
+                    "confidence": 0.95,
+                }
+            )
+
+    return list(brand_nodes.values()), product_brand_edges, parent_brand_edges
+
+
 def derive_copurchase(metadata: DataFrame) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     sets: Dict[str, Dict] = {}
     members: List[Dict] = []
     pair_edges: List[Dict] = []
 
     for _, row in metadata.iterrows():
-        asin = row.get("asin") or row.get("parent_asin")
+        asin = row.get("parent_asin")
         bought_together = row.get("bought_together")
         if not asin or not bought_together:
             continue
@@ -635,37 +693,45 @@ def derive_copurchase(metadata: DataFrame) -> Tuple[List[Dict], List[Dict], List
             members.append(
                 {
                     "set_id": set_id,
-                    "asin": member_asin,
+                    "parent_asin": member_asin,
                     "position": position,
                 }
             )
         pair_edges.append(
             {
-                "source_asin": asin,
-                "target_asin": member_asin,
+                    "source_asin": asin,
+                    "target_asin": member_asin,
                 "support": 1,
                 "confidence": 0.5,
             }
         )
 
-    roots = [{"set_id": set_id, "asin": data["source_asin"]} for set_id, data in sets.items()]
+    roots = [{"set_id": set_id, "parent_asin": data["source_asin"]} for set_id, data in sets.items()]
     return list(sets.values()), members, pair_edges + roots
 
 
-def derive_rated_edges(reviews: DataFrame) -> List[Dict]:
-    edges = []
+def split_rated_edges(reviews: DataFrame) -> Tuple[List[Dict], List[Dict]]:
+    variant_edges: List[Dict] = []
+    parent_edges: List[Dict] = []
     for _, row in reviews.iterrows():
-        edges.append(
-            {
-                "user_id": row["user_id"],
-                "asin": row["asin"],
-                "rating": float(row["rating"]),
-                "timestamp_iso": row["event_time"].tz_convert(None).isoformat(),
-                "review_id": _hash_review_id(row),
-                "verified": bool(row["verified_purchase"]),
-            }
-        )
-    return edges
+        edge_base = {
+            "user_id": row["user_id"],
+            "rating": float(row["rating"]),
+            "timestamp_iso": row["event_time"].tz_convert(None).isoformat(),
+            "review_id": _hash_review_id(row),
+            "verified": bool(row["verified_purchase"]),
+        }
+        parent_asin = row.get("parent_asin")
+        asin = row.get("asin")
+        if parent_asin and asin and asin != parent_asin:
+            edge = dict(edge_base)
+            edge["asin"] = asin
+            variant_edges.append(edge)
+        else:
+            edge = dict(edge_base)
+            edge["parent_asin"] = parent_asin or asin
+            parent_edges.append(edge)
+    return variant_edges, parent_edges
 
 
 def derive_variant_edges(products: List[Dict]) -> List[Dict]:
@@ -681,6 +747,114 @@ def derive_variant_edges(products: List[Dict]) -> List[Dict]:
                 }
             )
     return edges
+
+
+def load_aspect_triplets(path: Optional[Path], known_review_ids: Set[str]) -> Tuple[List[Dict], List[Dict]]:
+    """Load aspect triplets JSONL emitted by aspect_pipeline.py."""
+    if not path:
+        return [], []
+    if not path.exists():
+        LOGGER.warning("Aspects path %s not found; skipping aspect ingestion.", path)
+        return [], []
+
+    df = pd.read_json(path, lines=True, dtype=False)
+    if df.empty:
+        return [], []
+
+    df = df[df["review_id"].isin(known_review_ids)]
+    if df.empty:
+        LOGGER.warning("No aspect rows align with current review window; skipping.")
+        return [], []
+
+    df["aspect_name"] = df["aspect"].astype(str).str.strip().str.lower()
+    df["sentiment"] = df["sentiment"].astype(str).str.title()
+    df["opinion_text"] = df.get("opinion", df.get("opinion_text", "")).fillna("")
+    df["confidence"] = df.get("confidence", 1.0).fillna(1.0).astype(float)
+    df["surface_form"] = df.get("surface_form", df["aspect_name"])
+    df["model_version"] = df.get("model_version", "unknown").fillna("unknown")
+
+    now_iso = datetime.utcnow().isoformat()
+
+    aspect_nodes = (
+        df.groupby("aspect_name")
+        .agg(
+            surface_forms=("surface_form", lambda series: sorted(set([val for val in series if isinstance(val, str)]))),
+            mention_count=("review_id", "count"),
+        )
+        .reset_index()
+        .rename(columns={"aspect_name": "name"})
+    )
+    aspect_nodes["ingested_at"] = now_iso
+    aspect_nodes_records = aspect_nodes.to_dict(orient="records")
+
+    relationship_rows = df[
+        ["review_id", "aspect_name", "sentiment", "opinion_text", "confidence", "surface_form", "model_version"]
+    ].rename(columns={"aspect_name": "name"})
+    return aspect_nodes_records, relationship_rows.to_dict(orient="records")
+
+
+def aggregate_user_preferences(
+    aspect_mentions: List[Dict],
+    reviews: DataFrame,
+    min_opinions: int,
+    preference_threshold: float,
+    dislike_threshold: float,
+) -> Tuple[List[Dict], List[Dict]]:
+    """Aggregate aspect sentiments into user-level PREFERS/DISLIKES edges."""
+    if not aspect_mentions:
+        return [], []
+
+    df = pd.DataFrame(aspect_mentions)
+    review_users = reviews[["review_id", "user_id"]].drop_duplicates()
+    df = df.merge(review_users, on="review_id", how="left")
+    df = df[df["user_id"].notna()]
+    if df.empty:
+        return [], []
+
+    df["sentiment_norm"] = df["sentiment"].str.lower()
+    sentiment_counts = (
+        df.groupby(["user_id", "name"])["sentiment_norm"]
+        .value_counts()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+
+    def _series_with_default(frame: DataFrame, column: str) -> pd.Series:
+        return frame[column] if column in frame.columns else pd.Series([0] * len(frame), index=frame.index)
+
+    pos = _series_with_default(sentiment_counts, "positive")
+    neg = _series_with_default(sentiment_counts, "negative")
+    total = pos + neg
+
+    sentiment_counts["positive"] = pos
+    sentiment_counts["negative"] = neg
+    sentiment_counts["total"] = total
+    sentiment_counts["positive_ratio"] = sentiment_counts.apply(
+        lambda row: (row["positive"] / row["total"]) if row["total"] else 0.0, axis=1
+    )
+    sentiment_counts["negative_ratio"] = sentiment_counts.apply(
+        lambda row: (row["negative"] / row["total"]) if row["total"] else 0.0, axis=1
+    )
+
+    prefers: List[Dict] = []
+    dislikes: List[Dict] = []
+
+    for _, row in sentiment_counts.iterrows():
+        if row["total"] < min_opinions:
+            continue
+        base = {
+            "user_id": row["user_id"],
+            "name": row["name"],
+            "positive_count": int(row["positive"]),
+            "negative_count": int(row["negative"]),
+            "support": int(row["total"]),
+        }
+        if row["positive_ratio"] >= preference_threshold:
+            prefers.append({**base, "preference_score": float(row["positive_ratio"])})
+        if row["negative_ratio"] >= dislike_threshold:
+            dislikes.append({**base, "preference_score": float(row["negative_ratio"])})
+
+    return prefers, dislikes
 
 def chunk(items: Sequence[Dict], size: int) -> Iterator[List[Dict]]:
     for start in range(0, len(items), size):
@@ -775,41 +949,74 @@ def main() -> None:
         return
 
     metadata_df = load_metadata(args.metadata_path)
-    metadata_df = metadata_df[metadata_df["asin"].isin(reviews_df["asin"].unique())].reset_index(drop=True)
-    LOGGER.info("Metadata filtered to %d products referenced in the review window.", len(metadata_df))
+    metadata_df = metadata_df[
+        metadata_df["parent_asin"].notna()
+        & metadata_df["parent_asin"].isin(reviews_df["parent_asin"].dropna().unique())
+    ].reset_index(drop=True)
+    LOGGER.info("Metadata filtered to %d parent products referenced in the review window.", len(metadata_df))
 
     users = derive_users(reviews_df)
+    reviews_enriched = reviews_df.copy()
+    reviews_enriched["review_id"] = reviews_enriched.apply(_hash_review_id, axis=1)
+
     review_nodes = derive_reviews(reviews_df, ingest_batch_id)
-    products = derive_products(metadata_df, reviews_df.groupby("asin").agg(review_count=("rating", "count")).reset_index(), ingest_batch_id)
+    variants = derive_variants_from_reviews(reviews_enriched)
+    parent_products = derive_parent_products(metadata_df, ingest_batch_id)
 
     buckets = define_price_buckets()
     price_range_nodes = derive_price_ranges(buckets)
-    price_range_edges = assign_price_ranges(products, buckets)
+    price_range_edges = assign_price_ranges(parent_products, buckets)
 
     category_nodes, subcategory_edges = derive_categories(metadata_df)
     category_memberships = derive_category_memberships(metadata_df)
 
     attribute_nodes, has_attribute_edges = derive_attributes(metadata_df)
+    brand_nodes, product_brand_edges, parent_brand_edges = derive_brands(metadata_df)
 
     copurchase_sets, copurchase_members, copurchase_edges = derive_copurchase(metadata_df)
 
-    rated_edges = derive_rated_edges(reviews_df)
-    variant_edges = derive_variant_edges(products)
+    rated_variant_edges, rated_parent_edges = split_rated_edges(reviews_enriched)
+    variant_edges = derive_variant_edges(variants)
+
+    aspect_nodes: List[Dict] = []
+    aspect_mentions: List[Dict] = []
+    user_pref_edges: List[Dict] = []
+    user_dislike_edges: List[Dict] = []
+    if args.aspects_path:
+        aspect_nodes, aspect_mentions = load_aspect_triplets(
+            args.aspects_path,
+            set(reviews_enriched["review_id"].tolist()),
+        )
+        if args.aggregate_preferences:
+            user_pref_edges, user_dislike_edges = aggregate_user_preferences(
+                aspect_mentions,
+                reviews_enriched,
+                min_opinions=args.min_opinions,
+                preference_threshold=args.preference_threshold,
+                dislike_threshold=args.dislike_threshold,
+            )
 
     wrote_edges = [
         {"user_id": row["user_id"], "review_id": row["review_id"]}
         for row in review_nodes
     ]
-    review_relations = [
+    about_variant_edges = [
         {"review_id": row["review_id"], "asin": row["asin"]}
-        for row in review_nodes
+        for _, row in reviews_enriched.iterrows()
+        if row.get("parent_asin") and row["asin"] != row["parent_asin"]
+    ]
+    about_parent_edges = [
+        {"review_id": row["review_id"], "parent_asin": row.get("parent_asin") or row.get("asin")}
+        for _, row in reviews_enriched.iterrows()
+        if not row.get("parent_asin") or row["asin"] == row.get("parent_asin")
     ]
 
     LOGGER.info(
-        "Prepared %d users, %d reviews, %d products. Fallback window used: %s",
+        "Prepared %d users, %d reviews, %d variants, %d parents. Fallback window used: %s",
         len(users),
         len(review_nodes),
-        len(products),
+        len(variants),
+        len(parent_products),
         used_fallback,
     )
 
@@ -822,11 +1029,15 @@ def main() -> None:
 
         merge_nodes(connector, "User", "user_id", users, args.batch_size)
         merge_nodes(connector, "Review", "review_id", review_nodes, args.batch_size)
-        merge_nodes(connector, "Product", "asin", products, args.batch_size)
+        merge_nodes(connector, "Variant", "asin", variants, args.batch_size)
+        merge_nodes(connector, "ParentProduct", "parent_asin", parent_products, args.batch_size)
+        merge_nodes(connector, "Brand", "brand_id", brand_nodes, args.batch_size)
         merge_nodes(connector, "PriceRange", "range_id", price_range_nodes, args.batch_size)
         merge_nodes(connector, "Category", "category_id", category_nodes, args.batch_size)
         merge_nodes(connector, "Attribute", "attribute_id", attribute_nodes, args.batch_size)
         merge_nodes(connector, "CoPurchaseSet", "set_id", copurchase_sets, args.batch_size)
+        if aspect_nodes:
+            merge_nodes(connector, "Aspect", "name", aspect_nodes, args.batch_size)
 
         merge_relationships(
             connector,
@@ -839,49 +1050,78 @@ def main() -> None:
             args.batch_size,
         )
 
-        merge_relationships(
-            connector,
-            "REVIEWS",
-            "Review",
-            "review_id",
-            "Product",
-            "asin",
-            review_relations,
-            args.batch_size,
-        )
+        if about_variant_edges:
+            merge_relationships(
+                connector,
+                "ABOUT_PRODUCT",
+                "Review",
+                "review_id",
+                "Variant",
+                "asin",
+                about_variant_edges,
+                args.batch_size,
+            )
+        if about_parent_edges:
+            merge_relationships(
+                connector,
+                "ABOUT_PRODUCT",
+                "Review",
+                "review_id",
+                "ParentProduct",
+                "parent_asin",
+                about_parent_edges,
+                args.batch_size,
+                end_field="parent_asin",
+            )
 
-        merge_relationships(
-            connector,
-            "RATED",
-            "User",
-            "user_id",
-            "Product",
-            "asin",
-            rated_edges,
-            args.batch_size,
-            property_fields=["rating", "timestamp_iso", "review_id", "verified"],
-        )
+        if rated_variant_edges:
+            merge_relationships(
+                connector,
+                "RATED",
+                "User",
+                "user_id",
+                "Variant",
+                "asin",
+                rated_variant_edges,
+                args.batch_size,
+                property_fields=["rating", "timestamp_iso", "review_id", "verified"],
+            )
+        if rated_parent_edges:
+            merge_relationships(
+                connector,
+                "RATED",
+                "User",
+                "user_id",
+                "ParentProduct",
+                "parent_asin",
+                rated_parent_edges,
+                args.batch_size,
+                end_field="parent_asin",
+                property_fields=["rating", "timestamp_iso", "review_id", "verified"],
+            )
 
         merge_relationships(
             connector,
             "IN_PRICE_RANGE",
-            "Product",
-            "asin",
+            "ParentProduct",
+            "parent_asin",
             "PriceRange",
             "range_id",
             price_range_edges,
             args.batch_size,
+            start_field="parent_asin",
         )
 
         merge_relationships(
             connector,
             "BELONGS_TO_CATEGORY",
-            "Product",
-            "asin",
+            "ParentProduct",
+            "parent_asin",
             "Category",
             "category_id",
             category_memberships,
             args.batch_size,
+            start_field="parent_asin",
             property_fields=["primary"],
         )
 
@@ -902,24 +1142,84 @@ def main() -> None:
         merge_relationships(
             connector,
             "HAS_ATTRIBUTE",
-            "Product",
-            "asin",
+            "ParentProduct",
+            "parent_asin",
             "Attribute",
             "attribute_id",
             has_attribute_edges,
             args.batch_size,
+            start_field="parent_asin",
             property_fields=["value_origin", "raw_value", "confidence"],
         )
+
+        if aspect_mentions:
+            merge_relationships(
+                connector,
+                "MENTIONS_ASPECT",
+                "Review",
+                "review_id",
+                "Aspect",
+                "name",
+                aspect_mentions,
+                args.batch_size,
+                end_field="name",
+                property_fields=["sentiment", "opinion_text", "confidence", "surface_form", "model_version"],
+            )
+
+        if user_pref_edges:
+            merge_relationships(
+                connector,
+                "PREFERS",
+                "User",
+                "user_id",
+                "Aspect",
+                "name",
+                user_pref_edges,
+                args.batch_size,
+                start_field="user_id",
+                end_field="name",
+                property_fields=["positive_count", "negative_count", "support", "preference_score"],
+            )
+
+        if user_dislike_edges:
+            merge_relationships(
+                connector,
+                "DISLIKES",
+                "User",
+                "user_id",
+                "Aspect",
+                "name",
+                user_dislike_edges,
+                args.batch_size,
+                start_field="user_id",
+                end_field="name",
+                property_fields=["positive_count", "negative_count", "support", "preference_score"],
+            )
+
+        if parent_brand_edges:
+            merge_relationships(
+                connector,
+                "HAS_BRAND",
+                "ParentProduct",
+                "parent_asin",
+                "Brand",
+                "brand_id",
+                parent_brand_edges,
+                args.batch_size,
+                start_field="parent_asin",
+                property_fields=["source", "confidence"],
+            )
 
         merge_relationships(
             connector,
             "MEMBER_OF_SET",
-            "Product",
-            "asin",
+            "ParentProduct",
+            "parent_asin",
             "CoPurchaseSet",
             "set_id",
             copurchase_members,
             args.batch_size,
+            start_field="parent_asin",
             property_fields=["position"],
         )
 
@@ -929,10 +1229,10 @@ def main() -> None:
             merge_relationships(
                 connector,
                 "BOUGHT_TOGETHER",
-                "Product",
-                "source_asin",
-                "Product",
-                "target_asin",
+                "ParentProduct",
+                "parent_asin",
+                "ParentProduct",
+                "parent_asin",
                 pair_edges,
                 args.batch_size,
                 start_field="source_asin",
@@ -947,10 +1247,11 @@ def main() -> None:
                 "HAS_ROOT",
                 "CoPurchaseSet",
                 "set_id",
-                "Product",
-                "asin",
+                "ParentProduct",
+                "parent_asin",
                 root_edges,
                 args.batch_size,
+                end_field="parent_asin",
                 property_fields=[],
             )
 
@@ -958,9 +1259,9 @@ def main() -> None:
             merge_relationships(
                 connector,
                 "IS_VARIANT_OF",
-                "Product",
+                "Variant",
                 "child_asin",
-                "Product",
+                "ParentProduct",
                 "parent_asin",
                 variant_edges,
                 args.batch_size,
