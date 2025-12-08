@@ -67,16 +67,20 @@ filters:
 
 ## Transform Mapping Summary
 
-| Target          | Source Fields                              | Transform Notes                                                                          |
-| --------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `User`          | `reviewerID`, counts aggregated per batch  | Derive `review_count`, `verified_purchase_count`, `helpful_votes_given` (sum `helpful`). |
-| `Product`       | Metadata attributes                        | Clean numerical fields, normalise currency, compute `avg_rating` from filtered reviews.  |
-| `Review`        | Review record                              | Generate deterministic id; clip text to max length for ingestion; attach `source_file`.  |
-| `Attribute`     | `brand`, `details`, `feature`, NLP outputs | Standardise keys (snake_case), normalise values (unit conversion).                       |
-| `Category`      | `categories` array                         | Deduplicate via hash of full path; capture `level`, `path`.                              |
-| `PriceRange`    | Product price                              | Precompute ranges; maintain dimension table versioning.                                  |
-| `CoPurchaseSet` | `bought_together` list                     | Keep original `source_asin` and computed quality metrics (support = list length).        |
-| `OpinionPhrase` | NLP pipeline                               | Optional; store canonical aspect mapping and sentiment for reuse.                        |
+| Target          | Source Fields                             | Transform Notes                                                                          |
+| --------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `User`          | `reviewerID`, counts aggregated per batch | Derive `review_count`, `verified_purchase_count`, `helpful_votes_given` (sum `helpful`). |
+| `Variant`       | Review ASINs                              | Create from reviews; link to parents when `asin != parent_asin`.                         |
+| `ParentProduct` | `parent_asin` from metadata               | Create parent nodes; attach price/brand/categories/attributes from metadata.             |
+| `Brand`         | `brand`                                   | Normalise brand names and hash to `brand_id`; link via `HAS_BRAND`.                      |
+| `Review`        | Review record                             | Generate deterministic id; clip text to max length for ingestion; attach `source_file`.  |
+| `Attribute`     | `details`, `feature`, NLP outputs         | Standardise keys (snake_case), normalise values (unit conversion).                       |
+| `Category`      | `categories` array                        | Deduplicate via hash of full path; capture `level`, `path`.                              |
+| `PriceRange`    | Parent price                              | Precompute ranges; maintain dimension table versioning.                                  |
+| `CoPurchaseSet` | `bought_together` list                    | Keep original `source_asin` and computed quality metrics (support = list length).        |
+| `OpinionPhrase` | NLP pipeline                              | Optional; store canonical aspect mapping and sentiment for reuse.                        |
+
+Renamed edge `ABOUT_PRODUCT` (formerly `REVIEWS`) links reviews to variants when available, otherwise directly to `ParentProduct`. Variants link to parents via `IS_VARIANT_OF`. Brands and categories attach at the parent level (with optional propagation); price ranges also attach to parents.
 
 ## Operational Considerations
 
