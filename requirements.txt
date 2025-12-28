@@ -21,3 +21,5 @@ neo4j>=5.14.0
 python-dotenv>=1.0.0
 transformers>=4.41.1
 spacy>=3.7.4
+sentencepiece>=0.1.99
+pyabsa>=2.3.4

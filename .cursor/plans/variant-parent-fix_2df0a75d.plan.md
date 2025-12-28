@@ -25,4 +25,3 @@ todos:
 - link `Product` → `ParentProduct` via `IS_VARIANT_OF` when `asin != parent_asin`; otherwise link review directly `ABOUT_PRODUCT` → `ParentProduct`.
 - attach categories/brand/attributes to `ParentProduct`; optionally propagate to child `Product` if needed.
 - **constraints-validations**: Update constraints for `ParentProduct` uniqueness; adjust validation queries to check `IS_VARIANT_OF` and `ABOUT_PRODUCT` -> `ParentProduct` cases.
-- **doc-note**: Brief addendum in pipeline doc noting the parent/variant ingestion change and review-to-parent fallback.

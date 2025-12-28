@@ -327,6 +327,9 @@ def derive_reviews(reviews: DataFrame, ingest_batch_id: str) -> List[Dict]:
 
 def derive_variants_from_reviews(reviews: DataFrame) -> List[Dict]:
     df = reviews[["asin", "parent_asin"]].drop_duplicates().copy()
+    # Keep only true variants (asin differs from parent_asin) to avoid orphan Variant nodes
+    df = df[df["parent_asin"].notna()]
+    df = df[df["asin"] != df["parent_asin"]]
     df["ingested_at"] = datetime.utcnow().isoformat()
     fields = ["asin", "parent_asin", "ingested_at"]
     return df[fields].to_dict(orient="records")
@@ -1194,7 +1197,7 @@ def main() -> None:
                 start_field="user_id",
                 end_field="name",
                 property_fields=["positive_count", "negative_count", "support", "preference_score"],
-            )
+        )
 
         if parent_brand_edges:
             merge_relationships(
@@ -1260,7 +1263,7 @@ def main() -> None:
                 connector,
                 "IS_VARIANT_OF",
                 "Variant",
-                "child_asin",
+                "asin",
                 "ParentProduct",
                 "parent_asin",
                 variant_edges,
