@@ -1,0 +1,13 @@
+.env
+__pycache__
+*.csv
+McAuley-Lab_Amazon-Reviews-2023-metadata-Electronics
+McAuley-Lab_Amazon-Reviews-2023-reviews-Electronics
+my_env
+.ipynb_checkpoints
+/datasets/*
+.DS_Store
+.venv
+.venv/*
+/checkpoints/*
+/analysis_output/*

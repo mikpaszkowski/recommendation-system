@@ -1,0 +1,56 @@
+<OBJECTIVE>
+You are a world-class Data Architect and Graph Engineer specializing in building large-scale Knowledge Graphs (KGs) for advanced recommendation systems.
+Your task is to design and document the foundational data pipeline for constructing a Knowledge Graph (KG) that will serve as the backbone for a state-of-the-art Conversational Recommendation System (CRS) in the e-commerce domain.
+Your solution must be scalable, efficient, and, most importantly, extensible to support advanced multi-hop reasoning and LLM integration in future phases.
+</OBJECTIVE>
+
+<CONTEXT_&_DATA_SOURCE>
+1. Primary Data Source: The system will be built upon the Amazon Reviews '23 Dataset. You must analyze the potential entities and relations described in this dataset (reviews, user data, item metadata).
+2. Key Entities: The data source allows for the extraction of core entities such as:
+    * User (from ratings)
+    * Product / Item (from metadata, ASIN)
+    * Attribute / Facet (from details dict, e.g., brand, material, size)
+    * Price_Range (from price)
+    * Category (from hierarchical categories)
+    * Parent_ASIN (linking product variants)
+    * Co-purchase_Set (from bought_together)
+    * Opinion / Contextual_Phrase (to be extracted from text in a future phase)
+3. Ultimate Goal: The final KG will be integrated with a Large Language Model (LLM) to power a CRS, enabling dynamic, multi-hop reasoning (e.g., finding products based on implicit, commonsense relationships). Your design for this foundational task must make those future tasks possible.
+</CONTEXT_&_DATA_SOURCE>
+
+<TASK_1_CORE_REQUIREMENTS>
+Your specific task is to design and prototype the foundational layer of the KG.
+1. Define Extensible Schema:
+    * Design a robust graph schema (Node labels, Relationship types, and Properties).
+    * The schema must explicitly model all core entities (User, Product, Attribute, Category, etc.) and their explicit relations (e.g., RATED, HAS_ATTRIBUTE, BELONGS_TO_CATEGORY, BOUGHT_TOGETHER, IS_VARIANT_OF).
+    * The schema must be documented in a clear, easy-to-understand format (e.g., using Markdown tables or a visual representation).
+2. Design Ingestion Pipeline:
+    * Describe the architecture of a scalable ETL (Extract, Transform, Load) pipeline to process the raw Amazon Reviews '23 data (JSON/CSV) and populate a graph database (e.g., Neo4j, Neptune).
+    * Detail the "Transform" step: How will you map raw data fields (like the details dictionary or hierarchical categories list) into discrete nodes and relationships?
+3. Implement Prototype Ingestion:
+    * Provide the implementation scripts (e.g., Python, Cypher) to create graph constraints/indices and ingest a small, representative subset of the data (e.g., a single category like "Electronics").
+    * The goal is to prove the schema and ingestion logic are functional.
+4. Provide Validation Queries:
+    * Write 5-10 sample queries (e.g., in Cypher) that demonstrate the graph is correctly populated and key traversal paths are functional (e.g., "Find all products in category X with attribute Y", "Find users who rated product Z", "Show products frequently bought with product A").
+</TASK_1_CORE_REQUIREMENTS>
+
+<FUTURE-PROOFING_CONSIDERATIONS>
+You are NOT required to implement the following items. However, your schema design and documentation must explicitly state how it anticipates and supports these future extensions:
+1. Commonsense Knowledge Extraction: The schema must be ready to ingest implicit, commonsense relations (e.g., <Product> - USED_FOR -> <Audience>, <Product> - CAPABLE_OF -> <Function>) that will be extracted from review text by an LLM in a later phase.
+2. Graph Embeddings: The graph structure (node types, relations) must be suitable for generating high-quality graph embeddings using algorithms like GNNs, R-GCN, or FastRP.
+3. LLM Modality Alignment: The schema must support future alignment between the graph's semantic space and the LLM's token space. This includes accommodating techniques like Mutual Information Estimation (MIM) or Graph-to-Text Adapters (e.g., COMPASS framework) which require specific entity-centric views or captioning.
+</FUTURE-PROOFING_CONSIDERATIONS>
+
+<DELIVERABLES>
+1. Schema Definition Document: A clear, documented graph schema (nodes, properties, relationships).
+2. Ingestion & Setup Scripts: Runnable scripts (e.g., Python, Cypher) to set up indices/constraints and ingest the sample data subset.
+3. Validation Queries: A file with sample queries to validate the prototype graph.
+4. Extensibility Report: A brief (1-2 paragraph) explanation of how your schema design directly addresses the three points in the &lt;FUTURE-PROOFING_CONSIDERATIONS&gt; section.
+</DELIVERABLES>
+
+<CONSTRAINTS>
+* Focus ONLY on the foundational pipeline (Task 1).
+* DO NOT implement recommendation algorithms (e.g., collaborative filtering).
+* DO NOT implement embedding generation (GNNs, etc.) at this stage.
+* DO NOT implement the LLM conversational layer or reasoning engine (e.g., KECR).
+</CONSTRAINTS>

@@ -1,0 +1,10 @@
+---
+name: kafka-best-practices.mdc
+description: Best practices for Apache Kafka stream processing
+globs: **/*.py
+---
+
+- Use appropriate partitioning strategies to balance load across consumers.
+- Implement error handling and retries for message processing.
+- Monitor Kafka topics and consumer lag to ensure data flow is healthy.
+- Use schema registry to manage message formats and ensure compatibility.

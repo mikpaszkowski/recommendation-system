@@ -1,0 +1,11 @@
+---
+name: apache-spark-best-practices.mdc
+description: Best practices for Apache Spark data processing
+globs: **/*.py
+---
+
+- Use DataFrames for optimized performance and ease of use over RDDs.
+- Leverage Spark's built-in functions for data transformations instead of UDFs when possible.
+- Partition data effectively to improve parallel processing and reduce shuffling.
+- Cache intermediate results when reusing data across multiple operations.
+- Monitor Spark jobs using the Spark UI to identify bottlenecks and optimize resource allocation.

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Knowledge-Grounded Conversational AI for E-Commerce</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .chart-container {
+        position: relative;
+        width: 100%;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        height: 300px;
+        max-height: 400px;
+      }
+      @media (min-width: 768px) {
+        .chart-container {
+          height: 350px;
+          max-height: 450px;
+        }
+      }
+      .flow-node {
+        background-color: #0072b5;
+        color: white;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        text-align: center;
+        min-width: 120px;
+      }
+      .flow-relation {
+        color: #00509d;
+        font-weight: 600;
+        font-family: monospace;
+        font-size: 1.125rem;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body class="bg-[#F0F8FF]">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+      <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          <div class="flex-shrink-0 flex items-center">
+            <span class="text-2xl font-bold text-[#003F88]"
+              >KG-CRS ARCHITECTURE</span
+            >
+          </div>
+          <div class="hidden md:block">
+            <div class="ml-10 flex items-baseline space-x-4">
+              <a
+                href="#problem"
+                class="text-gray-600 hover:text-[#0072B5] px-3 py-2 rounded-md text-sm font-medium"
+                >The Problem</a
+              >
+              <a
+                href="#solution"
+                class="text-gray-600 hover:text-[#0072B5] px-3 py-2 rounded-md text-sm font-medium"
+                >The Solution</a
+              >
+              <a
+                href="#data"
+                class="text-gray-600 hover:text-[#0072B5] px-3 py-2 rounded-md text-sm font-medium"
+                >Data Deep-Dive</a
+              >
+              <a
+                href="#schema"
+                class="text-gray-600 hover:text-[#0072B5] px-3 py-2 rounded-md text-sm font-medium"
+                >KG Schema</a
+              >
+              <a
+                href="#ai-modules"
+                class="text-gray-600 hover:text-[#0072B5] px-3 py-2 rounded-md text-sm font-medium"
+                >Advanced AI</a
+              >
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-8 mt-8">
+      <section id="intro" class="text-center mb-12">
+        <h1 class="text-4xl md:text-5xl font-bold text-[#003F88] mb-4">
+          Building the Next Generation of E-Commerce
+        </h1>
+        <p class="text-xl md:text-2xl text-[#00509D] max-w-4xl mx-auto">
+          A Knowledge-Grounded Conversational Recommender System (CRS) to Solve
+          Core LLM Challenges
+        </p>
+      </section>
+
+      <section
+        id="problem"
+        class="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-8"
+      >
+        <h2 class="text-3xl font-bold text-[#003F88] mb-6 text-center">
+          The Challenge: Why LLMs Alone Fail in E-Commerce
+        </h2>
+        <p
+          class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+        >
+          Relying on generic Large Language Models (LLMs) for conversational
+          recommendations introduces critical failures. They lack
+          domain-specific context, leading to user frustration and lost revenue.
+          We face two primary challenges.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div>
+            <h3 class="text-2xl font-semibold text-[#00509D] mb-3">
+              1. Item Space Discrepancy
+            </h3>
+            <p class="text-gray-700 leading-relaxed mb-4">
+              LLMs, trained on general web data, frequently recommend products
+              that are not in the target e-commerce catalog. This creates a
+              "dead-end" for the user, as the recommendation is unusable.
+            </p>
+
+            <h3 class="text-2xl font-semibold text-[#00509D] mb-3">
+              2. Item Information Negligence
+            </h3>
+            <p class="text-gray-700 leading-relaxed">
+              LLMs are unaware of crucial interdependencies, such as
+              collaborative patterns (what users *actually* buy together),
+              sequential purchases, or specific, real-time attributes (e.g.,
+              inventory, price), operating only on the dialogue context.
+            </p>
+          </div>
+
+          <div class="chart-container">
+            <canvas id="llmVsCatalogChart"></canvas>
+          </div>
+        </div>
+        <div class="text-center mt-4 text-gray-600 font-medium">
+          Chart 1: LLM Knowledge vs. Target E-Commerce Catalog
+        </div>
+      </section>
+
+      <section
+        id="solution"
+        class="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-8"
+      >
+        <h2 class="text-3xl font-bold text-[#003F88] mb-6 text-center">
+          The Solution: The Knowledge Graph as "Domain Expert"
+        </h2>
+        <p
+          class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+        >
+          We propose an architecture where a Knowledge Graph (KG) serves as the
+          central "domain expert" and "memory" for the CRS. This KG grounds the
+          LLM in factual, domain-specific data, ensuring recommendations are
+          accurate, relevant, and explainable.
+        </p>
+
+        <div class="w-full overflow-x-auto p-4">
+          <div
+            class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4"
+          >
+            <div class="flow-node">
+              User Request<br />
+              (Natural Language)
+            </div>
+            <div class="flow-relation text-2xl transform rotate-90 md:rotate-0">
+              →
+            </div>
+            <div class="flow-node bg-[#00A5DB]">
+              LLM<br />(Conversational AI)
+            </div>
+            <div class="flow-relation text-2xl transform rotate-90 md:rotate-0">
+              ↔
+            </div>
+            <div class="flow-node bg-[#003F88] border-4 border-[#00D8FF]">
+              Knowledge Graph<br />("The Domain Expert")
+            </div>
+            <div class="flow-relation text-2xl transform rotate-90 md:rotate-0">
+              ↔
+            </div>
+            <div class="flow-node bg-[#0083C2]">
+              E-Commerce Data<br />(Amazon '23)
+            </div>
+          </div>
+        </div>
+        <div class="text-center mt-4 text-gray-600 font-medium">
+          Diagram 1: High-Level System Architecture
+        </div>
+      </section>
+
+      <section id="data" class="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-8">
+        <h2 class="text-3xl font-bold text-[#003F88] mb-6 text-center">
+          Data Deep-Dive: Fueling the KG (Amazon Reviews '23)
+        </h2>
+        <p
+          class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+        >
+          The foundation of our KG is the Amazon Reviews '23 dataset, which
+          provides two rich data streams: product metadata (the catalog) and
+          user reviews (user behavior and implicit preferences).
+        </p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div>
+            <h3 class="text-2xl font-semibold text-[#00509D] mb-3">
+              Entities Extracted from Amazon '23
+            </h3>
+            <p class="text-gray-700 leading-relaxed mb-6">
+              By processing both metadata and review files, we can extract a
+              massive, interconnected graph of users, products, and the rich
+              features that link them.
+            </p>
+            <div class="chart-container" style="height: 350px">
+              <canvas id="entityBarChart"></canvas>
+            </div>
+            <div class="text-center mt-4 text-gray-600 font-medium">
+              Chart 2: Estimated Scale of Knowledge Graph Entities
+            </div>
+          </div>
+          <div>
+            <h3 class="text-2xl font-semibold text-[#00509D] mb-3">
+              Data Source Composition
+            </h3>
+            <p class="text-gray-700 leading-relaxed mb-6">
+              Review text is the primary source for mining implicit preferences
+              ("battery life is short"), while metadata provides the structured,
+              explicit attributes ("16GB RAM").
+            </p>
+            <div class="chart-container" style="height: 350px">
+              <canvas id="dataSourceChart"></canvas>
+            </div>
+            <div class="text-center mt-4 text-gray-600 font-medium">
+              Chart 3: Composition of Core Data Sources
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="schema"
+        class="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-8"
+      >
+        <h2 class="text-3xl font-bold text-[#003F88] mb-6 text-center">
+          The Blueprint: Strategic KG Schema Design
+        </h2>
+        <p
+          class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+        >
+          This schema is strategically designed to treat Reviews and Features as
+          central nodes, not just properties. This model is essential for
+          enabling advanced GNN embeddings, modality fusion, and explainable
+          path reasoning.
+        </p>
+
+        <div
+          class="w-full overflow-x-auto p-4 space-y-6 flex flex-col items-center"
+        >
+          <div
+            class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4"
+          >
+            <div class="flow-node">(User)</div>
+            <div class="flow-relation">-[WROTE]→</div>
+            <div class="flow-node bg-[#00A5DB]">(Review)</div>
+            <div class="flow-relation">-[REVIEWS]→</div>
+            <div class="flow-node">(Product)</div>
+          </div>
+
+          <div
+            class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4"
+          >
+            <div class="flow-node bg-[#00A5DB]">(Review)</div>
+            <div class="flow-relation">-[MENTIONS_FEATURE]→</div>
+            <div class="flow-node bg-[#00D8FF] text-[#003F88]">(Feature)</div>
+            <div class="flow-relation">←[HAS_FEATURE]-</div>
+            <div class="flow-node">(Product)</div>
+          </div>
+
+          <div
+            class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4"
+          >
+            <div class="flow-node">(Product)</div>
+            <div class="flow-relation">-[PART_OF]→</div>
+            <div class="flow-node bg-[#0083C2]">(Category)</div>
+            <div class="flow-relation">-[SUB_CATEGORY_OF]→</div>
+            <div class="flow-node bg-[#0083C2]">(Category)</div>
+          </div>
+
+          <div
+            class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4"
+          >
+            <div class="flow-node">(Product)</div>
+            <div class="flow-relation">-[BOUGHT_TOGETHER]→</div>
+            <div class="flow-node">(Product)</div>
+          </div>
+        </div>
+        <div class="text-center mt-4 text-gray-600 font-medium">
+          Diagram 2: Core Knowledge Graph Schema Relationships
+        </div>
+      </section>
+
+      <section
+        id="ai-modules"
+        class="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-8"
+      >
+        <h2 class="text-3xl font-bold text-[#003F88] mb-6 text-center">
+          Phase 2: Advanced AI Integration
+        </h2>
+        <p
+          class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+        >
+          With the KG foundation, we unlock three powerful AI capabilities that
+          directly solve our initial challenges. This is how the KG transitions
+          from a data store to a reasoning engine.
+        </p>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mb-12">
+          <div>
+            <h3 class="text-2xl font-semibold text-[#00509D] mb-3">
+              Goal 1: GNN Embeddings for Cold-Start
+            </h3>
+            <p class="text-gray-700 leading-relaxed mb-4">
+              <b>Problem:</b> How to recommend items to new users
+              (cold-start)?<br /><b>Solution:</b> We use Relational-GCN (R-GCN)
+              on the graph to generate vector embeddings for all users and
+              products. These embeddings capture complex patterns, allowing us
+              to find similar users based on graph structure, not just shared
+              purchases. This reveals distinct user clusters for better
+              personalization.
+            </p>
+          </div>
+          <div class="chart-container">
+            <canvas id="gnnClusterChart"></canvas>
+          </div>
+          <div class="lg:col-span-2 text-center mt-4 text-gray-600 font-medium">
+            Chart 4: User Clusters Identified by GNN Embeddings
+          </div>
+        </div>
+
+        <hr class="my-12 border-gray-300" />
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mb-12">
+          <div class="chart-container">
+            <canvas id="mimChart"></canvas>
+          </div>
+          <div>
+            <h3 class="text-2xl font-semibold text-[#00509D] mb-3">
+              Goal 2: KG-LLM Fusion (MIM)
+            </h3>
+            <p class="text-gray-700 leading-relaxed mb-4">
+              <b>Problem:</b> The "semantic gap." A user's query ("I need a
+              durable laptop") exists in *language space*, while our data
+              ("Feature: 'Durability'") exists in *graph space*.<br /><b
+                >Solution:</b
+              >
+              We use Mutual Information Maximization (MIM) to create a shared
+              embedding space. By aligning the LLM's text embedding of a review
+              with the GNN's graph embedding of that same review node, the
+              system learns that the *concept* of "durable" is semantically
+              close to the *entity* "Durability".
+            </p>
+          </div>
+          <div class="lg:col-span-2 text-center mt-4 text-gray-600 font-medium">
+            Chart 5: Semantic Space Alignment Before & After MIM
+          </div>
+        </div>
+
+        <hr class="my-12 border-gray-300" />
+
+        <div>
+          <h3 class="text-2xl font-semibold text-[#00509D] mb-3 text-center">
+            Goal 3: GraphRAG & Path Reasoning
+          </h3>
+          <p
+            class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+          >
+            <b>Problem:</b> LLMs hallucinate recommendations and cannot explain
+            *why* an item is suggested.<br /><b>Solution:</b> We use GraphRAG
+            (Retrieval-Augmented Generation). Instead of retrieving simple text,
+            we retrieve a *path* from the KG that answers the user's query. This
+            path provides verifiable, explainable context that grounds the LLM
+            in facts from our catalog.
+          </p>
+
+          <p class="text-center text-lg font-semibold text-gray-800 mb-4">
+            User Query: "I liked Product X, but I need something with better
+            battery life."
+          </p>
+
+          <div class="w-full overflow-x-auto p-4 bg-gray-50 rounded-lg">
+            <div class="flex flex-col space-y-4">
+              <div class="flex items-center space-x-2">
+                <div class="flow-node">(Product X)</div>
+                <div class="flow-relation">-[SHARES_FEATURE]→</div>
+                <div class="flow-node bg-[#00D8FF] text-[#003F88]">
+                  (Feature: 'Battery')
+                </div>
+              </div>
+              <div class="flex items-center space-x-2 ml-auto">
+                <div class="flow-relation transform rotate-180">
+                  -[MENTIONS_FEATURE]→
+                </div>
+                <div class="flow-node bg-[#00A5DB]">
+                  (Review: "5/5 stars, battery lasts 2 days!")
+                </div>
+              </div>
+              <div class="flex items-center space-x-2">
+                <div class="flow-node">(Product Y)</div>
+                <div class="flow-relation">←[REVIEWS]-</div>
+                <div class="flow-node bg-[#00A5DB]">
+                  (Review: "5/5 stars, battery lasts 2 days!")
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="text-center mt-4 text-gray-600 font-medium">
+            Diagram 3: A Multi-Hop GraphRAG Path for an Explainable
+            Recommendation
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="impact"
+        class="bg-white rounded-lg shadow-xl p-6 md:p-8 mb-8"
+      >
+        <h2 class="text-3xl font-bold text-[#003F88] mb-6 text-center">
+          Projected Impact: KG-Grounded CRS vs. LLM-Only
+        </h2>
+        <p
+          class="text-lg text-gray-700 leading-relaxed mb-8 max-w-4xl mx-auto text-center"
+        >
+          By grounding our LLM, we move from a generic chatbot to a true domain
+          expert. This architecture is projected to dramatically improve all key
+          business metrics: recommendation accuracy (by eliminating
+          out-of-catalog items), user trust (through explainability), and
+          conversion (by surfacing truly relevant products).
+        </p>
+
+        <div class="chart-container" style="max-width: 800px; height: 400px">
+          <canvas id="impactChart"></canvas>
+        </div>
+        <div class="text-center mt-4 text-gray-600 font-medium">
+          Chart 6: Projected Performance Gains
+        </div>
+      </section>
+    </main>
+
+    <footer class="text-center p-6 mt-8">
+      <p class="text-gray-600">
+        This infographic was generated based on the architectural design for a
+        Knowledge-Grounded Conversational Recommender System.
+      </p>
+      <p class="text-sm text-gray-500 mt-1">
+        Confirmations: No SVG graphics or Mermaid JS were used. All diagrams are
+        built with HTML/CSS. All charts are rendered on Canvas via Chart.js.
+      </p>
+    </footer>
+
+    <script>
+      (function () {
+        "use strict";
+
+        const palette = {
+          primary: "#0072B5",
+          secondary: "#00A5DB",
+          accent: "#00D8FF",
+          dark: "#003F88",
+          medium: "#00509D",
+          light: "#F0F8FF",
+          text: "#333333",
+        };
+
+        function wrapLabel(label) {
+          const maxLen = 16;
+          if (label.length <= maxLen) {
+            return label;
+          }
+          const words = label.split(" ");
+          const lines = [];
+          let currentLine = "";
+          for (const word of words) {
+            if ((currentLine + word).length <= maxLen) {
+              currentLine += word + " ";
+            } else {
+              if (currentLine) lines.push(currentLine.trim());
+              currentLine = word + " ";
+            }
+          }
+          if (currentLine) lines.push(currentLine.trim());
+          return lines;
+        }
+
+        const requiredTooltipCallback = {
+          title: function (tooltipItems) {
+            const item = tooltipItems[0];
+            let label = item.chart.data.labels[item.dataIndex];
+            if (Array.isArray(label)) {
+              return label.join(" ");
+            } else {
+              return label;
+            }
+          },
+        };
+
+        const defaultChartOptions = (hasScales = true) => ({
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "top",
+              labels: {
+                color: palette.text,
+              },
+            },
+            tooltip: {
+              callbacks: requiredTooltipCallback,
+            },
+          },
+          scales: hasScales
+            ? {
+                y: {
+                  beginAtZero: true,
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+                x: {
+                  ticks: { color: palette.text },
+                  grid: { display: false },
+                },
+              }
+            : {},
+        });
+
+        function renderLLMvCatalogChart() {
+          const ctx = document
+            .getElementById("llmVsCatalogChart")
+            .getContext("2d");
+          new Chart(ctx, {
+            type: "doughnut",
+            data: {
+              labels: [
+                "LLM General Knowledge",
+                "Target E-Commerce Catalog",
+                "Overlap",
+              ],
+              datasets: [
+                {
+                  label: "Knowledge Space",
+                  data: [65, 25, 10],
+                  backgroundColor: [
+                    palette.secondary,
+                    palette.dark,
+                    palette.accent,
+                  ],
+                  borderColor: "#ffffff",
+                  borderWidth: 2,
+                },
+              ],
+            },
+            options: {
+              ...defaultChartOptions(false),
+              plugins: {
+                ...defaultChartOptions(false).plugins,
+                title: {
+                  display: true,
+                  text: "Item Space Discrepancy",
+                  color: palette.text,
+                  font: { size: 16 },
+                },
+              },
+            },
+          });
+        }
+
+        function renderEntityBarChart() {
+          const ctx = document
+            .getElementById("entityBarChart")
+            .getContext("2d");
+          new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: [
+                "Users",
+                "Products",
+                "Reviews",
+                "Categories",
+                "Features",
+              ].map(wrapLabel),
+              datasets: [
+                {
+                  label: "Total Entities (Log Scale)",
+                  data: [6.17, 5.7, 6.7, 4, 4.7],
+                  backgroundColor: palette.primary,
+                  borderRadius: 4,
+                },
+              ],
+            },
+            options: {
+              ...defaultChartOptions(true),
+              scales: {
+                y: {
+                  type: "linear",
+                  beginAtZero: true,
+                  title: {
+                    display: true,
+                    text: "Count (Log 10)",
+                  },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+                x: {
+                  ticks: { color: palette.text },
+                  grid: { display: false },
+                },
+              },
+              plugins: {
+                ...defaultChartOptions(true).plugins,
+                tooltip: {
+                  callbacks: {
+                    ...requiredTooltipCallback,
+                    label: (context) =>
+                      `Log Count: ${context.raw.toFixed(1)} (Approx. ${Math.pow(
+                        10,
+                        context.raw
+                      ).toLocaleString()})`,
+                  },
+                },
+              },
+            },
+          });
+        }
+
+        function renderDataSourceChart() {
+          const ctx = document
+            .getElementById("dataSourceChart")
+            .getContext("2d");
+          new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: ["reviews.json", "metadata.json"],
+              datasets: [
+                {
+                  label: "Review Text / Features",
+                  data: [70, 40],
+                  backgroundColor: palette.secondary,
+                },
+                {
+                  label: "Ratings / Categories",
+                  data: [30, 20],
+                  backgroundColor: palette.primary,
+                },
+                {
+                  label: "Details (from metadata)",
+                  data: [0, 40],
+                  backgroundColor: palette.medium,
+                },
+              ],
+            },
+            options: {
+              ...defaultChartOptions(true),
+              scales: {
+                x: {
+                  stacked: true,
+                  ticks: { color: palette.text },
+                  grid: { display: false },
+                },
+                y: {
+                  stacked: true,
+                  title: { display: true, text: "Composition %" },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+              },
+            },
+          });
+        }
+
+        function renderGnnClusterChart() {
+          const ctx = document
+            .getElementById("gnnClusterChart")
+            .getContext("2d");
+          new Chart(ctx, {
+            type: "bubble",
+            data: {
+              labels: [
+                "Value-Seekers (Electronics)",
+                "Casual Browsers (Books)",
+                "Fashion Enthusiasts",
+                "Home Improvement DIYers",
+                "Niche Hobbyists",
+              ].map(wrapLabel),
+              datasets: [
+                {
+                  label: "User Clusters",
+                  data: [
+                    {
+                      x: 10,
+                      y: 12,
+                      r: 28,
+                      label: "Value-Seekers (Electronics)",
+                    },
+                    { x: 18, y: 8, r: 22, label: "Casual Browsers (Books)" },
+                    { x: 8, y: 20, r: 18, label: "Fashion Enthusiasts" },
+                    { x: 22, y: 17, r: 15, label: "Home Improvement DIYers" },
+                    { x: 15, y: 15, r: 10, label: "Niche Hobbyists" },
+                  ],
+                  backgroundColor: [
+                    palette.primary + "B3",
+                    palette.secondary + "B3",
+                    palette.accent + "B3",
+                    palette.medium + "B3",
+                    palette.dark + "B3",
+                  ],
+                },
+              ],
+            },
+            options: {
+              ...defaultChartOptions(true),
+              scales: {
+                y: {
+                  title: { display: true, text: "Avg. Items per Session" },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+                x: {
+                  title: { display: true, text: "Avg. Purchase Value" },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+              },
+              plugins: {
+                ...defaultChartOptions(true).plugins,
+                tooltip: {
+                  callbacks: {
+                    title: function (tooltipItems) {
+                      const item = tooltipItems[0];
+                      let label = item.chart.data.labels[item.dataIndex];
+                      if (Array.isArray(label)) {
+                        return label.join(" ");
+                      } else {
+                        return label;
+                      }
+                    },
+                    label: (context) =>
+                      `Cluster Size (Radius): ${context.raw.r}`,
+                  },
+                },
+              },
+            },
+          });
+        }
+
+        function renderMimChart() {
+          const ctx = document.getElementById("mimChart").getContext("2d");
+
+          const unalignedData = Array.from({ length: 20 }, () => ({
+            x: Math.random() * 20,
+            y: Math.random() * 20,
+          }));
+          const alignedDataLang = Array.from({ length: 15 }, () => ({
+            x: 5 + Math.random() * 2,
+            y: 5 + Math.random() * 2,
+          }));
+          const alignedDataGraph = Array.from({ length: 15 }, () => ({
+            x: 15 + Math.random() * 2,
+            y: 15 + Math.random() * 2,
+          }));
+
+          new Chart(ctx, {
+            type: "scatter",
+            data: {
+              labels: ["Unaligned", "Aligned (Language)", "Aligned (Graph)"],
+              datasets: [
+                {
+                  label: "Before MIM (Unaligned)",
+                  data: unalignedData,
+                  backgroundColor: palette.secondary + "80",
+                },
+                {
+                  label: "After MIM (Language Space)",
+                  data: alignedDataLang,
+                  backgroundColor: palette.dark,
+                },
+                {
+                  label: "After MIM (Graph Space)",
+                  data: alignedDataGraph,
+                  backgroundColor: palette.primary,
+                },
+              ],
+            },
+            options: {
+              ...defaultChartOptions(true),
+              scales: {
+                y: {
+                  title: { display: true, text: "Semantic Dimension 2" },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+                x: {
+                  title: { display: true, text: "Semantic Dimension 1" },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+              },
+              plugins: {
+                legend: {
+                  position: "top",
+                  labels: {
+                    color: palette.text,
+                  },
+                },
+                tooltip: {
+                  callbacks: {
+                    title: function (tooltipItems) {
+                      return tooltipItems[0].dataset.label;
+                    },
+                  },
+                },
+              },
+            },
+          });
+        }
+
+        function renderImpactChart() {
+          const ctx = document.getElementById("impactChart").getContext("2d");
+          new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels: [
+                "Recommendation Accuracy",
+                "User Trust & Confidence",
+                "Explainability",
+              ].map(wrapLabel),
+              datasets: [
+                {
+                  label: "LLM-Only CRS",
+                  data: [35, 20, 10],
+                  backgroundColor: palette.secondary,
+                  borderRadius: 4,
+                },
+                {
+                  label: "KG-Grounded CRS",
+                  data: [85, 75, 90],
+                  backgroundColor: palette.primary,
+                  borderRadius: 4,
+                },
+              ],
+            },
+            options: {
+              ...defaultChartOptions(true),
+              indexAxis: "y",
+              scales: {
+                y: {
+                  ticks: { color: palette.text },
+                  grid: { display: false },
+                },
+                x: {
+                  max: 100,
+                  title: { display: true, text: "Performance Score (0-100)" },
+                  ticks: { color: palette.text },
+                  grid: { color: "#e0e0e0" },
+                },
+              },
+            },
+          });
+        }
+
+        window.addEventListener("load", () => {
+          renderLLMvCatalogChart();
+          renderEntityBarChart();
+          renderDataSourceChart();
+          renderGnnClusterChart();
+          renderMimChart();
+          renderImpactChart();
+        });
+      })();
+    </script>
+  </body>
+</html>

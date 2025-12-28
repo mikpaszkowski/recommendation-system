@@ -1,0 +1,11 @@
+---
+name: data-modeling-best-practices.mdc
+description: Best practices for data modeling in knowledge graphs
+globs: **/*.jsonl
+---
+
+- Normalize attributes and relationships to reduce redundancy and improve data integrity.
+- Clearly define node and relationship types to facilitate easier querying and understanding.
+- Use descriptive names for nodes and relationships to enhance readability.
+- Document the data model schema to ensure clarity for future developers.
+- Regularly review and update the schema as the application evolves.
