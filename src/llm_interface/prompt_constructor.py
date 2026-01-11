@@ -38,7 +38,8 @@ Follow these steps when responding to users:
                                       user_query: str,
                                       user_profile: Optional[Dict[str, Any]] = None,
                                       conversation_history: Optional[List[Dict[str, str]]] = None,
-                                      retrieved_items: Optional[List[Dict[str, Any]]] = None) -> List[BaseMessage]:
+                                      retrieved_items: Optional[List[Dict[str, Any]]] = None,
+                                      preferences: Optional[Dict[str, Any]] = None) -> List[BaseMessage]:
         """
         Construct a prompt for generating recommendations.
         
@@ -47,6 +48,7 @@ Follow these steps when responding to users:
             user_profile: Optional user profile information
             conversation_history: Optional conversation history
             retrieved_items: Optional list of retrieved items
+            preferences: Optional weighted preferences (likes/dislikes/constraints)
             
         Returns:
             List of LangChain message objects ready for the LLM
@@ -64,6 +66,11 @@ Follow these steps when responding to users:
             history_text = self._format_conversation_history(conversation_history)
             prompt_parts.append(f"[CONVERSATION HISTORY]\n{history_text}\n")
         
+        # Add structured preferences if available
+        if preferences:
+            prefs_text = self._format_preferences(preferences)
+            prompt_parts.append(f"[PREFERENCES]\n{prefs_text}\n")
+
         # Add retrieved items if available
         if retrieved_items:
             items_text = self._format_retrieved_items(retrieved_items)
@@ -132,6 +139,45 @@ Follow these steps when responding to users:
                 history_parts.append(f"Assistant: {turn['assistant']}")
         
         return "\n".join(history_parts)
+
+    def _format_preferences(self, preferences: Dict[str, Any]) -> str:
+        """
+        Format weighted preferences for inclusion in the prompt.
+        Expects keys: weighted_preferences -> likes/dislikes/constraints.
+        """
+        parts = []
+        weighted = preferences.get("weighted_preferences", {})
+
+        likes = weighted.get("likes", [])
+        if likes:
+            parts.append("Positive signals:")
+            for entry in likes:
+                weight = self._as_float(entry.get("weight", 0.0))
+                parts.append(f"- {entry.get('value')} (weight={weight:.2f})")
+
+        dislikes = weighted.get("dislikes", [])
+        if dislikes:
+            parts.append("\nNegative signals:")
+            for entry in dislikes:
+                weight = self._as_float(entry.get("weight", 0.0))
+                parts.append(f"- {entry.get('value')} (weight={weight:.2f})")
+
+        constraints = weighted.get("constraints") or {}
+        if constraints:
+            parts.append("\nConstraints:")
+            for key, value in constraints.items():
+                parts.append(f"- {key}: {value}")
+
+        if not parts:
+            parts.append("No structured preferences captured yet.")
+
+        return "\n".join(parts)
+
+    def _as_float(self, value: Any) -> float:
+        try:
+            return float(value)
+        except Exception:
+            return 0.0
     
     def _format_retrieved_items(self, retrieved_items: List[Dict[str, Any]]) -> str:
         """

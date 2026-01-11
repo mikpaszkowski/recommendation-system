@@ -73,3 +73,19 @@ The LLM integration demonstrates how to integrate the recommendation API with an
 1. Sending user messages to the recommendation API
 2. Generating responses using the LLM
 3. Updating conversation history in the recommendation API
+
+## Phase I: Agentic Preference Extraction (LangChain)
+
+Phase I wraps preference extraction, quantification, and prompt construction into a small agentic flow.
+
+Example:
+
+```python
+from src.dialog_manager.preference_agent_flow import PreferenceAgentFlow
+
+flow = PreferenceAgentFlow()
+result = flow.run(user_id="u123", user_message="I loved Interstellar, dislike horror.")
+
+# result["prompt_messages"] are LangChain messages ready for the recommender call
+# result["preferences"] contains weighted likes/dislikes/constraints
+```

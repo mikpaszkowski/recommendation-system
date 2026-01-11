@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
-from langchain.schema import BaseMessage
+from langchain_core.messages import BaseMessage
 
 class LLMHandlerInterface(ABC):
     """Interface for LLM handlers."""

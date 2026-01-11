@@ -1,9 +1,10 @@
 import json
-from langchain_community.chat_models import ChatOpenAI
-from langchain.schema import BaseMessage, HumanMessage, SystemMessage, AIMessage
-from typing import Dict, Any, Optional, List, Union
 import os
 import logging
+from typing import Dict, Any, Optional, List, Union
+
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
+from langchain_openai import ChatOpenAI
 
 from src.llm.abstract_llm_handler import LLMHandlerInterface
 
@@ -35,7 +36,7 @@ class SimpleLLMHandler(LLMHandlerInterface):
         self.llm = ChatOpenAI(
             openai_api_key=self.api_key,
             model_name=model_name,
-            temperature=0.7
+            temperature=0
         )
         
         logger.info(f"Initialized SimpleLLMHandler with model: {model_name}")
