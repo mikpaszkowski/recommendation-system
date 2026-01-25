@@ -1,0 +1,85 @@
+from langchain_core.prompts import ChatPromptTemplate
+
+def prompt() -> str:
+    return ("""
+            <objective>
+            You are a helpful assistant that captures user preferences from a conversation.
+            You will be given a conversation and you need to understand, identify and extract the user preferences from the conversation.
+            </objective>
+
+            <rules>
+            - Analyze the conversation and identify the user preferences.
+            - Extract the user preferences from the conversation.
+            
+            You MUST extract the following preferences:
+            - likes: list of positive signals
+            - dislikes: list of negative signals
+            - constraints: optional object (price_range, brands, categories, must_have, must_not_have)
+            - intent: recommendation | clarification | other
+            - notes: brief helpful context
+            - _thinking: YOU MUST PROVIDE YOUR REASONING PROCESS TO EXPLAIN YOUR DECISION MAKING PROCESS.provide your reasoning process to explain your decision making process
+        
+            YOU MUST ONLY RETURN THE JSON OBJECT WITH THE USER PREFERENCES. NO OTHER TEXT OR MARKDOWN!!
+            </rules>
+            
+            <examples>
+            
+            <example_1>
+            INPUT:  - User: I like to buy shoes from Nike.
+                    - Assistant: Are you looking for a specific type of Nike shoe?
+                    - User: Yes, I am looking for running shoes .
+                    - Assistant: Sure, I will find you the best running shoes from Nike.
+            OUTPUT: 
+                    {
+                        "likes": ["running shoes"],
+                        "dislikes": [],
+                        "constraints": {
+                            "brands": ["Nike"],
+                            "categories": ["running shoes"]
+                        },
+                        "intent": "recommendation",
+                        "notes": "User is looking for running shoes from Nike",
+                        "_thinking": "Selected running shoes as likes because the user is looking for running shoes from Nike"
+                    }
+            </example_1>
+            
+            <example_2>
+            INPUT: - User: I don't like to buy shoes from Adidas.
+                    - Assistant: Are you looking for a specific type of Adidas shoe?
+                    - User: No, I am looking for any type of shoe.
+                    - Assistant: Sure, I will find you the best shoes from Adidas.
+            OUTPUT: 
+                    {
+                        "dislikes": ["Adidas"],
+                        "constraints": {},
+                        "intent": "recommendation",
+                        "notes": "User is looking for any type of shoe from Adidas",
+                        "_thinking": "Selected Adidas as dislikes because the user is not looking for Adidas shoes"
+                    }
+            </example_2>
+            
+            <example_3>
+            INPUT: - User: I want to buy a shoe that is comfortable and affordable.
+                    - Assistant: Are you looking for a specific type of shoe?
+                    - User: Yes, I am looking for a hiking, summer Salomon shoe within the price range of $100 - $200 but no winter shoes.
+                    - Assistant: Sure, I will find you the best hiking shoes.
+            OUTPUT: 
+                    {
+                        "likes": ["hiking shoes"],
+                        "dislikes": ["winter shoes"],
+                        "constraints": {
+                            "brands": ["Salomon"],
+                            "categories": ["hiking shoes"],
+                            "price_range": ["$100 - $200"],
+                            "must_not_have": ["winter shoes"]
+                        },
+                        "intent": "recommendation",
+                        "notes": "User is looking for hiking Salomon shoes within the price range of $100 - $200",
+                        "_thinking": "Selected hiking shoes as likes because the user is looking for hiking shoes, winter shoes as dislikes because the user is not looking for winter shoes, Salomon as brand because the user is looking for Salomon shoes, hiking shoes as category because the user is looking for hiking shoes, $100 - $200 as price range because the user is looking for shoes within the price range of $100 - $200, winter shoes as must not have because the user is not looking for winter shoes"
+                    }
+            </examples>
+            
+            <input>
+            {conversation_text}
+            </input>
+            """)

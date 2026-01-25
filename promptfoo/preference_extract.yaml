@@ -1,0 +1,62 @@
+- description: Example 1 - Nike running shoes
+  vars:
+    conversation_text: |
+      - User: I like to buy shoes from Nike.
+      - Assistant: Are you looking for a specific type of Nike shoe?
+      - User: Yes, I am looking for running shoes .
+      - Assistant: Sure, I will find you the best running shoes from Nike.
+  assert:
+    - type: javascript
+      value: |
+        const obj = JSON.parse(output);
+        return obj.likes.includes("running shoes") &&
+          (obj.constraints?.brands || []).includes("Nike") &&
+          (obj.constraints?.categories || []).includes("running shoes") &&
+          obj.intent === "recommendation";
+
+- description: Example 2 - dislikes Adidas
+  vars:
+    conversation_text: |
+      - User: I don't like to buy shoes from Adidas.
+      - Assistant: Are you looking for a specific type of Adidas shoe?
+      - User: No, I am looking for any type of shoe.
+      - Assistant: Sure, I will find you the best shoes from Adidas.
+  assert:
+    - type: javascript
+      value: |
+        const obj = JSON.parse(output);
+        return (obj.dislikes || []).includes("Adidas") &&
+          Object.keys(obj.constraints || {}).length === 0 &&
+          obj.intent === "recommendation";
+
+- description: Example 3 - Salomon hiking shoes with constraints
+  vars:
+    conversation_text: |
+      - User: I want to buy a shoe that is comfortable and affordable.
+      - Assistant: Are you looking for a specific type of shoe?
+      - User: Yes, I am looking for a hiking, summer Salomon shoe within the price range of $100 - $200 but no winter shoes.
+      - Assistant: Sure, I will find you the best hiking shoes.
+  assert:
+    - type: javascript
+      value: |
+        const obj = JSON.parse(output);
+        const priceRange = (obj.constraints?.price_range || []).some((p) => `${p}`.includes("$100 - $200"));
+        return (obj.likes || []).includes("hiking shoes") &&
+          (obj.dislikes || []).includes("winter shoes") &&
+          (obj.constraints?.brands || []).includes("Salomon") &&
+          (obj.constraints?.categories || []).includes("hiking shoes") &&
+          priceRange &&
+          (obj.constraints?.must_not_have || []).includes("winter shoes") &&
+          obj.intent === "recommendation";
+
+- description: Test case - Nike running preference parsing
+  vars:
+    conversation_text: "User likes Nike running shoes"
+  assert:
+    - type: javascript
+      value: |
+        const obj = JSON.parse(output);
+        const likesRunning = (obj.likes || []).some((v) => v.toLowerCase().includes("running"));
+        const brandNike = (obj.constraints?.brands || []).some((v) => v.toLowerCase().includes("nike"));
+        return likesRunning && brandNike && obj.intent === "recommendation";
+
