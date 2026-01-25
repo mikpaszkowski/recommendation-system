@@ -25,14 +25,14 @@ Punktem wyjścia jest szczegółowa analiza pól dostępnych w zbiorze danych 1:
 * **Metadane Produktów (Rodzice):** parent\_asin (ID produktu nadrzędnego), title (nazwa), features (lista), description (lista), bought\_together (lista parent\_asin).  
 * **Pół-ustrukturyzowane Metadane:** categories (lista hierarchiczna), details (słownik klucz-wartość, np. marka, materiał, rozmiar).2
 
-### **1.2. Krytyczne Rozróżnienie: Product (asin) vs. ParentProduct (parent\_asin)**
+### **1.2. Krytyczne Rozróżnienie: Variant (asin) vs. ParentProduct (parent\_asin)**
 
 Kluczowym wyzwaniem i jednocześnie fundamentalną decyzją projektową jest poprawne zamodelowanie rozróżnienia między asin a parent\_asin. Dokumentacja 1 wyraźnie wskazuje: "Products with different colors, styles, sizes usually belong to the same parent ID" oraz "Please use parent ID to find product meta".
 
 Oznacza to, że:
 
-1. Użytkownik (User) pisze recenzję (Review) o konkretnym wariancie, który kupił (np. "czerwone buty, rozmiar 42"), identyfikowanym przez asin.  
-2. Jednakże wszystkie bogate metadane – takie jak bought\_together, categories i details (w tym marka) – są powiązane z produktem *nadrzędnym*, identyfikowanym przez parent\_asin (np. "model butów XYZ").
+1. Użytkownik (User) pisze recenzję (Review) o konkretnym wariancie, który kupił (np. "czerwone buty, rozmiar 42"), identyfikowanym przez asin. W grafie jest to węzeł **Variant**.  
+2. Jednakże wszystkie bogate metadane – takie jak bought\_together, categories i details (w tym marka) – są powiązane z produktem *nadrzędnym*, identyfikowanym przez parent\_asin (np. "model butów XYZ") i reprezentowanym jako **ParentProduct**.
 
 Błędne zamodelowanie, polegające na przypisaniu bought\_together bezpośrednio do asin, doprowadziłoby do utraty sygnału kolaboracyjnego i błędnych rekomendacji. Dlatego schemat grafu musi jawnie rozdzielić te dwie koncepcje i połączyć je relacją IS\_VARIANT\_OF. System rekomendacyjny będzie wówczas polecał ParentProduct, pozostawiając użytkownikowi wybór wariantu (koloru, rozmiaru).
 
@@ -40,32 +40,44 @@ Błędne zamodelowanie, polegające na przypisaniu bought\_together bezpośredni
 
 Na podstawie powyższej analizy definiuje się następujący schemat docelowy dla bazy danych grafowej.
 
-**Tabela 1: Definicja Schematu Węzłów Rdzeniowych**
+**Tabela 1: Definicja Schematu Węzłów Rdzeniowych (aktualny stan ingestu)**
 
 | Etykieta Węzła | Opis | Kluczowe Właściwości | Źródło Danych (Pole Amazon '23) |
 | :---- | :---- | :---- | :---- |
-| User | Recenzent/Użytkownik | userId: STRING (unikalny) | user\_id |
-| Product | Konkretny wariant produktu | asin: STRING (unikalny), price: FLOAT | asin, price (z metadanych produktu) |
-| ParentProduct | Ogólny koncept/model produktu | parentAsin: STRING (unikalny), title: STRING | parent\_asin, title (z metadanych rodzica) |
-| Review | Recenzja napisana przez użytkownika | reviewId: STRING (generowany\*), timestamp: DATETIME, verified: BOOLEAN, helpfulVotes: INTEGER | user\_id \+ asin \+ timestamp, timestamp, verified\_purchase, helpful\_vote |
-| Category | Kategoria produktu | name: STRING (unikalny) | categories (lista) |
-| Brand | Marka produktu | name: STRING (unikalny) | details |
-| Attribute | Generyczny atrybut produktu | name: STRING, value: STRING | details (pozostałe klucze-wartości) |
+| User | Recenzent/Użytkownik | user\_id: STRING (unikalny), review\_count, verified\_purchase\_count, helpful\_votes\_total, ingested\_at | review\_data |
+| Review | Recenzja napisana przez użytkownika | review\_id: STRING (unikalny), rating, review\_title, review\_body, verified, helpful\_votes, timestamp\_iso, user\_id, asin, ingest\_batch\_id | review\_data |
+| Variant | Konkretny wariant produktu | asin: STRING (unikalny), parent\_asin, ingested\_at | reviews (asin, parent\_asin) |
+| ParentProduct | Ogólny koncept/model produktu | parent\_asin: STRING (unikalny), title, brand, price, avg\_rating, review\_count, recent\_review\_count, main\_category, ingested\_at, ingest\_batch\_id | metadata (parent\_asin, title, rating\_number, average\_rating, price, main\_category) |
+| Brand | Marka produktu | brand\_id: STRING (unikalny), name, ingested\_at | metadata.brand / details.Brand |
+| Category | Kategoria produktu | category\_id: STRING (unikalny), name, level, path, ingested\_at | metadata.categories |
+| Attribute | Generyczny atrybut produktu | attribute\_id: STRING (unikalny), attribute\_name, attribute\_value, normalized\_value, value\_type, source, ingested\_at | metadata.details / features |
+| PriceRange | Przedział cenowy | range\_id: STRING (unikalny), label, lower\_bound, upper\_bound, currency, ingested\_at | wyliczane |
+| CoPurchaseSet | Zestaw współkupowań | set\_id: STRING (unikalny), source\_asin, size, support, confidence, ingested\_at | metadata.bought\_together |
+| Aspect | Znormalizowany aspekt recenzji | name: STRING (unikalny), surface\_forms, mention\_count, ingested\_at | aspect\_pipeline (opcjonalnie) |
 
-\* reviewId można wygenerować jako hash z user\_id, asin i timestamp, aby zapewnić unikalność.
+\* review\_id generowany jest jako hash z user\_id, asin, timestamp i tytułu recenzji.
 
-**Tabela 2: Definicja Schematu Relacji Jawnych**
+**Tabela 2: Definicja Schematu Relacji Jawnych (aktualny stan ingestu)**
 
 | Węzeł Startowy | Typ Relacji | Węzeł Końcowy | Właściwości Relacji | Źródło / Logika Biznesowa |
 | :---- | :---- | :---- | :---- | :---- |
 | User | WROTE | Review | Brak | Powiązanie autora z recenzją. |
-| Review | ABOUT\_PRODUCT | Product | Brak | Powiązanie recenzji z kupionym wariantem (asin). |
-| Product | IS\_VARIANT\_OF | ParentProduct | Brak | Kluczowe powiązanie asin z parent\_asin. |
-| ParentProduct | BOUGHT\_TOGETHER | ParentProduct | Brak | Z listy bought\_together (łączenie parent\_asin). |
-| ParentProduct | HAS\_BRAND | Brand | Brak | Ze słownika details. |
-| ParentProduct | HAS\_ATTRIBUTE | Attribute | Brak | Ze słownika details (un-pivot). |
-| ParentProduct | IN\_CATEGORY | Category | Brak | Relacja do najniższej (leaf) kategorii z listy categories. |
-| Category | CHILD\_OF | Category | Brak | Modelowanie hierarchii z listy categories.5 |
+| Review | ABOUT\_PRODUCT | Variant | Brak | Recenzja o wariancie (asin), gdy asin != parent\_asin. |
+| Review | ABOUT\_PRODUCT | ParentProduct | Brak | Recenzja o produkcie nadrzędnym, gdy brak wariantu. |
+| User | RATED | Variant | rating, timestamp\_iso, review\_id, verified | Ocena wariantu przez użytkownika. |
+| User | RATED | ParentProduct | rating, timestamp\_iso, review\_id, verified | Ocena produktu nadrzędnego, gdy brak wariantu. |
+| Variant | IS\_VARIANT\_OF | ParentProduct | Brak | Kluczowe powiązanie asin z parent\_asin. |
+| ParentProduct | IN\_PRICE\_RANGE | PriceRange | Brak | Wyliczany koszyk cenowy na podstawie price. |
+| ParentProduct | BELONGS\_TO\_CATEGORY | Category | primary | Przynależność do kategorii (zaznaczony liść). |
+| Category | SUBCATEGORY\_OF | Category | depth | Modelowanie hierarchii z listy categories.5 |
+| ParentProduct | HAS\_ATTRIBUTE | Attribute | value\_origin, raw\_value, confidence | Atrybuty z details i features. |
+| ParentProduct | HAS\_BRAND | Brand | source, confidence | Marka z metadata/details. |
+| ParentProduct | MEMBER\_OF\_SET | CoPurchaseSet | position | Przynależność do zestawu współkupowań. |
+| CoPurchaseSet | HAS\_ROOT | ParentProduct | Brak | Powiązanie zestawu z produktem źródłowym. |
+| ParentProduct | BOUGHT\_TOGETHER | ParentProduct | support, confidence | Krawędzie par współkupowanych parent\_asin. |
+| Review | MENTIONS\_ASPECT | Aspect | sentiment, opinion\_text, confidence, surface\_form, model\_version | Powiązania aspektów z recenzjami (opcjonalnie). |
+| User | PREFERS | Aspect | positive\_count, negative\_count, support, preference\_score | Zagregowane preferencje użytkownika (opcjonalnie). |
+| User | DISLIKES | Aspect | positive\_count, negative\_count, support, preference\_score | Zagregowane negatywne preferencje (opcjonalnie). |
 
 ### **1.4. Przewodnik Implementacyjny ETL**
 
@@ -78,8 +90,8 @@ Import tak dużego zbioru danych do Neo4j wymaga przetwarzania wsadowego. Użyci
 * **Krok 4: Przetwarzanie Pół-Strukturalne (details i categories):**  
   * Słownik details 2: Wymaga logiki "un-pivot" zaimplementowanej w Pythonie przed importem. Należy iterować po słowniku details dla każdego produktu. Jeśli klucz to 'Brand', generuj relację HAS\_BRAND. Dla pozostałych kluczy (np. 'Material', 'Size') generuj węzły :Attribute i relacje HAS\_ATTRIBUTE.5  
   * Lista categories 2: Wymaga przetworzenia hierarchii.5 Dla listy \['Electronics', 'Computers', 'Laptops'\]:  
-    1. Utwórz relację (ParentProduct)--\>(Category {name: 'Laptops'}).  
-    2. Utwórz relacje hierarchiczne: MERGE (c1:Category {name: 'Electronics'}), MERGE (c2:Category {name: 'Computers'}) MERGE (c2)--\>(c1), MERGE (c3:Category {name: 'Laptops'}) MERGE (c3)--\>(c2).
+    1. Utwórz relację (ParentProduct)-[:BELONGS\_TO\_CATEGORY {primary: true}]-\>(Category {name: 'Laptops'}).  
+    2. Utwórz relacje hierarchiczne SUBCATEGORY\_OF: MERGE (c1:Category {name: 'Electronics'}), MERGE (c2:Category {name: 'Computers'}) MERGE (c2)-[:SUBCATEGORY\_OF]-\>(c1), MERGE (c3:Category {name: 'Laptops'}) MERGE (c3)-[:SUBCATEGORY\_OF]-\>(c2).
 
 ## **Część 2: Wzbogacanie Grafu z Danych Niestrukturalnych – Ekstrakcja Wiedzy z Recenzji (IE i NLP)**
 

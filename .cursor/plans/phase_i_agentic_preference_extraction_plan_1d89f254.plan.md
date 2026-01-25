@@ -62,15 +62,3 @@ flowchart TD
 ## File-level plan
 
 - `src/conversation/`: add concrete `InMemoryHistoryManager` (or light stub) implementing `AbstractHistoryManager`.
-- `src/llm/`: keep `SimpleLLMHandler`; add small factory/config for model names if needed.
-- `src/llm_interface/`: implement `PreferenceParser` (LLM chain + pydantic validation), add prompt templates for extraction; extend `PromptConstructor` (or new helper) to inject weighted prefs into recommendation prompt.
-- `src/dialog_manager/`: add `preference_agent_flow.py` orchestrator wiring agents (history -> extract -> quantify -> profile -> context rewrite).
-- `src/personalization/` (empty now): optional placement for quantifier strategy if preferred; otherwise keep in dialog_manager.
-- `src/user/profile_manager.py`: reuse as profile store; minor tweaks if needed for weighted prefs structure.
-
-## Deliverables
-
-- Agentic Phase I flow (code + docstring) ready to plug into downstream recommender.
-- Simple default prompts and JSON schema for extracted prefs.
-- Lightweight quantifier (rule/LLM-based) with clear seam for BERT replacement.
-- README snippet (short) describing how to run the flow.
