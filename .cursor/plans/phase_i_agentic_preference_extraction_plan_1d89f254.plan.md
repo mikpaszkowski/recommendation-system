@@ -20,6 +20,7 @@ todos:
   - id: docs
     content: Add short README/usage for Phase I flow
     status: completed
+isProject: false
 ---
 
 # Phase I Agentic Preference Extraction Plan
@@ -49,8 +50,6 @@ flowchart TD
   profileAgent --> contextRewriter[ContextRewriterAgent]
   contextRewriter --> output[EnrichedContext+Prefs]
 ```
-
-
 
 ## Key design decisions
 

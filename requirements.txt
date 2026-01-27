@@ -26,3 +26,4 @@ spacy>=3.7.4
 sentencepiece>=0.1.99
 pyabsa>=2.3.4
 pytest>=7.0.0
+chainlit>=1.0.0
