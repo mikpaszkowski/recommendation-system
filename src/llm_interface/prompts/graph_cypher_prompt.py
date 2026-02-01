@@ -38,6 +38,7 @@ def prompt() -> str:
 
         <rules>
         - Always call the tool `capture_cypher_query` with a Cypher string and parameters object.
+        - In the `notes` field, you MUST explain your `WITH` clause handling. State "Variables aggregated: [x], Aliases created: [y]. variable [x] is now dead." to verify you are not making syntax errors.
         - Return only fields needed for recommendation context.
         - Prefer parameterized Cypher; do not inline user text values.
         - Include a `LIMIT $limit` clause in the query (default limit 10).
@@ -53,6 +54,14 @@ def prompt() -> str:
         - Produce a numeric `score` if possible (simple heuristic is fine).
         - Output should be compatible with mapping to:
           title, main_category, price, avg_rating, brand, categories, attributes, score.
+        
+        CRITICAL SYNTAX RULES (DO NOT IGNORE):
+        - VARIABLE SCOPE: Once you use a `WITH` clause, variables from previous matches (like `c`, `a`, `b`) are DROPPED unless explicitly carried over.
+        - AGGREGATION: If you aggregate `c.name` into `categories` in a `WITH` clause, `c` DOES NOT EXIST anymore.
+        - ERROR PREVENTION: You CANNOT use `c`, `a`, or `b` in the `RETURN` clause if you have a `WITH` clause before it.
+        - CORRECT PATTERN: `WITH pp, collect(DISTINCT c.name) AS categories ... RETURN pp.title, categories`
+        - FAILING PATTERN: `WITH pp, collect(DISTINCT c.name) AS categories ... RETURN collect(DISTINCT c.name)` -> CAUSES ERROR "Variable c not defined"
+        - ALWAYS reuse the aliases defined in `WITH` (e.g. `categories`, `attributes`) for the final `RETURN`.
         </rules>
 
         <example_pairs>
@@ -112,11 +121,38 @@ def prompt() -> str:
         }
         </output>
         </example_pair>
+        <example_pair>
+        <input>
+        {
+          "user_query": "I want a lightweight laptop with 16GB RAM.",
+          "preferences": {
+             "weighted_preferences": {
+               "likes": [{"value": "lightweight", "weight": 1.0}, {"value": "16GB RAM", "weight": 1.0}],
+               "dislikes": [],
+               "constraints": {"categories": ["Laptops"]}
+             }
+          },
+          "default_limit": 5
+        }
+        </input>
+        <output>
+        {
+          "cypher": "MATCH (pp:ParentProduct)-[:BELONGS_TO_CATEGORY]->(c:Category) WHERE ANY(cat IN $categories WHERE toLower(c.name) CONTAINS toLower(cat)) OPTIONAL MATCH (pp)-[:HAS_ATTRIBUTE]->(a:Attribute) WITH pp, collect(DISTINCT c.name) AS categories, collect(DISTINCT {attribute_name: a.attribute_name, attribute_value: a.attribute_value}) AS attributes, sum(CASE WHEN ANY(like IN $likes WHERE toLower(a.attribute_name) CONTAINS toLower(like) OR toLower(a.attribute_value) CONTAINS toLower(like)) THEN 1 ELSE 0 END) AS like_score RETURN pp.parent_asin AS parent_asin, pp.title AS title, pp.price AS price, pp.avg_rating AS avg_rating, pp.main_category AS main_category, categories AS categories, attributes AS attributes, like_score AS score LIMIT $limit",
+          "parameters": {
+            "limit": 5,
+            "categories": ["Laptops"],
+            "likes": ["lightweight", "16GB RAM"]
+          }
+        }
+        </output>
+        </example_pair>
         </example_pairs>
 
         <input>
         {context}
         </input>
+
+        REMINDER: Check your `RETURN` clause. Did you use `WITH`? If yes, are you trying to access `c`, `a`, or `b` in `RETURN`? STOP. Use the aliases from `WITH` (e.g., `categories`, `attributes`) instead.
         """
     )
 

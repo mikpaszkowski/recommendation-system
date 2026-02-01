@@ -11,4 +11,5 @@ my_env
 .venv/*
 /checkpoints/*
 /analysis_output/*
+.chainlit
 .env
