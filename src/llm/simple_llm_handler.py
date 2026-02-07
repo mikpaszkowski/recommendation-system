@@ -85,7 +85,7 @@ class SimpleLLMHandler(LLMHandlerInterface):
                     langchain_messages.append(AIMessage(content=content))
             
             # Get response
-            return self.submit(langchain_messages)
+            return self.query(langchain_messages)
             
         except Exception as e:
             logger.error(f"Error querying LLM with raw messages: {str(e)}")

@@ -7,18 +7,22 @@ from typing import Any, Dict, List, Optional
 
 
 from src.llm.simple_llm_handler import SimpleLLMHandler
+from src.llm.abstract_llm_handler import LLMHandlerInterface
 
 try:
     from .cypher_generator import CypherQueryGenerator
-    from .external_llm_cypher_generator import ExternalLLMCypherGenerator
 except ImportError:
     from cypher_generator import CypherQueryGenerator
-    from external_llm_cypher_generator import ExternalLLMCypherGenerator
 
 try:
     from .neo4j_connector import Neo4jConnector
 except ImportError:  # Allow direct script execution without package context.
     from neo4j_connector import Neo4jConnector
+
+try:
+    from .resolver_service import ResolverService
+except ImportError:
+    from resolver_service import ResolverService
 
 
 class GraphQueryManager:
@@ -52,11 +56,23 @@ class GraphQueryManager:
         if query_generator:
             self.query_generator = query_generator
         else:
+            try:
+                from .external_llm_cypher_generator import ExternalLLMCypherGenerator
+            except ImportError:
+                from external_llm_cypher_generator import ExternalLLMCypherGenerator
+            
             self.query_generator = ExternalLLMCypherGenerator(
                 llm_handler=llm_handler,
                 system_instruction=system_instruction,
                 default_limit=default_limit,
             )
+        
+        # Initialize Resolver Service
+        try:
+            self.resolver = ResolverService()
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize ResolverService: {e}")
+            self.resolver = None
 
     def retrieve_items(
         self,
@@ -69,9 +85,12 @@ class GraphQueryManager:
             self.logger.info("Graph retrieval disabled; skipping.")
             return []
 
+        # Semantic Grounding Step
+        grounded_prefs = self._ground_preferences(preferences)
+        
         query_payload = self.build_query(
             user_query=user_query,
-            preferences=preferences,
+            preferences=grounded_prefs,
             user_profile=user_profile,
             conversation_history=conversation_history,
         )
@@ -190,6 +209,72 @@ class GraphQueryManager:
             except Exception:
                 return {}
         return {}
+
+    def _ground_preferences(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhance preferences by resolving loose terms to canonical Graph Attributes/Categories.
+        """
+        if not self.resolver or not preferences:
+            return preferences
+
+        import copy
+        grounded = copy.deepcopy(preferences)
+        weighted = grounded.get("weighted_preferences", {})
+        
+        # 1. Resolve Attributes (from 'likes')
+        # We assume 'likes' contains attribute-like features e.g. "pulse reader"
+        likes = weighted.get("likes", [])
+        grounded_attributes = []
+        
+        for item in likes:
+            text = item.get("value")
+            if not text:
+                continue
+                
+            # Try to resolve to attributes
+            matches = self.resolver.resolve_attribute(text, k=1)
+            if matches:
+                best = matches[0]
+                # Append the canonical info to the item
+                # We can modify the 'value' or add a new field. 
+                # Better to keep original 'value' for reference but add 'canonical'
+                item["canonical_attribute"] = {
+                    "name": best["name"],
+                    "value": best["value"],
+                    "normalized": best["normalized_value"]
+                }
+                grounded_attributes.append(f"{best['name']}: {best['normalized_value']}")
+                self.logger.info(f"Resolved attribute '{text}' -> {best['name']}: {best['normalized_value']}")
+            else:
+                grounded_attributes.append(text)
+
+        # 2. Resolve Categories (from 'constraints.categories')
+        constraints = weighted.get("constraints", {})
+        categories = constraints.get("categories", [])
+        grounded_categories = []
+        
+        if categories:
+            for cat in categories:
+                matches = self.resolver.resolve_category(cat, k=1)
+                if matches:
+                    best = matches[0]
+                    # We might want to use the full path or just the name
+                    # Using the exact name node found is best for matching
+                    grounded_categories.append(best["name"])
+                    self.logger.info(f"Resolved category '{cat}' -> {best['name']} (Path: {best['path']})")
+                else:
+                    grounded_categories.append(cat)
+            
+            constraints["categories"] = grounded_categories
+
+        # 3. Inject explicit "grounded_context" into preferences for the Prompt to use
+        # This is a bit of a hack to pass data to the prompt template without changing the signature
+        grounded["grounded_context"] = {
+            "resolved_attributes": grounded_attributes,
+            "resolved_categories": grounded_categories
+        }
+
+        return grounded
 
     def _as_float(self, value: Any) -> float:
         try:
