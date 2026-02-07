@@ -62,6 +62,9 @@ def prompt() -> str:
         - CORRECT PATTERN: `WITH pp, collect(DISTINCT c.name) AS categories ... RETURN pp.title, categories`
         - FAILING PATTERN: `WITH pp, collect(DISTINCT c.name) AS categories ... RETURN collect(DISTINCT c.name)` -> CAUSES ERROR "Variable c not defined"
         - ALWAYS reuse the aliases defined in `WITH` (e.g. `categories`, `attributes`) for the final `RETURN`.
+        - GROUNDED CONTEXT: The input may contain `grounded_context` with `resolved_attributes` and `resolved_categories`.
+          - If `resolved_categories` is present, use THESE exact names for category matching (instead of fuzzy matching user text).
+          - If `resolved_attributes` is present, use THESE exact terms for attribute matching logic (e.g. `toLower(a.normalized_value) CONTAINS ...`).
         </rules>
 
         <example_pairs>
