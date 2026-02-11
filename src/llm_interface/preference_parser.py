@@ -62,8 +62,8 @@ class LLMPreferenceParser(PreferenceParserInterface):
         Ensures expected keys exist and defaults are present.
         """
         return {
-            "likes": preferences.get("likes", []),
-            "dislikes": preferences.get("dislikes", []),
+            "likes": preferences.get("likes") or [],
+            "dislikes": preferences.get("dislikes") or [],
             "constraints": preferences.get("constraints", {}),
             "intent": preferences.get("intent", "recommendation"),
             "notes": preferences.get("notes", ""),

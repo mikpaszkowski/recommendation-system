@@ -42,6 +42,8 @@ class HeuristicQuantificationStrategy(QuantificationStrategy):
         }
 
     def _apply_weight(self, entries: List[Any], weight: float) -> List[Dict[str, Any]]:
+        if not entries:
+            return []
         return [{"value": entry, "weight": weight} for entry in entries]
 
 
