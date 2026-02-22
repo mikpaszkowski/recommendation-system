@@ -96,7 +96,7 @@ class PreferenceAgentFlow:
     def _init_graph_query_manager(self) -> Optional[Any]:
         module_path = (
             Path(__file__).resolve().parents[1]
-            / "knowledge-graph"
+            / "knowledge_graph"
             / "graphdb"
             / "graph_query_manager.py"
         )

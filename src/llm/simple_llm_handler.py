@@ -19,27 +19,47 @@ class SimpleLLMHandler(LLMHandlerInterface):
     with no template formatting functionality.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-3.5-turbo"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o-mini", provider: str = "openai"):
         """
         Initialize the LLM handler.
         
         Args:
-            api_key: OpenAI API key. If None, will try to get from environment
-            model_name: Name of the model to use
+            api_key: OpenAI API key. If None, will try to get from environment (only for openai)
+            model_name: Name of the model to use (default: gpt-4o-mini, or llama3.1 for ollama)
+            provider: 'openai' or 'ollama'
         """
-        # Set up API key
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OpenAI API key must be provided or set in OPENAI_API_KEY environment variable")
-            
-        # Initialize LangChain chat model
-        self.llm = ChatOpenAI(
-            openai_api_key=self.api_key,
-            model_name=model_name,
-            temperature=0
-        )
+        self.provider = provider
         
-        logger.info(f"Initialized SimpleLLMHandler with model: {model_name}")
+        if self.provider == "openai":
+            # Set up API key
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError("OpenAI API key must be provided or set in OPENAI_API_KEY environment variable")
+                
+            # Initialize LangChain chat model
+            self.llm = ChatOpenAI(
+                openai_api_key=self.api_key,
+                model_name=model_name,
+                temperature=0
+            )
+            logger.info(f"Initialized SimpleLLMHandler (OpenAI) with model: {model_name}")
+            
+        elif self.provider == "ollama":
+            # Use ChatOpenAI with Ollama's OpenAI-compatible endpoint
+            # Default for ollama if user passed an OpenAI default
+            if model_name.startswith("gpt-"):
+                model_name = "llama3.1"
+                
+            self.llm = ChatOpenAI(
+                openai_api_key="ollama", # Key is required but ignored by Ollama
+                openai_api_base="http://localhost:11434/v1", # Standard Ollama endpoint
+                model_name=model_name,
+                temperature=0
+            )
+            logger.info(f"Initialized SimpleLLMHandler (Ollama via OpenAI API) with model: {model_name}")
+        
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
     
     def query(self, messages: List[BaseMessage]) -> str:
         """
@@ -54,7 +74,11 @@ class SimpleLLMHandler(LLMHandlerInterface):
         try:
             # Use invoke() instead of direct call
             response = self.llm.invoke(messages)
-            return response.content
+            result = response.content
+            
+            # Ollama sometimes returns parsed JSON if format="json" is used, 
+            # or just raw text. For generic Usage, raw text is expected.
+            return result if isinstance(result, str) else str(result)
             
         except Exception as e:
             logger.error(f"Error querying LLM: {str(e)}")

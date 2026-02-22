@@ -102,6 +102,17 @@ class GraphQueryManager:
         parameters = query_payload.get("parameters") or {}
         parameters.setdefault("limit", self.default_limit)
 
+        # Safety: Ensure all parameters used in Cypher are present provided
+        # This prevents "Expected parameter(s): dislikes" errors if LLM forgets them.
+        import re
+        used_params = set(re.findall(r"\$(\w+)", cypher))
+        for param in used_params:
+            if param not in parameters:
+                self.logger.warning(f"Parameter '${param}' found in Cypher but missing in parameters. Defaulting to [].")
+                # Defaulting to empty list is safer for IN clauses like "WHERE b.name IN $brands"
+                # For scalars it might break logic but better than crashing.
+                parameters[param] = []
+
         self.logger.info("Executing Cypher query for graph retrieval.")
         self.logger.info("Final Cypher (rendered): %s", self._render_cypher_with_params(cypher, parameters))
         self.logger.debug("Cypher: %s", cypher)

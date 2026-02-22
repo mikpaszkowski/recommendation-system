@@ -1,7 +1,7 @@
 providers:
   - id: openai:gpt-4o-mini
     config:
-      apiKey: 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
+      apiKey: XXXX
       temperature: 0
 
 prompts:
