@@ -13,6 +13,9 @@ class ConversationState(TypedDict):
     # Values: "SEARCH", "CLARIFY", "ANSWER", "UPDATE_PROFILE", "READ_PROFILE", "CRITIQUE"
     next_step: Optional[str]
     
+    # Persistent filters/preferences for the current conversation
+    active_filters: Dict[str, Any]
+    
     # Temporary context or metadata to pass between steps
     # e.g., raw search results from the tool before the critic sees them
     current_context: Optional[Dict[str, Any]]

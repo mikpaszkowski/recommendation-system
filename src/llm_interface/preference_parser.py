@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from langchain.agents import create_agent
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 
@@ -28,30 +28,29 @@ class LLMPreferenceParser(PreferenceParserInterface):
         self.logger = logging.getLogger(__name__)
         
         self.llm_handler: LLMHandlerInterface = llm_handler or SimpleLLMHandler()
-        # Build a simple tool the agent can call to emit structured prefs
+        # Build a simple tool the LLM can call to emit structured prefs
         self.capture_preferences_tool = self._build_capture_tool()
 
-        # Create the LangChain agent with a chat model instance
+        # Create a ChatOpenAI instance with the tool bound directly
         model = getattr(self.llm_handler, "llm", self.llm_handler)
         if isinstance(model, ChatOpenAI):
             llm = model
         else:
-            # If a model name (str) was provided, build a ChatOpenAI instance
-            llm = ChatOpenAI(model=model, temperature=0)
-            
-        # INSERT_YOUR_CODE
+            llm = ChatOpenAI(model=model, temperature=0, api_key=getattr(self.llm_handler, "api_key", None))
 
-        self.agent = create_agent(
-            model=llm,
-            tools=[self.capture_preferences_tool],
-            system_prompt=system_instruction or self._default_system_prompt(),
-        )
+        self.system_instruction = system_instruction or self._default_system_prompt()
+        # Bind the tool so the LLM can call it in a single invocation
+        self.llm_with_tools = llm.bind_tools([self.capture_preferences_tool])
 
     def extract_preferences(self, text: str) -> Dict[str, Any]:
         """Run LLM extraction with a JSON-structured response."""
 
         user_msg = self._build_prompt(text)
-        result = self.agent.invoke({"messages": [{"role": "user", "content": user_msg}]})
+        messages = [
+            ("system", self.system_instruction),
+            ("human", user_msg),
+        ]
+        result = self.llm_with_tools.invoke(messages)
         raw = self._extract_content(result)
         return self._parse_response(raw)
 

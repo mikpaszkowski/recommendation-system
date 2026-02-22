@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
+from src.conversation.history_manager import InMemoryHistoryManager
 from src.agents.state import ConversationState
 from src.tools.graph_search_tool import GraphSearchTool
 from src.tools.profile_tool import ProfileTool
@@ -12,6 +13,34 @@ from src.llm_interface.prompts.router_prompt import router_prompt_template
 from src.llm_interface.prompt_constructor import PromptConstructor
 
 logger = logging.getLogger(__name__)
+
+SEARCH_GENERATION_PROMPT = """
+YOUR GOAL: Help the user find the perfect product by translating their request into search arguments.
+
+[CONTEXT]
+You are given the user's CURRENT MESSAGE, the CONVERSATION HISTORY, and the currently ACTIVE FILTERS.
+
+[TASK]
+1. Analyze if the user is MODIFYING existing filters, ADDING new ones, or STARTING OVER.
+2. Generate a JSON containing the *updates* to the filters and a semantic query.
+
+[OUTPUT FORMAT (JSON)]
+{
+  "thought": "Reasoning about what changed.",
+  "structured_filters": { 
+     "brand": "Samsung",  // specific constraint
+     "price_max": 2000, 
+     "category": "laptop"
+  },
+  "semantic_query": "high performance gaming...", // abstract visualization of the product
+  "_thinking": "Detailed step-by-step reasoning"
+}
+
+[RULES]
+- If user says "actually under 1500", UPDATE `price_max` to 150.
+- If user says "show me Dell instead", UPDATE `brand` to "Dell".
+- If user says "what about that one?", use context to identify "that one".
+"""
 
 class AgentOrchestrator:
     """
@@ -22,67 +51,99 @@ class AgentOrchestrator:
     def __init__(self, 
                  graph_tool: Optional[GraphSearchTool] = None,
                  profile_tool: Optional[ProfileTool] = None,
-                 llm_handler: Optional[SimpleLLMHandler] = None):
+                 llm_handler: Optional[SimpleLLMHandler] = None,
+                 history_manager: Optional[InMemoryHistoryManager] = None):
         
         self.graph_tool = graph_tool or GraphSearchTool()
         self.profile_tool = profile_tool or ProfileTool()
         self.llm_handler = llm_handler or SimpleLLMHandler()
+        self.history_manager = history_manager or InMemoryHistoryManager()
         self.prompt_constructor = PromptConstructor()
         
     def run(self, user_id: str, user_message: str) -> Dict[str, Any]:
         """
         Main entry point for the agent conversation loop.
         """
-        logger.info(f"AgentOrchestrator: Processing message from {user_id}: {user_message}")
+        logger.info(f"{'='*60}")
+        logger.info(f"[STEP 0] New request from user={user_id}")
+        logger.info(f"[STEP 0] Message: '{user_message}'")
         
         # 1. Initialize State
         state = self._initialize_state(user_id, user_message)
+        logger.info(f"[STEP 1] State initialized")
+        logger.info(f"  - History turns loaded: {len(state['messages']) - 1}")
+        logger.info(f"  - Active filters from profile: {state.get('active_filters', {})}")
+        logger.info(f"  - User profile keys: {list(state.get('user_profile', {}).keys())}")
         
         # 2. Router Step: Decide next action
         next_action, reasoning = self._decide_next_step(state)
-        logger.info(f"AgentOrchestrator: Router decision -> {next_action} ({reasoning})")
+        logger.info(f"[STEP 2] Router decision: {next_action}")
+        logger.info(f"  - Reasoning: {reasoning}")
         state["next_step"] = next_action
         
         # 3. Execution Step
+        logger.info(f"[STEP 3] Executing action: {next_action}")
         response_payload = self._execute_step(user_id, state)
+        
+        # 4. Save History (Post-Execution)
+        agent_answer = response_payload.get("answer", "")
+        self.history_manager.add_turn(user_id, user_message, agent_answer)
+        logger.info(f"[STEP 4] History saved. Answer length: {len(agent_answer)} chars")
+        logger.info(f"{'='*60}")
         
         return response_payload
 
     def _initialize_state(self, user_id: str, user_message: str) -> ConversationState:
         """Loads history and profile to build the initial state."""
         profile = self.profile_tool.get_profile(user_id)
-        # History is managed by ProfileManager implicitly in this setup, 
-        # or we might need a HistoryManager.
-        # For now, let's assume we pull history from profile["history"] or similar if needed,
-        # but the tools might handle history themselves or we pass it.
-        # The prompt constructor manages history formatting usually.
-        # We will retrieve history from the profile manager's history link if available, 
-        # or we might need to inject HistoryManager here too.
         
-        # NOTE: In strict MA, orchestrator holds state. Here we are adapting legacy.
-        # We will pass the profile which contains "history" (interaction history) 
-        # but for conversation history (messages), we might need to fetch it.
-        # Let's use the ProfileTool for now or assume HistoryManager is used outside/inside.
-        # Actually, `preference_agent_flow` had `history_manager`. We should probably utilize it.
-        # For this step, I will stick to what `ProfileTool` and `GraphSearchTool` need.
+        # Load persistent preferences as starting active filters if not present?
+        # For now, we assume active_filters are effectively the session's working memory of constraints.
+        # We initialize them from the user's permanent preferences.
+        active_filters = profile.get("preferences", {}).copy()
         
+        # NOTE: In a real persistent state system (e.g. Redis), we would load the specific 
+        # 'session_state' here which might differ from long-term 'profile'.
+        # For this MVP, we re-initialize from profile.
+        
+        history = self.history_manager.get_history(user_id)
+        # Convert history to BaseMessages if needed, or just keep raw for logic.
+        # State expects List[BaseMessage]
+        messages = []
+        for turn in reversed(history): # History is most recent first
+             if "user" in turn:
+                 messages.append(HumanMessage(content=turn["user"]))
+             if "assistant" in turn:
+                 messages.append(AIMessage(content=turn["assistant"]))
+        
+        messages.append(HumanMessage(content=user_message))
+
         return {
-            "messages": [HumanMessage(content=user_message)],
+            "messages": messages,
             "next_step": None,
             "current_context": {},
-            "user_profile": profile
+            "user_profile": profile,
+            "active_filters": active_filters
         }
 
     def _decide_next_step(self, state: ConversationState) -> tuple[str, str]:
         """Uses LLM to classify intent and pick the next step."""
         user_message = state["messages"][-1].content
         profile = state.get("user_profile", {})
+        active_filters = state.get("active_filters", {})
         
-        history_text = "No recent history." # Placeholder
+        # Format history for prompt
+        # We take the last 5 turns (excluding current)
+        history_msgs = state["messages"][:-1]
+        recent_history = history_msgs[-10:] # Last 5 turns (User+AI)
+        history_text = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_history])
+        if not history_text:
+            history_text = "No recent history."
         
         prompt = router_prompt_template.format(
             history=history_text,
             user_profile=json.dumps(profile.get("preferences", {}), indent=2),
+            active_filters=json.dumps(active_filters, indent=2),
             user_message=user_message
         )
         
@@ -105,31 +166,55 @@ class AgentOrchestrator:
         action = state["next_step"]
         user_message = state["messages"][-1].content
         profile = state.get("user_profile", {})
+        active_filters = state.get("active_filters", {})
+        
+        # Helper to get history text
+        history_msgs = state["messages"][:-1]
+        history_text = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_msgs[-6:]])
         
         result = {}
         
         if action == "SEARCH":
-            # 1. Extract recent prefs
-            raw_prefs = self.profile_tool.parser.extract_preferences(user_message)
-            formatted_prefs = self.profile_tool.parser.format_for_recommender(raw_prefs)
-            quantified_prefs = self.profile_tool.quantifier.quantify(formatted_prefs)
+            # 3a. Generate Hybrid Search Parameters (Merging with Active Filters)
+            logger.info(f"[STEP 3a] Generating search params via LLM...")
+            updates = self._generate_search_params(user_message, active_filters, history_text)
+            logger.info(f"[STEP 3a] LLM returned:")
+            logger.info(f"  - semantic_query: '{updates.get('semantic_query', '')}'")
+            logger.info(f"  - structured_filters: {updates.get('structured_filters', {})}")
+            logger.info(f"  - thought: {updates.get('thought', 'N/A')}")
             
-            # 2. Search
+            # 3b. Merge updates into active_filters
+            new_filters = updates.get("structured_filters", {})
+            for k, v in new_filters.items():
+                active_filters[k] = v
+            
+            logger.info(f"[STEP 3b] Merged active filters: {active_filters}")
+            state["active_filters"] = active_filters
+            
+            # 3c. Search (normalization + Cypher happens inside)
+            logger.info(f"[STEP 3c] Calling GraphSearchTool.search()...")
             search_result = self.graph_tool.search(
-                query=user_message,
-                preferences=quantified_prefs,
-                user_profile=profile
+                semantic_query=updates.get("semantic_query"),
+                structured_filters=active_filters,
+                limit=5
             )
+            logger.info(f"[STEP 3c] Search result: strategy={search_result.get('strategy')}, count={search_result.get('count')}")
+            if search_result.get('items'):
+                for i, item in enumerate(search_result['items'][:3]):
+                    logger.info(f"  - Item {i+1}: {item.get('title', '?')[:60]} | price={item.get('price')} | score={item.get('score', 0):.3f}")
             
-            # 3. Generate Response
+            # 3d. Generate final response
+            logger.info(f"[STEP 3d] Constructing recommendation prompt...")
             prompt_messages = self.prompt_constructor.construct_recommendation_prompt(
                 user_query=user_message,
                 user_profile=profile,
                 retrieved_items=search_result.get("items", []),
-                preferences=quantified_prefs
+                preferences=active_filters
             )
             
+            logger.info(f"[STEP 3e] Querying LLM for final answer...")
             final_answer = self.llm_handler.query(prompt_messages)
+            logger.info(f"[STEP 3e] Final answer generated ({len(final_answer)} chars)")
             
             result = {
                 "answer": final_answer,
@@ -179,3 +264,40 @@ class AgentOrchestrator:
             }
             
         return result
+
+    def _generate_search_params(self, user_message: str, current_filters: Dict[str, Any], history_text: str = "") -> Dict[str, Any]:
+        """Uses LLM to generate semantic query and structured filters."""
+        try:
+            filters_context = json.dumps(current_filters, indent=2)
+            prompt = f"{SEARCH_GENERATION_PROMPT}\n\n[CONVERSATION HISTORY]\n{history_text}\n\n[ACTIVE FILTERS]\n{filters_context}\n\n[USER MESSAGE]\n{user_message}"
+            
+            messages = [
+                SystemMessage(content="You are a smart search query generator. Output valid JSON only, no comments."),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.llm_handler.query(messages)
+            logger.debug(f"Raw LLM response for search params: {response[:300]}")
+            cleaned = self._clean_llm_json(response)
+            parsed = json.loads(cleaned)
+            logger.info(f"Search params parsed successfully")
+            return parsed
+        except Exception as e:
+            logger.error(f"Search Param Generation failed: {e}")
+            logger.error(f"Raw LLM response was: {response[:500] if 'response' in dir() else 'N/A'}")
+            # Fallback: Use raw message as semantic query, no filters
+            return {
+                "semantic_query": user_message,
+                "structured_filters": {}
+            }
+
+    @staticmethod
+    def _clean_llm_json(raw: str) -> str:
+        """Clean LLM output to produce valid JSON (strip markdown, comments, trailing commas)."""
+        import re
+        cleaned = raw.replace("```json", "").replace("```", "").strip()
+        # Remove single-line JS comments (// ...)
+        cleaned = re.sub(r'//[^\n]*', '', cleaned)
+        # Remove trailing commas before } or ]
+        cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+        return cleaned

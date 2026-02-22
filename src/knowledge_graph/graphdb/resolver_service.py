@@ -14,11 +14,44 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class ResolverService:
-    def __init__(self):
-        self.connector = Neo4jConnector()
-        self.connector.connect()
-        self.embed_svc = EmbeddingService()
-        self.min_score = 0.7  # Cosine similarity threshold
+    def __init__(self, connector=None, embed_svc=None, min_score: float = 0.55):
+        self.connector = connector or Neo4jConnector()
+        if not connector:
+            self.connector.connect()
+        self.embed_svc = embed_svc or EmbeddingService()
+        self.min_score = min_score
+
+    def resolve_brand(self, text: str, k: int = 1) -> List[Dict]:
+        """
+        Resolve a user brand query (e.g. "asus") to canonical Brand node name.
+        """
+        if not text:
+            return []
+
+        embedding = self.embed_svc.embed_query(text)
+
+        query = """
+        CALL db.index.vector.queryNodes('brand_embedding_index', $k, $embedding)
+        YIELD node, score
+        WHERE score >= $min_score
+        RETURN node.name as name, score
+        """
+
+        with self.connector.session() as session:
+            result = session.run(query, {
+                "k": k,
+                "embedding": embedding,
+                "min_score": self.min_score
+            })
+
+            matches = []
+            for record in result:
+                matches.append({
+                    "name": record["name"],
+                    "score": record["score"]
+                })
+
+            return matches
 
     def resolve_attribute(self, text: str, k: int = 3) -> List[Dict]:
         """

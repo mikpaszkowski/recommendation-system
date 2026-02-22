@@ -182,6 +182,7 @@ Follow these steps when responding to users:
     def _format_retrieved_items(self, retrieved_items: List[Dict[str, Any]]) -> str:
         """
         Format retrieved items for inclusion in the prompt.
+        Supports both legacy format ({"details": {...}}) and flat format from GraphSearchTool.
         
         Args:
             retrieved_items: List of retrieved items
@@ -192,15 +193,16 @@ Follow these steps when responding to users:
         items_parts = []
         
         for i, item in enumerate(retrieved_items, 1):
-            details = item['details']
+            # Support both nested {"details": {...}} and flat dict formats
+            details = item.get('details', item)
             items_parts.append(f"Item {i}:")
             items_parts.append(f"- Title: {details.get('title', 'Unknown')}")
-            items_parts.append(f"- Category: {details.get('main_category', 'Unknown')}")
-            items_parts.append(f"- Brand: {details.get('store') or details.get('detail_brand') or details.get('detail_manufacturer', 'Unknown')}")
+            items_parts.append(f"- Category: {details.get('main_category') or details.get('category', 'Unknown')}")
+            items_parts.append(f"- Brand: {details.get('store') or details.get('brand') or details.get('detail_brand') or details.get('detail_manufacturer', 'Unknown')}")
             items_parts.append(f"- Price: ${details.get('price', 'Unknown')}")
             items_parts.append(f"- Rating: {details.get('rating', 'Unknown')}/5.0")
             items_parts.append(f"- Features: {details.get('features', 'None specified')}")
-            items_parts.append(f"- Match score: {details.get('score', 0):.2f}")
+            items_parts.append(f"- Match score: {self._as_float(details.get('score', 0)):.2f}")
             items_parts.append("")
         
         return "\n".join(items_parts)

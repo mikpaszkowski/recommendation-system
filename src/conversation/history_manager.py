@@ -1,4 +1,7 @@
 from typing import Dict, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.conversation.abstract_history_manager import AbstractHistoryManager
 
@@ -17,7 +20,9 @@ class InMemoryHistoryManager(AbstractHistoryManager):
 
     def get_history(self, user_id: str) -> List[Dict[str, str]]:
         """Return conversation history for a user (most recent first)."""
-        return self._store.get(user_id, [])
+        history = self._store.get(user_id, [])
+        logger.debug(f"HistoryManager: Retrieved {len(history)} turns for user {user_id}")
+        return history
 
     def add_turn(
         self,
@@ -33,4 +38,6 @@ class InMemoryHistoryManager(AbstractHistoryManager):
         history.insert(0, turn)
         if len(history) > self._max_turns:
             self._store[user_id] = history[: self._max_turns]
+        
+        logger.info(f"HistoryManager: Added turn for user {user_id}. History length: {len(history)}")
 

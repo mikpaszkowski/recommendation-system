@@ -35,12 +35,15 @@ router_prompt_template = PromptTemplate(
     
     [USER PROFILE CONTEXT]
     {user_profile}
+
+    [CURRENT ACTIVE FILTERS]
+    {active_filters}
     
     [CURRENT USER MESSAGE]
     {user_message}
     
     Decide the next action. Output JSON only.
     """,
-    input_variables=["history", "user_profile", "user_message"],
+    input_variables=["history", "user_profile", "active_filters", "user_message"],
     partial_variables={"system_prompt": ROUTER_SYSTEM_PROMPT}
 )
