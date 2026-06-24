@@ -15,7 +15,18 @@ class LLMHandlerInterface(ABC):
         Args:
             messages: List of LangChain message objects
             
+        """
+        pass
+        
+    @abstractmethod
+    async def aquery(self, messages: List[BaseMessage]) -> str:
+        """
+        Submit a list of LangChain messages to the LLM asynchronously.
+        
+        Args:
+            messages: List of LangChain message objects
+            
         Returns:
             Response from the LLM as a string
         """
-        pass 
+        pass

@@ -83,6 +83,25 @@ class SimpleLLMHandler(LLMHandlerInterface):
         except Exception as e:
             logger.error(f"Error querying LLM: {str(e)}")
             return f"Error: {str(e)}"
+
+    async def aquery(self, messages: List[BaseMessage]) -> str:
+        """
+        Submit a list of LangChain messages to the LLM asynchronously.
+        
+        Args:
+            messages: List of LangChain message objects
+            
+        Returns:
+            Response from the LLM as a string
+        """
+        try:
+            response = await self.llm.ainvoke(messages)
+            result = response.content
+            return result if isinstance(result, str) else str(result)
+            
+        except Exception as e:
+            logger.error(f"Error asynchronously querying LLM: {str(e)}")
+            return f"Error: {str(e)}"
     
     def submit_raw(self, messages: List[Dict[str, str]]) -> str:
         """

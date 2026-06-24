@@ -106,13 +106,13 @@ class GraphSearchTool:
 
         # 3. Hybrid Query: vector search first, then apply filters
         cypher = f"""
-        CALL db.index.vector.queryNodes('product_embedding_index', {limit * 3}, $vector)
+        CALL db.index.vector.queryNodes('product_embedding_index', {limit * 30}, $vector)
         YIELD node, score
         {"WHERE " + where_str if where_str else ""}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
-               c.name as category, score, elementId(node) as id
+               collect(DISTINCT c.name) as category, score, elementId(node) as id, node.parent_asin as asin
         ORDER BY score DESC
         LIMIT {limit}
         """
@@ -127,7 +127,7 @@ class GraphSearchTool:
         for i, item in enumerate(items):
             logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | price={item.get('price')} | brand={item.get('brand')} | cat={item.get('category')} | title={str(item.get('title', ''))[:70]}")
         if not items:
-            logger.warning(f"[GST:Hybrid] 0 results! Vector index queried {limit*3} candidates but all were filtered out.")
+            logger.warning(f"[GST:Hybrid] 0 results! Vector index queried {limit*30} candidates but all were filtered out.")
             
         return {"status": "success", "items": items, "count": len(items), "strategy": "hybrid"}
 
@@ -141,8 +141,9 @@ class GraphSearchTool:
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
-               c.name as category, score, elementId(node) as id
+               collect(DISTINCT c.name) as category, score, elementId(node) as id, node.parent_asin as asin
         ORDER BY score DESC
+        LIMIT {limit}
         """
 
         with self.db.session() as session:
@@ -165,7 +166,7 @@ class GraphSearchTool:
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
-               c.name as category, 1.0 as score, elementId(node) as id
+               collect(DISTINCT c.name) as category, 1.0 as score, elementId(node) as id, node.parent_asin as asin
         LIMIT {limit}
         """
         
@@ -181,13 +182,72 @@ class GraphSearchTool:
             
         return {"status": "success", "items": items, "count": len(items), "strategy": "filter_only"}
 
+    def fetch_product_attributes(self, asins: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Fetches unstructured attributes (e.g. pros/cons, opinions, reviews) for given products.
+        Returns a dictionary mapping ASIN to a list of attributes and recent reviews.
+        """
+        if not self.db or not asins:
+            return {}
+
+        # Query attributes
+        cypher_attr = """
+        MATCH (p:ParentProduct)-[r:HAS_ATTRIBUTE]->(a:Attribute)
+        WHERE p.parent_asin IN $asins
+        RETURN p.parent_asin AS asin, a.attribute_name AS name, a.attribute_value AS value, a.source AS source
+        """
+        
+        # Query reviews (recent helpful ones)
+        cypher_rev = """
+        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
+        WHERE p.parent_asin IN $asins
+        RETURN p.parent_asin AS asin, r.review_title AS name, r.review_body AS value, 'user_review' AS source
+        ORDER BY r.helpful_votes DESC, r.timestamp_iso DESC
+        LIMIT 20
+        """
+        
+        logger.info(f"[GST:Attributes] Fetching attributes and reviews for {len(asins)} products...")
+        
+        result_map = {asin: [] for asin in asins}
+        
+        try:
+            with self.db.session() as session:
+                # 1. Fetch Attributes
+                result_attr = session.run(cypher_attr, asins=asins)
+                for record in result_attr:
+                    asin = record["asin"]
+                    if asin in result_map:
+                        result_map[asin].append({
+                            "name": record["name"],
+                            "value": str(record["value"])[:200], # truncate to avoid huge context per attr
+                            "source": record["source"]
+                        })
+                        
+                # 2. Fetch Reviews
+                result_rev = session.run(cypher_rev, asins=asins)
+                for record in result_rev:
+                    asin = record["asin"]
+                    # Optionally limit reviews per product to avoid context window explosion
+                    if asin in result_map and sum(1 for a in result_map[asin] if a["source"] == 'user_review') < 5:
+                        result_map[asin].append({
+                            "name": f"Review: {record['name']}",
+                            "value": str(record["value"])[:300], # truncate long reviews
+                            "source": record["source"]
+                        })
+                        
+            logger.info(f"[GST:Attributes] Fetched attributes and reviews for {len(result_map)} products.")
+            return result_map
+        except Exception as e:
+            logger.error(f"[GST:Attributes] Error fetching attributes/reviews: {e}", exc_info=True)
+            return {}
+
     def _build_filters(self, filters: Dict[str, Any]):
         """Build WHERE clauses for filters. Uses EXISTS subqueries for relationship-based filters."""
         where_clauses = []
         params = {}
         
         for key, value in filters.items():
-            if value is None:
+            if value is None or value == "":
                 continue
             
             if key == "price_max":

@@ -1,7 +1,12 @@
 import chainlit as cl
 import json
 import logging
+import sys
+import os
 from typing import Dict, Any
+
+# Ensure project root is in sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.agents.orchestrator import AgentOrchestrator
 
