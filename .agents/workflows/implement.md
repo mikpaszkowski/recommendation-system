@@ -15,8 +15,9 @@ When the user types `/implement <feature description>`, orchestrate the full dev
 Before starting the pipeline, perform these checks:
 
 1. **Read `production_artifacts/Vision_Report.md`** — understand current strategic direction, active constraints, and rejected approaches.
-2. **Read `docs/project_state_report.md`** — understand what's already implemented.
-3. **Validate the feature request**: Does this feature align with the Vision Report's current phase and next priorities? If the request contradicts the vision or proposes a rejected approach, **STOP** and inform the user immediately:
+2. **Read `production_artifacts/Implementation_Plan.md`** — understand the current implementation phase goals and technology stack.
+3. **Read `docs/project_state_report.md`** — understand what's already implemented.
+4. **Validate the feature request**: Does this feature align with the Vision Report's current phase and next priorities? If the request contradicts the vision or proposes a rejected approach, **STOP** and inform the user immediately:
    > "⚠️ This feature conflicts with the Vision Report: [explain]. Would you like to proceed anyway, or should we first run `research_analyst` to revisit this decision?"
 
 ---

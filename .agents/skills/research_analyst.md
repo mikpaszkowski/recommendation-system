@@ -27,6 +27,7 @@ Before doing ANY research, you MUST read the project's strategic documents. The 
 | Document | Path | Purpose |
 |----------|------|---------|
 | **🧭 Vision Report** | `production_artifacts/Vision_Report.md` | **READ THIS FIRST.** The canonical, living strategic ledger. Contains the current agreed direction, active constraints, rejected approaches, and a decision log. This is the single source of truth for "what we agreed to build." |
+| **📋 Implementation Plan** | `production_artifacts/Implementation_Plan.md` | **READ THIS SECOND.** The current concrete tech stack and implementation phases (Phase 0 to Phase 3). |
 
 ### Secondary References (Static Foundational Documents)
 
@@ -34,7 +35,7 @@ These documents contain the original theoretical analysis. They are **static** �
 
 | Document | Path | Purpose |
 |----------|------|---------|
-| **Implementation Plan** | `prompts_and_req/Plan Implementacji Systemu Rekomendacyjnego.md` | Original 3-phase architecture (Hybrid LLM+BERT → Knowledge Graph → Memory & Dialog Management). |
+| **Theoretical Vision Plan** | `docs/Plan Implementacji Systemu Rekomendacyjnego.md` | Original 3-phase architecture in Polish (Hybrid LLM+BERT → Knowledge Graph → Memory & Dialog Management). |
 | **KG Pipeline Requirements** | `prompts_and_req/knowledge-graph-pipeline-requirements.md` | KG schema, ETL pipeline architecture, advanced AI module integration strategy. |
 | **Semantic Alignment Strategy** | `prompts_and_req/Dopasowanie Preferencji Użytkownika do Grafu Wiedzy.md` | Three-layer integration architecture (MIM + ReFinED + Dual Encoder). |
 | **Project State Report** | `docs/project_state_report.md` | Living changelog of what code was built. Your baseline for "where we are now" in terms of implementation. |

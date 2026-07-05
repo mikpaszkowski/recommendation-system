@@ -33,6 +33,7 @@ Before writing any specification, you MUST read the project's strategic document
 | Document | Path | What to extract |
 |----------|------|----------------|
 | **🧭 Vision Report** | `production_artifacts/Vision_Report.md` | **READ THIS FIRST.** Current agreed direction, active constraints, rejected approaches (do NOT propose rejected solutions), current phase, decision history. |
+| **📋 Implementation Plan** | `production_artifacts/Implementation_Plan.md` | **READ THIS SECOND.** Technology choices, component architecture, and active implementation phase constraints. |
 | **Research Report** (if exists) | `production_artifacts/Research_Report.md` | Validated direction and technology choices for the specific feature being spec'd. |
 
 ### Secondary References
@@ -40,7 +41,7 @@ Before writing any specification, you MUST read the project's strategic document
 | Document | Path | What to extract |
 |----------|------|----------------|
 | **Project State Report** | `docs/project_state_report.md` | Current implementation state — what exists, what's missing |
-| **Implementation Plan** | `prompts_and_req/Plan Implementacji Systemu Rekomendacyjnego.md` | Original 3-phase vision (for deeper theoretical context if needed) |
+| **Theoretical Vision Plan** | `docs/Plan Implementacji Systemu Rekomendacyjnego.md` | Original 3-phase vision in Polish (for deeper theoretical context if needed) |
 | **KG Pipeline Requirements** | `prompts_and_req/knowledge-graph-pipeline-requirements.md` | Schema, ETL, and advanced AI module strategy |
 | **Semantic Alignment Strategy** | `prompts_and_req/Dopasowanie Preferencji Użytkownika do Grafu Wiedzy.md` | Three-layer integration architecture (MIM + ReFinED + Dual Encoder) |
 

@@ -41,6 +41,7 @@ Before writing ANY code, you MUST read these documents:
 | Document | Path | What to extract |
 |----------|------|-----------------|
 | **🧭 Vision Report** | `production_artifacts/Vision_Report.md` | Active constraints, rejected approaches (do NOT use rejected technologies), current architecture. |
+| **📋 Implementation Plan** | `production_artifacts/Implementation_Plan.md` | Technology stack constraints, dataset configuration, and coding goals for the current phase. |
 | **📐 Technical Specification** | `production_artifacts/Technical_Specification.md` | The complete specification: requirements, architecture, API design, data model, file structure, acceptance criteria. **This is your blueprint.** |
 | **📋 Project State Report** | `docs/project_state_report.md` | Current implementation state — understand what exists so you don't break or duplicate it. |
 
