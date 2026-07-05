@@ -42,7 +42,7 @@ Before auditing ANY code, you MUST read these documents:
 |----------|------|-----------------|
 | **🧭 Vision Report** | `production_artifacts/Vision_Report.md` | Active constraints, rejected approaches — verify that code doesn't use rejected technologies or violate constraints. |
 | **📐 Technical Specification** | `production_artifacts/Technical_Specification.md` | The blueprint. Every acceptance criterion, interface contract, and architectural decision must be verified against the code. |
-| **📋 Project State Report** | `docs/project_state_report.md` | Understand what existed before the new code was added — helps distinguish new code from pre-existing components. |
+| **📋 Project State Report** | `docs/changelog/changelog.md` | Understand what existed before the new code was added — helps distinguish new code from pre-existing components. |
 
 ## Rules of Engagement
 
@@ -81,7 +81,7 @@ Classify every finding using this severity scale:
    - Section 5: Data Model / State Management
    - Section 7: File Structure
    - Section 8: Acceptance Criteria
-3. **Read `docs/project_state_report.md`** — understand baseline.
+3. **Read `docs/changelog/changelog.md`** — understand baseline.
 
 ### Step 2: Spec Compliance Audit
 

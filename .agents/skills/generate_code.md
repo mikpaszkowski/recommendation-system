@@ -43,7 +43,7 @@ Before writing ANY code, you MUST read these documents:
 | **🧭 Vision Report** | `production_artifacts/Vision_Report.md` | Active constraints, rejected approaches (do NOT use rejected technologies), current architecture. |
 | **📋 Implementation Plan** | `production_artifacts/Implementation_Plan.md` | Technology stack constraints, dataset configuration, and coding goals for the current phase. |
 | **📐 Technical Specification** | `production_artifacts/Technical_Specification.md` | The complete specification: requirements, architecture, API design, data model, file structure, acceptance criteria. **This is your blueprint.** |
-| **📋 Project State Report** | `docs/project_state_report.md` | Current implementation state — understand what exists so you don't break or duplicate it. |
+| **📋 Project State Report** | `docs/changelog/changelog.md` | Current implementation state — understand what exists so you don't break or duplicate it. |
 
 ### Codebase Scan
 
@@ -106,7 +106,7 @@ Activate this skill when:
 
 1. **Read `production_artifacts/Vision_Report.md`** — understand constraints and rejected approaches.
 2. **Read `production_artifacts/Technical_Specification.md`** — this is your blueprint. Understand every section.
-3. **Read `docs/project_state_report.md`** — know what's already implemented.
+3. **Read `docs/changelog/changelog.md`** — know what's already implemented.
 4. **Scan the source directories** listed above — understand existing code patterns and interfaces.
 
 Verify that:
@@ -192,7 +192,7 @@ Report the results to the user:
 
 After implementation, proactively suggest:
 
-1. **Project State Update**: "Should I update `docs/project_state_report.md` with these changes?" (triggers `update_project_state` skill)
+1. **Project State Update**: "Should I update `docs/changelog/changelog.md` with these changes?" (triggers `update_project_state` skill)
 2. **Testing**: "The code is ready for testing. You may want to trigger the testing agent/skill to verify functionality."
 
 ## Example Trigger Prompts

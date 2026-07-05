@@ -33,7 +33,7 @@ Before auditing, you MUST read the project's source of truth documents in this o
 | Document | Path | Role in audit |
 |----------|------|---------------|
 | **🧭 Vision Report** | `production_artifacts/Vision_Report.md` | The canonical strategic direction. Documentation must not contradict this. |
-| **📋 Project State Report** | `docs/project_state_report.md` | What was actually built. Documentation claims must match this. |
+| **📋 Project State Report** | `docs/changelog/changelog.md` | What was actually built. Documentation claims must match this. |
 | **The actual codebase** | `src/`, `scripts/`, `tests/` | The ultimate truth. If code and docs disagree, the code is right. |
 
 ### Secondary References (What the project PLANNED)
@@ -51,7 +51,7 @@ The skill audits ALL documentation in the project. Here is the full inventory of
 |----------|-------------|----------------|
 | `README.md` (root) | Project overview, setup instructions | Should reflect the current system, not Phase I |
 | `src/README.md` | Source code architecture overview | Should match current module structure |
-| `docs/project_state_report.md` | Living changelog | Managed by `update_project_state` — do NOT modify entries, only flag issues |
+| `docs/changelog/changelog.md` | Living changelog | Managed by `update_project_state` — do NOT modify entries, only flag issues |
 | `docs/kg_pipeline/` | KG pipeline documentation (schema, architecture, extensibility) | Should match current Neo4j schema and pipeline |
 | `prompts_and_req/` | Foundational design documents | Static references — flag if they contradict Vision Report but do NOT modify |
 | `diagrams/` | Mermaid diagrams (ASTE flow, KG state-of-art, node/edge schema) | Should match current architecture |
@@ -79,7 +79,7 @@ Classify every documentation artifact using these categories:
 1. **DO fix**: Outdated file paths, broken references, incorrect class/method names, stale directory structures in READMEs, outdated Mermaid diagrams.
 2. **DO consolidate**: When the same information exists in 3+ places, keep the canonical version and replace duplicates with links.
 3. **DO NOT modify**: Foundational documents in `prompts_and_req/` — these are historical records. Flag contradictions but preserve them as-is.
-4. **DO NOT modify**: Existing entries in `docs/project_state_report.md` — this is an append-only log.
+4. **DO NOT modify**: Existing entries in `docs/changelog/changelog.md` — this is an append-only log.
 5. **DO NOT modify**: `production_artifacts/Vision_Report.md` — this is managed by `research_analyst`.
 6. **ASK before deleting**: Never delete a file without explicit user approval. Propose deletions in the audit report.
 

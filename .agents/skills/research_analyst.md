@@ -38,7 +38,7 @@ These documents contain the original theoretical analysis. They are **static** �
 | **Theoretical Vision Plan** | `docs/Plan Implementacji Systemu Rekomendacyjnego.md` | Original 3-phase architecture in Polish (Hybrid LLM+BERT → Knowledge Graph → Memory & Dialog Management). |
 | **KG Pipeline Requirements** | `prompts_and_req/knowledge-graph-pipeline-requirements.md` | KG schema, ETL pipeline architecture, advanced AI module integration strategy. |
 | **Semantic Alignment Strategy** | `prompts_and_req/Dopasowanie Preferencji Użytkownika do Grafu Wiedzy.md` | Three-layer integration architecture (MIM + ReFinED + Dual Encoder). |
-| **Project State Report** | `docs/project_state_report.md` | Living changelog of what code was built. Your baseline for "where we are now" in terms of implementation. |
+| **Project State Report** | `docs/changelog/changelog.md` | Living changelog of what code was built. Your baseline for "where we are now" in terms of implementation. |
 
 > **CRITICAL**: The Vision Report supersedes foundational documents wherever they conflict. The Vision Report contains the Decision Log that tracks how and why the direction evolved. If the Vision Report feels outdated, ask the user if the direction has changed.
 
@@ -81,7 +81,7 @@ Activate this skill when:
    - Rejected approaches (do NOT revisit these)
    - Decision log (understand the history of strategic choices)
    - Current phase and next priorities
-2. **Then scan `docs/project_state_report.md`** for the latest implementation state.
+2. **Then scan `docs/changelog/changelog.md`** for the latest implementation state.
 3. **Only if needed**, reference the foundational documents in `prompts_and_req/` for deeper theoretical context.
 
 ### Step 2: Understand the Research Question

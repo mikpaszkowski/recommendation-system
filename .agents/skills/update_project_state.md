@@ -1,7 +1,7 @@
 ---
 name: update_project_state
 description: >
-  Skill for updating the project state report (docs/project_state_report.md) with a new changelog entry
+  Skill for updating the project changelog (`docs/changelog/changelog.md`) with a new changelog entry
   after each important or major change to the recommendation system codebase. Automatically analyzes
   what has changed, what was modified, and what are the crucial changes introduced.
 ---
@@ -10,7 +10,7 @@ description: >
 
 ## Purpose
 
-This skill is triggered after **major or important changes** to the recommendation system. It analyzes the codebase, compares it against the latest entry in `docs/project_state_report.md`, and appends a **new dated changelog entry** documenting all meaningful differences.
+This skill is triggered after **major or important changes** to the recommendation system. It analyzes the codebase, compares it against the latest entry in `docs/changelog/changelog.md`, and appends a **new dated changelog entry** documenting all meaningful differences.
 
 ## When to Trigger
 
@@ -32,7 +32,7 @@ Activate this skill when:
 Before writing the changelog entry, perform the following analysis:
 
 ### Step 1: Read the Current Report
-- Read `docs/project_state_report.md` in full.
+- Read `docs/changelog/changelog.md` in full.
 - Identify the **most recent dated entry** (the topmost `## 📅 YYYY-MM-DD` section).
 - Understand what was documented as the last known state.
 
@@ -133,9 +133,9 @@ Before writing a changelog entry, read `production_artifacts/Vision_Report.md` t
 
 When the user says something like:
 - "Zaktualizuj raport stanu projektu"
-- "Dodaj changelog do project_state_report"
+- "Dodaj changelog do changelog"
 - "Co się zmieniło w projekcie? Zaktualizuj docs."
 - "Update the project state report"
 
 Or after completing a major implementation task, proactively suggest:
-> "Wprowadzono istotne zmiany w architekturze. Czy chcesz, żebym zaktualizował `docs/project_state_report.md` z nowym wpisem changelog?"
+> "Wprowadzono istotne zmiany w architekturze. Czy chcesz, żebym zaktualizował `docs/changelog/changelog.md` z nowym wpisem changelog?"

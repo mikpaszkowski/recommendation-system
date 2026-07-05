@@ -40,7 +40,7 @@ Before writing any specification, you MUST read the project's strategic document
 
 | Document | Path | What to extract |
 |----------|------|----------------|
-| **Project State Report** | `docs/project_state_report.md` | Current implementation state — what exists, what's missing |
+| **Project State Report** | `docs/changelog/changelog.md` | Current implementation state — what exists, what's missing |
 | **Theoretical Vision Plan** | `docs/Plan Implementacji Systemu Rekomendacyjnego.md` | Original 3-phase vision in Polish (for deeper theoretical context if needed) |
 | **KG Pipeline Requirements** | `prompts_and_req/knowledge-graph-pipeline-requirements.md` | Schema, ETL, and advanced AI module strategy |
 | **Semantic Alignment Strategy** | `prompts_and_req/Dopasowanie Preferencji Użytkownika do Grafu Wiedzy.md` | Three-layer integration architecture (MIM + ReFinED + Dual Encoder) |

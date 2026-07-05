@@ -16,7 +16,7 @@ Before starting the pipeline, perform these checks:
 
 1. **Read `production_artifacts/Vision_Report.md`** — understand current strategic direction, active constraints, and rejected approaches.
 2. **Read `production_artifacts/Implementation_Plan.md`** — understand the current implementation phase goals and technology stack.
-3. **Read `docs/project_state_report.md`** — understand what's already implemented.
+3. **Read `docs/changelog/changelog.md`** — understand what's already implemented.
 4. **Validate the feature request**: Does this feature align with the Vision Report's current phase and next priorities? If the request contradicts the vision or proposes a rejected approach, **STOP** and inform the user immediately:
    > "⚠️ This feature conflicts with the Vision Report: [explain]. Would you like to proceed anyway, or should we first run `research_analyst` to revisit this decision?"
 
@@ -144,11 +144,11 @@ Execute the `update_project_state` skill.
 
 **What this phase does:**
 - Analyzes what was built, modified, and added during this pipeline run
-- Appends a new dated changelog entry to `docs/project_state_report.md`
+- Appends a new dated changelog entry to `docs/changelog/changelog.md`
 - Cross-references the Vision Report to contextualize the changes
 - Written in Polish (as per project convention)
 
-**Output:** New dated entry in `docs/project_state_report.md`
+**Output:** New dated entry in `docs/changelog/changelog.md`
 
 ---
 
@@ -180,7 +180,7 @@ At the end of the full pipeline, present a consolidated summary:
 > | 2. Specification | ✅ Approved | `Technical_Specification.md` |
 > | 3. Implementation | ✅ Complete | [N] files created, [N] modified |
 > | 4. Audit | ✅ PASS | `Audit_Report.md` |
-> | 5. Changelog | ✅ Updated | `project_state_report.md` |
+> | 5. Changelog | ✅ Updated | `docs/changelog/changelog.md` |
 > | 6. Docs Cleanup | ✅ Complete | `Documentation_Audit_Report.md` |
 >
 > The Vision Report has been updated with the decision log entry for this feature."
