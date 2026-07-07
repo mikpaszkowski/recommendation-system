@@ -42,3 +42,33 @@ We will use an advanced LLM model to evaluate the generated responses according 
 * **Explainability**: The system's ability to provide clear, detailed, and verifiable justifications for *why* a given product fits the user's preferences based on explicit graph paths.
 * **Groundedness**: Measuring the extent to which the response relies *exclusively* on data and relationships fetched from the Knowledge Graph (strictly penalizing attribute hallucinations).
 * **Recoverability**: The system's ability to refine and correct its outputs based on negative user feedback or shifted preferences.
+
+---
+
+## Decision Log
+
+### Decision 2026-07-08-001: Strategic Data Foundation Reset
+**Date**: 2026-07-08
+**Trigger**: /audit-state pipeline — codebase inspection revealed Amazon-only graph
+**Decision**: All phases reset to NOT DONE / NOT VERIFIED. Implementation Plan rewritten with REDIAL-first data flow: LLM-REDIAL item extraction → REDIAL core ingestion → Amazon metadata enrichment (REDIAL items only) → Lexical GraphRAG layer → Embedding generation → Vector index creation (Cypher 25 DDL).
+**Rationale**: The existing graph, embeddings, and vector indexes were built on Amazon Electronics data with zero connection to LLM-REDIAL. This violates the dual-dataset strategy defined in Section 4 and makes evaluation against LLM-REDIAL test splits impossible.
+**Impact**: All previously ingested Neo4j data must be dropped and rebuilt. Existing backfill_embeddings.py and vector index scripts are reusable but must be re-executed against the REDIAL-sourced graph.
+**Status**: ✅ Accepted
+
+### Decision 2026-07-08-002: Implementation Structure — Foundation + Meta-Phase A + Meta-Phase B
+**Date**: 2026-07-08
+**Trigger**: User decision to reorganise the build order to reflect academic priorities
+**Decision**: Replaced linear Phase 0–3 with a two-axis build strategy:
+- **Foundation**: Infrastructure fixes + REDIAL-first KG pipeline (prerequisite for both axes)
+- **Meta-Phase A — Recommendation Engine**: Primary academic contribution. GraphSearchTool, CriticAgent, KECR, Explainable Generation, full Evaluation suite. Fully evaluatable without UI.
+- **Meta-Phase B — Conversational Flow**: CRS packaging. AgentOrchestrator, MemoCRS persistence, CLARIFY quality, Recoverability, Chainlit integration.
+**Rationale**: Meta-Phase A maps directly to Vision Report priorities (Explainability > Groundedness). A complete Meta-Phase A is a publishable thesis contribution independent of Meta-Phase B. Building the recommendation engine first reduces academic risk.
+**Status**: ✅ Accepted
+
+### Decision 2026-07-08-003: LangGraph Adoption Strategy
+**Date**: 2026-07-08
+**Trigger**: Codebase inspection — LangGraph declared in plan but never used
+**Decision**: Procedural Python orchestration accepted for the current 5-action router (KISS principle). LangGraph will be introduced via `SqliteSaver` checkpointer as the persistence backend for MemoCRS (Meta-Phase B2), giving it a clear functional justification.
+**Previous stance**: Implementation Plan called for "LangGraph for state-machine orchestration" as the core Phase 2 technology.
+**Revised stance**: LangGraph enters via persistence, not as an architectural refactor. The procedural router is not a defect — it is KISS-compliant and equivalent for the current routing complexity.
+**Status**: ✅ Accepted
