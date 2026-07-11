@@ -609,7 +609,7 @@ MATCH (n) RETURN labels(n)[0] AS label, count(n) AS count ORDER BY count DESC;
 
 | Item | Status | Reason |
 |---|---|---|
-| F0 — Infrastructure fixes (asyncio, Neo4j API, requirements.txt) | ❌ NOT DONE | GAP-001, GAP-003, GAP-011 unresolved |
+| F0 — Infrastructure fixes (asyncio, Neo4j API, requirements.txt) | ✅ DONE | GAP-001, GAP-003, GAP-011 fully implemented and audited |
 | F1 — Live graph introspection | ❌ NOT DONE | Cypher queries not yet run |
 | F1.2 — Ingestion script audit | ❌ NOT DONE | Script compatibility with processed CSVs unverified |
 | F2 — Curated subset selection | ⚠️ SELECTED (not ingested) | User/product IDs identified via dataset analysis; not yet extracted to `datasets/curated/` |

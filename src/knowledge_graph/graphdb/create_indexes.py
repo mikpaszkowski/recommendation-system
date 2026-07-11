@@ -17,36 +17,22 @@ def create_indexes():
 
     cmds = [
         """
-        CALL db.index.vector.createNodeIndex(
-          'attribute_embedding_index',
-          'Attribute',
-          'embedding',
-          384,
-          'cosine'
-        )
+        CREATE VECTOR INDEX attribute_embedding_index IF NOT EXISTS
+        FOR (n:Attribute) ON (n.embedding)
+        OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}}
         """,
         """
-        CALL db.index.vector.createNodeIndex(
-          'category_embedding_index',
-          'Category',
-          'embedding',
-          384,
-          'cosine'
-        )
+        CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
+        FOR (n:Category) ON (n.embedding)
+        OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}}
         """
     ]
     
     with connector.session() as session:
         for cmd in cmds:
             try:
-                # Check exist
-                name = cmd.split("'")[1]
-                check = f"SHOW INDEXES WHERE name = '{name}'"
-                if session.run(check).peek() is None:
-                    session.run(cmd)
-                    logger.info(f"Created index {name}")
-                else:
-                    logger.info(f"Index {name} already exists")
+                session.run(cmd)
+                logger.info("Index created or already exists")
             except Exception as e:
                 logger.error(f"Failed to create index: {e}")
 

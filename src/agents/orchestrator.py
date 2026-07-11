@@ -64,7 +64,7 @@ class AgentOrchestrator:
         self.prompt_constructor = PromptConstructor()
         self.critic_agent = critic_agent or CriticAgent(llm_handler=self.llm_handler)
         
-    def run(self, user_id: str, user_message: str) -> Dict[str, Any]:
+    async def run(self, user_id: str, user_message: str) -> Dict[str, Any]:
         """
         Main entry point for the agent conversation loop.
         """
@@ -73,21 +73,21 @@ class AgentOrchestrator:
         logger.info(f"[STEP 0] Message: '{user_message}'")
         
         # 1. Initialize State
-        state = self._initialize_state(user_id, user_message)
+        state = await self._initialize_state(user_id, user_message)
         logger.info(f"[STEP 1] State initialized")
         logger.info(f"  - History turns loaded: {len(state['messages']) - 1}")
         logger.info(f"  - Active filters from profile: {state.get('active_filters', {})}")
         logger.info(f"  - User profile keys: {list(state.get('user_profile', {}).keys())}")
         
         # 2. Router Step: Decide next action
-        next_action, reasoning = self._decide_next_step(state)
+        next_action, reasoning = await self._decide_next_step(state)
         logger.info(f"[STEP 2] Router decision: {next_action}")
         logger.info(f"  - Reasoning: {reasoning}")
         state["next_step"] = next_action
         
         # 3. Execution Step
         logger.info(f"[STEP 3] Executing action: {next_action}")
-        response_payload = self._execute_step(user_id, state)
+        response_payload = await self._execute_step(user_id, state)
         
         # 4. Save History (Post-Execution)
         agent_answer = response_payload.get("answer", "")
@@ -97,7 +97,7 @@ class AgentOrchestrator:
         
         return response_payload
 
-    def _initialize_state(self, user_id: str, user_message: str) -> ConversationState:
+    async def _initialize_state(self, user_id: str, user_message: str) -> ConversationState:
         """Loads history and profile to build the initial state."""
         profile = self.profile_tool.get_profile(user_id)
         
@@ -130,7 +130,7 @@ class AgentOrchestrator:
             "active_filters": active_filters
         }
 
-    def _decide_next_step(self, state: ConversationState) -> tuple[str, str]:
+    async def _decide_next_step(self, state: ConversationState) -> tuple[str, str]:
         """Uses LLM to classify intent and pick the next step."""
         user_message = state["messages"][-1].content
         profile = state.get("user_profile", {})
@@ -154,7 +154,7 @@ class AgentOrchestrator:
         try:
             # Construct messages for the router
             messages = [HumanMessage(content=prompt)]
-            response = self.llm_handler.query(messages)
+            response = await self.llm_handler.aquery(messages)
             
             # Expecting JSON
             cleaned = response.replace("```json", "").replace("```", "").strip()
@@ -165,7 +165,7 @@ class AgentOrchestrator:
             # Fallback
             return "ANSWER", "Fallback due to error"
 
-    def _execute_step(self, user_id: str, state: ConversationState) -> Dict[str, Any]:
+    async def _execute_step(self, user_id: str, state: ConversationState) -> Dict[str, Any]:
         """Executes the determined action."""
         action = state["next_step"]
         user_message = state["messages"][-1].content
@@ -181,7 +181,7 @@ class AgentOrchestrator:
         if action == "SEARCH":
             # 3a. Generate Hybrid Search Parameters (Merging with Active Filters)
             logger.info(f"[STEP 3a] Generating search params via LLM...")
-            updates = self._generate_search_params(user_message, active_filters, history_text)
+            updates = await self._generate_search_params(user_message, active_filters, history_text)
             logger.info(f"[STEP 3a] LLM returned:")
             logger.info(f"  - semantic_query: '{updates.get('semantic_query', '')}'")
             logger.info(f"  - structured_filters: {updates.get('structured_filters', {})}")
@@ -213,19 +213,8 @@ class AgentOrchestrator:
             asins = [item.get("asin") for item in candidates if item.get("asin")]
             attributes_map = self.graph_tool.fetch_product_attributes(asins)
             
-            # Use asyncio block for the async critic agent
-            # Create a new event loop if needed, or use asyncio.run 
-            # (Note: depending on UI framework, this might need an 'await' throughout if Orchestrator was async)
-            try:
-                 loop = asyncio.get_event_loop()
-            except RuntimeError:
-                 loop = asyncio.new_event_loop()
-                 asyncio.set_event_loop(loop)
-                 
-            # Note: _execute_step is synchronous, so we use loop.run_until_complete
-            reranked_top = loop.run_until_complete(
-                self.critic_agent.evaluate_candidates(profile, candidates, attributes_map)
-            )
+            # CriticAgent evaluates directly using await
+            reranked_top = await self.critic_agent.evaluate_candidates(profile, candidates, attributes_map)
             
             # Replace candidates with the top 3 recommended items from Critic
             search_result["items"] = reranked_top[:3]
@@ -241,7 +230,7 @@ class AgentOrchestrator:
             )
             
             logger.info(f"[STEP 3e] Querying LLM for final answer...")
-            final_answer = self.llm_handler.query(prompt_messages)
+            final_answer = await self.llm_handler.aquery(prompt_messages)
             logger.info(f"[STEP 3e] Final answer generated ({len(final_answer)} chars)")
             
             result = {
@@ -257,7 +246,7 @@ class AgentOrchestrator:
                 SystemMessage(content="You are a helpful assistant."),
                 HumanMessage(content=prompt)
             ]
-            clarification = self.llm_handler.query(messages)
+            clarification = await self.llm_handler.aquery(messages)
             result = {
                 "answer": clarification,
                 "action": "CLARIFY"
@@ -285,7 +274,7 @@ class AgentOrchestrator:
                 SystemMessage(content="You are a helpful assistant. Respond to the user politely."),
                 HumanMessage(content=user_message)
             ]
-            answer = self.llm_handler.query(messages)
+            answer = await self.llm_handler.aquery(messages)
             result = {
                 "answer": answer,
                 "action": "ANSWER"
@@ -293,7 +282,7 @@ class AgentOrchestrator:
             
         return result
 
-    def _generate_search_params(self, user_message: str, current_filters: Dict[str, Any], history_text: str = "") -> Dict[str, Any]:
+    async def _generate_search_params(self, user_message: str, current_filters: Dict[str, Any], history_text: str = "") -> Dict[str, Any]:
         """Uses LLM to generate semantic query and structured filters."""
         try:
             filters_context = json.dumps(current_filters, indent=2)
@@ -304,7 +293,7 @@ class AgentOrchestrator:
                 HumanMessage(content=prompt)
             ]
             
-            response = self.llm_handler.query(messages)
+            response = await self.llm_handler.aquery(messages)
             logger.debug(f"Raw LLM response for search params: {response[:300]}")
             cleaned = self._clean_llm_json(response)
             parsed = json.loads(cleaned)

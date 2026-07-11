@@ -4,6 +4,7 @@ import logging
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
 from src.knowledge_graph.graphdb.resolver_service import ResolverService
+from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search_query
 
 logger = logging.getLogger(__name__)
 
@@ -105,17 +106,20 @@ class GraphSearchTool:
         logger.info(f"[GST:Hybrid] Params (excl. vector): { {k:v for k,v in params.items() if k != 'vector'} }")
 
         # 3. Hybrid Query: vector search first, then apply filters
-        cypher = f"""
-        CALL db.index.vector.queryNodes('product_embedding_index', {limit * 30}, $vector)
-        YIELD node, score
-        {"WHERE " + where_str if where_str else ""}
+        return_clause = """
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
                collect(DISTINCT c.name) as category, score, elementId(node) as id, node.parent_asin as asin
-        ORDER BY score DESC
-        LIMIT {limit}
         """
+        cypher = build_vector_search_query(
+            index_name='product_embedding_index',
+            k=limit * 30,
+            where_clause=where_str,
+            return_clause=return_clause,
+            order_by="score DESC",
+            limit=limit
+        )
         
         logger.info(f"[GST:Hybrid] Cypher:\n{cypher}")
 
@@ -135,16 +139,19 @@ class GraphSearchTool:
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
         
-        cypher = f"""
-        CALL db.index.vector.queryNodes('product_embedding_index', {limit}, $vector)
-        YIELD node, score
+        return_clause = """
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
                collect(DISTINCT c.name) as category, score, elementId(node) as id, node.parent_asin as asin
-        ORDER BY score DESC
-        LIMIT {limit}
         """
+        cypher = build_vector_search_query(
+            index_name='product_embedding_index',
+            k=limit,
+            return_clause=return_clause,
+            order_by="score DESC",
+            limit=limit
+        )
 
         with self.db.session() as session:
             result = session.run(cypher, vector=query_vector)

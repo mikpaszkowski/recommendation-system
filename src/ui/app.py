@@ -37,11 +37,10 @@ async def main(message: cl.Message):
 
     try:
         # Run the Agent Orchestrator
-        # Note: orchestrator.run is synchronous for now
         async with cl.Step(name="Agent Thinking") as step:
             step.input = message.content
             
-            result = await cl.make_async(orchestrator.run)(
+            result = await orchestrator.run(
                 user_id=user_id,
                 user_message=message.content
             )

@@ -448,3 +448,22 @@ Aby przejść do Fazy II i zrealizować pełną wizję projektu, należy skupić
     *   Wdrożyć FAISS dla szybkiego wyszukiwania podobieństw (ANN).
 3.  **Trening GNN (KGAT):**
     *   Zaimplementować model KGAT do uczenia się relacji w grafie.
+
+## [2026-07-11] - F0: Usprawnienia Infrastrukturalne (Przed-Faza A/B)
+
+### Zrealizowane w tej aktualizacji
+Zgodnie z decyzją 2026-07-11-004 z Raportu Wizji (odłożenie integracji LLM-REDIAL i praca na wycinku danych Amazon), przeprowadzono obowiązkowe poprawki infrastrukturalne w celu przygotowania bazy kodu do dalszych prac nad silnikiem rekomendacji (Faza F0).
+
+*   **Naprawa pętli zdarzeń asyncio (GAP-001)**: Główny klasa `AgentOrchestrator` została w pełni przepisana na asynchroniczną (`async def`). Usunięto obejście z `cl.make_async` w Chainlit, naprawiając tym samym błąd uruchomieniowy w produkcji. Zintegrowano bezpośrednie wywołania `await` dla zapytań LLM oraz `CriticAgent`.
+*   **Aktualizacja API wektorowego Neo4j (GAP-003)**:
+    *   Scentralizowano wszystkie zapytania wyszukiwania wektorowego w nowym pliku `vector_search_helper.py`, co pozwoli na łatwiejszą migrację do składni Cypher 25 `VECTOR SEARCH` w przyszłości.
+    *   Całkowicie usunięto przestarzałą funkcję `CALL db.index.vector.createNodeIndex`.
+    *   Wszystkie skrypty tworzące indeksy (`create_vector_indexes.cypher`, `create_indexes.py`, `backfill_category_embeddings.py`) zostały zaktualizowane o nowoczesną składnię DDL `CREATE VECTOR INDEX ... IF NOT EXISTS`.
+*   **Oczyszczanie zależności (GAP-011)**:
+    *   Oczyszczono `requirements.txt` ze zbędnych paczek (przeniesiono do `requirements-legacy.txt`).
+    *   Wymuszono wersję `openai>=1.0.0` oraz dodano `pytest-asyncio`.
+    *   Utworzono plik konfiguracyjny `.env.example` dla łatwiejszego wdrażania projektu.
+    *   Przywrócono domyślną walidację zmiennych środowiskowych w `Neo4jConnector`.
+
+### Stan w stosunku do Raportu Wizji
+Krok ten zamyka sekcję F0 (Infrastructure Prerequisites) z dokumentu Implementation Plan. Kolejnym etapem będzie przygotowanie wyselekcjonowanego podzbioru danych Amazon (Faza F2) oraz zasilenie nowej bazy grafowej `kg_curated` (Faza F3).

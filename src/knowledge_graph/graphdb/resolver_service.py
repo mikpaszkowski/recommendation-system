@@ -10,6 +10,7 @@ try:
 except ImportError:
     from neo4j_connector import Neo4jConnector
     from embedding_service import EmbeddingService
+from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search_query
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,12 @@ class ResolverService:
 
         embedding = self.embed_svc.embed_query(text)
 
-        query = """
-        CALL db.index.vector.queryNodes('brand_embedding_index', $k, $embedding)
-        YIELD node, score
-        WHERE score >= $min_score
-        RETURN node.name as name, score
-        """
+        query = build_vector_search_query(
+            index_name='brand_embedding_index',
+            k=k, # k is embedded directly into query string by helper
+            where_clause="score >= $min_score",
+            return_clause="RETURN node.name as name, score"
+        )
 
         with self.connector.session() as session:
             result = session.run(query, {
@@ -63,12 +64,12 @@ class ResolverService:
         embedding = self.embed_svc.embed_query(text)
         
         # Cypher for vector search
-        query = """
-        CALL db.index.vector.queryNodes('attribute_embedding_index', $k, $embedding)
-        YIELD node, score
-        WHERE score >= $min_score
-        RETURN node.attribute_name as name, node.attribute_value as value, node.normalized_value as norm, score
-        """
+        query = build_vector_search_query(
+            index_name='attribute_embedding_index',
+            k=k,
+            where_clause="score >= $min_score",
+            return_clause="RETURN node.attribute_name as name, node.attribute_value as value, node.normalized_value as norm, score"
+        )
         
         with self.connector.session() as session:
             result = session.run(query, {
@@ -97,12 +98,12 @@ class ResolverService:
 
         embedding = self.embed_svc.embed_query(text)
         
-        query = """
-        CALL db.index.vector.queryNodes('category_embedding_index', $k, $embedding)
-        YIELD node, score
-        WHERE score >= $min_score
-        RETURN node.name as name, node.path as path, score
-        """
+        query = build_vector_search_query(
+            index_name='category_embedding_index',
+            k=k,
+            where_clause="score >= $min_score",
+            return_clause="RETURN node.name as name, node.path as path, score"
+        )
         
         with self.connector.session() as session:
             result = session.run(query, {

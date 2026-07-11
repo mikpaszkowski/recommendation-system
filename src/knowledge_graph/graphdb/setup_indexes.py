@@ -48,15 +48,6 @@ def setup_indexes():
         for i, cmd in enumerate(commands):
             logger.info(f"Executing command {i+1}/{len(commands)}...")
             try:
-                # Basic check if index exists to simulate IF NOT EXISTS behavior for procedures
-                match = re.search(r"createNodeIndex\('([^']+)'", cmd)
-                if match:
-                    idx_name = match.group(1)
-                    check = f"SHOW INDEXES WHERE name = '{idx_name}'"
-                    if session.run(check).peek() is not None:
-                        logger.info(f"Index '{idx_name}' already exists. Skipping.")
-                        continue
-                
                 session.run(cmd)
                 logger.info("Success.")
             except Exception as e:

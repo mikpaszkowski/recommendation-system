@@ -59,8 +59,7 @@ class Neo4jConnector:
         self.database = os.getenv("NEO4J_DATABASE", "neo4j")
         
         # Validate required environment variables
-        #TODO TEMPORARY DISABLED
-        # self._validate_config()
+        self._validate_config()
         
         # Driver instance (initialized on connect)
         self._driver: Optional[Driver] = None

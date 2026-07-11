@@ -126,30 +126,17 @@ def backfill_category_embeddings():
 
     # 3. Create Index
     logger.info("Creating Vector Index 'category_embedding_index'...")
-    # Try Cypher syntax first, fall back to procedure if fails (handled by try/except usually but let's use the procedure which is 5.11+ compatible)
-    # Actually, CREATE INDEX is standard. CREATE VECTOR INDEX is 5.15+.
-    # Let's try the db.index.vector.createNodeIndex procedure which works on 5.11+
-    
     index_query = """
-    CALL db.index.vector.createNodeIndex(
-      'category_embedding_index',
-      'Category',
-      'embedding',
-      384,
-      'cosine'
-    )
+    CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
+    FOR (n:Category) ON (n.embedding)
+    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}}
     """
     try:
         with connector.session() as session:
-            # Check if index exists first to avoid error
-            check = "SHOW INDEXES WHERE name = 'category_embedding_index'"
-            if session.run(check).peek() is None:
-                session.run(index_query)
-                logger.info("Index created successfully.")
-            else:
-                logger.info("Index already exists.")
+            session.run(index_query)
+            logger.info("Created category_embedding_index successfully")
     except Exception as e:
-        logger.error(f"Failed to create index: {e}")
+        logger.error(f"Could not create index (may already exist): {e}")
 
 if __name__ == "__main__":
     backfill_category_embeddings()
