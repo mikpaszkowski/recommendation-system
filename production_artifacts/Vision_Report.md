@@ -72,3 +72,15 @@ We will use an advanced LLM model to evaluate the generated responses according 
 **Previous stance**: Implementation Plan called for "LangGraph for state-machine orchestration" as the core Phase 2 technology.
 **Revised stance**: LangGraph enters via persistence, not as an architectural refactor. The procedural router is not a defect — it is KISS-compliant and equivalent for the current routing complexity.
 **Status**: ✅ Accepted
+
+
+### Decision 2026-07-11-004: Amazon-Curated Subset First (LLM-REDIAL Deferred)
+**Date**: 2026-07-11
+**Trigger**: LLM-REDIAL dataset requires author approval; blocks Foundation development
+**Decision**: Foundation graph build uses an Amazon-curated subset (25 users, 25 products) instead of waiting for LLM-REDIAL access. The schema is designed to be REDIAL-compatible from day one ( constraint already exists). LLM-REDIAL integration is deferred to Meta-Phase B once dataset access is granted.
+**Curated selection**:
+- 20 active users (147–532 reviews each) + 5 cold-start users (1 review each)
+- 20 well-reviewed products (292–519 reviews each) + 5 low-review products (1–2 reviews each)
+- Target database:  (separate from existing graph — existing data preserved)
+**Rationale**: Unblocks the entire development pipeline immediately. The curated subset is sufficient to test KECR, CriticAgent, hybrid search, evaluation scripts, and the full recommendation engine. REDIAL adds conversational dialogue data — important for evaluation quality but not required for building the recommendation engine.
+**Status**: ✅ Accepted

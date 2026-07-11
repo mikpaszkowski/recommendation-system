@@ -582,3 +582,50 @@ MATCH (n) RETURN labels(n)[0] AS label, count(n) AS count ORDER BY count DESC;
 | 🟡 NEXT | Write REDIAL ETL pipeline | After schema is defined and dataset is available |
 
 *Strategic reset documented by parent agent on 2026-07-08. No source code was modified during this update.*
+
+---
+
+## Strategic Update — 2026-07-11
+
+### Foundation Phase Revised — NOT DONE
+
+**Trigger**: User decision to decouple the graph rebuild from the LLM-REDIAL dataset dependency.
+
+**Key changes:**
+
+1. **LLM-REDIAL deferred to Meta-Phase B**: The LLM-REDIAL dataset requires author approval (email request to `LitGreenhand/LLM-Redial`). Rather than block Foundation work, the approach has been revised to use an **Amazon-curated subset** first.
+
+2. **Amazon-curated subset strategy**: Dataset analysis (2026-07-11) identified:
+   - 471,471 unique users; 123,720 products; 1,630,273 reviews in the full Amazon Electronics dataset
+   - Selected: top 20 active users (147–532 reviews each) + 5 cold-start users (1 review)
+   - Selected: top 20 most-reviewed products (292–519 reviews) + 5 low-review products (1–2 reviews)
+   - Target: ~25 users, ~25 products, ~N reviews → small, fast, fully evaluatable graph
+
+3. **REDIAL-compatible schema from day one**: The existing `constraints.cypher` already has `CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.user_id IS UNIQUE`. No schema migration needed when REDIAL access is eventually granted — REDIAL `:Dialogue` and `:Turn` nodes slot in alongside existing `:User` and `:Item` nodes.
+
+4. **Existing graph preserved**: The existing Neo4j database will NOT be deleted. The curated subset will be built in a new `kg_curated` database.
+
+### Foundation Status — ALL ITEMS MARKED NOT DONE
+
+| Item | Status | Reason |
+|---|---|---|
+| F0 — Infrastructure fixes (asyncio, Neo4j API, requirements.txt) | ❌ NOT DONE | GAP-001, GAP-003, GAP-011 unresolved |
+| F1 — Live graph introspection | ❌ NOT DONE | Cypher queries not yet run |
+| F1.2 — Ingestion script audit | ❌ NOT DONE | Script compatibility with processed CSVs unverified |
+| F2 — Curated subset selection | ⚠️ SELECTED (not ingested) | User/product IDs identified via dataset analysis; not yet extracted to `datasets/curated/` |
+| F3 — Fresh graph build (kg_curated) | ❌ NOT DONE | No data in kg_curated yet |
+| F3.4 — Embedding generation | ❌ NOT DONE | Blocked by F3.3 and GAP-003 |
+| F3.5 — Vector index creation | ❌ NOT DONE | Blocked by GAP-003 (deprecated API) |
+
+### Ingestion Script Assessment
+
+`src/knowledge_graph/graphdb/graph-builder/sample_ingest.py`:
+- **Core logic**: Reusable — node creation, relationship wiring, price bucket derivation, attribute extraction are all sound
+- **Issue**: Currently expects raw JSONL format (`Electronics.jsonl`, `meta_Electronics.jsonl`); processed CSVs use different column names
+- **Resolution**: Adapt path arguments or write `scripts/ingest_curated.py` wrapper
+
+`src/knowledge_graph/graphdb/backfill_embeddings.py`:
+- **Status**: Fully reusable — model-agnostic, batch-based, queries by `elementId`
+- **Issue**: Uses deprecated Neo4j `db.index.vector.createNodeIndex()` indirectly via create scripts (GAP-003)
+- **Resolution**: Fix index creation DDL (GAP-003); backfill script itself does not need changes
+

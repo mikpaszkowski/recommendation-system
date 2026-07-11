@@ -1,6 +1,7 @@
 # Implementation Plan: Explainable Hybrid GraphRAG for Conversational Recommendation
 
-> **Last restructured**: 2026-07-08 — Reorganised from linear Phase 0–3 into **Foundation → Meta-Phase A → Meta-Phase B** to reflect the correct dependency order and academic priority (Explainability > Groundedness > Conversational Fluidity).
+> **Last restructured**: 2026-07-08 — Reorganised from linear Phase 0–3 into **Foundation → Meta-Phase A → Meta-Phase B**.
+> **Foundation revised**: 2026-07-11 — LLM-REDIAL dependency removed from Foundation. Amazon-curated subset strategy adopted for the initial graph build. REDIAL integration deferred to Meta-Phase B.
 
 ---
 
@@ -10,9 +11,9 @@ The system is a Multi-Agent System (MAS) that combines a Neo4j Knowledge Graph, 
 
 **Technology Stack:**
 * **Database**: Neo4j (structured graph + vector index for ANN search)
-* **Logic / Agents**: LangChain + procedural Python orchestration; LangGraph `SqliteSaver` for MemoCRS persistence
+* **Logic / Agents**: LangChain + procedural Python orchestration; LangGraph `SqliteSaver` for MemoCRS persistence (Meta-Phase B)
 * **LLM API**: OpenAI GPT-4o — reasoning, extraction, critique, evaluation (LLM-as-a-Judge)
-* **Embeddings**: `sentence-transformers/all-MiniLM-L6-v2` (structural nodes) — upgrade path to `BGE-M3` for Phase A lexical chunks
+* **Embeddings**: `sentence-transformers/all-MiniLM-L6-v2` (structural nodes); upgrade path to `BGE-M3` for chunk nodes
 * **Interface**: Chainlit (async chat UI)
 
 ---
@@ -25,28 +26,26 @@ The system has two independent execution axes that share a common data foundatio
 ┌──────────────────────────────────────────────────────────────────────┐
 │  FOUNDATION  (prerequisite for both axes — must be built first)      │
 │  • Infrastructure fixes (asyncio, Neo4j API, requirements.txt)       │
-│  • REDIAL-first Knowledge Graph pipeline (6 steps)                   │
+│  • Amazon-curated Knowledge Graph (small, clean, REDIAL-compatible   │
+│    schema — no REDIAL data yet, but schema supports future extension) │
 └───────────────────────┬──────────────────────────────────────────────┘
                         │
           ┌─────────────┴──────────────┐
           ▼                            ▼
 ┌──────────────────────┐   ┌────────────────────────────────────┐
 │  META-PHASE A        │   │  META-PHASE B                      │
-│  Recommendation      │   │  Conversational Flow               │
-│  Engine              │   │  (CRS packaging)                   │
-│                      │   │                                    │
-│  PRIMARY ACADEMIC    │   │  Builds on top of Meta-Phase A.    │
-│  CONTRIBUTION        │   │  Can be developed once A is        │
-│                      │   │  verifiably complete.              │
-│  Fully evaluatable   │   │                                    │
-│  without UI/router.  │   │                                    │
+│  Recommendation      │   │  Conversational Flow +             │
+│  Engine              │   │  REDIAL Integration                │
+│  (Primary thesis     │   │  (CRS packaging)                   │
+│   contribution)      │   │                                    │
 └──────────────────────┘   └────────────────────────────────────┘
 ```
 
-**Why this order?**
-- Meta-Phase A contains the thesis's primary academic deliverable (KECR, Explainability, Groundedness evaluation). It can be fully evaluated — Hit@K, MRR, NDCG, LLM-as-Judge — without any conversation UI.
-- Meta-Phase B wraps Meta-Phase A with intent routing, persistent memory, and recoverability. It depends on A being correct first.
-- If time is constrained, a complete Meta-Phase A alone constitutes a publishable thesis contribution.
+**Why Amazon-curated subset first (not REDIAL)?**
+- LLM-REDIAL dataset requires author approval (email request) — blocks development
+- Amazon dataset is already downloaded (1.63M reviews, 9,271 products, 161K metadata entries)
+- A curated Amazon subset (20–30 active users, 10–30 well-reviewed products) lets us build and test the entire pipeline end-to-end without waiting for access
+- The schema is designed to be **REDIAL-compatible from day one**: `:User`, `:Item`, `:Dialogue`, `:Turn` node types are reserved — REDIAL data slots in without schema changes in Meta-Phase B
 
 ---
 
@@ -59,128 +58,265 @@ The system has two independent execution axes that share a common data foundatio
 
 * [ ] **GAP-003 — Neo4j Deprecated API Migration** (`src/tools/graph_search_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`): Replace all 8 occurrences of deprecated `CALL db.index.vector.queryNodes(...)` with Cypher 25 `VECTOR SEARCH` syntax. Replace `CALL db.index.vector.createNodeIndex(...)` in `create_vector_indexes.cypher` and `setup_indexes.py` with `CREATE VECTOR INDEX ... IF NOT EXISTS` DDL.
 
-* [ ] **GAP-011 — `requirements.txt` Hygiene**: Pin `openai>=1.0.0` (eliminates latent v0.x crash). Add `langgraph>=1.0.0`. Add `pydantic>=2.0.0`. Move unused legacy packages (`lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`) to `requirements-legacy.txt`. Add `.env.example` documenting `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
+* [ ] **GAP-011 — `requirements.txt` Hygiene**: Pin `openai>=1.0.0`. Add `langgraph>=1.0.0`. Add `pydantic>=2.0.0`. Move unused legacy packages (`lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`) to `requirements-legacy.txt`. Add `.env.example` documenting `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
 
-### F1 — REDIAL-First Knowledge Graph Pipeline
+### F1 — Current Graph State Assessment
 
-> **⚠️ CRITICAL**: The entire existing graph, embeddings, and indexes were built on Amazon Electronics data only. `datasets/llm_redial/` does not exist. Zero REDIAL code exists anywhere. All existing graph data must be dropped and rebuilt following the correct order below: **LLM-REDIAL first → Amazon enrichment second → embeddings third → indexes last**.
+> **⚠️ NOT DONE — Must be verified before any graph rebuild.** Run the introspection queries below against the live Neo4j instance to establish the current database state.
 
-* [ ] **F1.1 — LLM-REDIAL Acquisition & Item Extraction**: Clone `https://github.com/LitGreenhand/LLM-Redial`. Parse all dialogue JSON files. Extract the complete set of unique `movieId` / `item_id` values mentioned across all train/valid/test splits. This **canonical item set** gates everything that follows — no item enters the Knowledge Graph unless it appears in LLM-REDIAL. Script: `scripts/extract_redial_items.py` → `datasets/llm_redial/canonical_items.json`.
+* [ ] **F1.1 — Live Neo4j Introspection**: Run the following Cypher queries and record results in `production_artifacts/graph_state_snapshot.md`:
 
-* [ ] **F1.2 — Schema Definition (REDIAL-first)**: Extend `src/knowledge_graph/graphdb/graph-builder/constraints.cypher` with uniqueness constraints for `(:User {user_id})`, `(:Dialogue {dialogue_id})`, `(:Turn {turn_id})`, `(:Item {item_id})`. These are the REDIAL-sourced foundation nodes.
+```cypher
+-- Node counts by label
+MATCH (n) RETURN labels(n)[0] AS label, count(n) AS count ORDER BY count DESC;
 
-* [ ] **F1.3 — REDIAL Core Ingestion**: Script `scripts/ingest_redial_core.py`. Create `(:User)`, `(:Dialogue)`, `(:Turn)`, `(:Item)` Neo4j nodes directly from parsed LLM-REDIAL JSON. Link `(:User)-[:HAD_DIALOGUE]->(:Dialogue)-[:HAS_TURN]->(:Turn)-[:MENTIONS]->(:Item)`. This step establishes the graph's behavioural and conversational backbone.
+-- Embedding coverage per label
+MATCH (n:ParentProduct) RETURN count(n) AS total,
+  count(CASE WHEN n.embedding IS NOT NULL THEN 1 END) AS embedded;
+MATCH (n:Brand) RETURN count(n) AS total,
+  count(CASE WHEN n.embedding IS NOT NULL THEN 1 END) AS embedded;
+MATCH (n:Category) RETURN count(n) AS total,
+  count(CASE WHEN n.embedding IS NOT NULL THEN 1 END) AS embedded;
+MATCH (n:Attribute) RETURN count(n) AS total,
+  count(CASE WHEN n.embedding IS NOT NULL THEN 1 END) AS embedded;
 
-* [ ] **F1.4 — Amazon Metadata Enrichment** (REDIAL items only): Script `scripts/enrich_from_amazon.py`. For each item in `canonical_items.json`, look up metadata in `datasets/Electronics.*.csv` by ASIN. Create `(:Brand)`, `(:Category)`, `(:Attribute)`, `(:PriceRange)` nodes **only for items already present** in the REDIAL canonical set. Wire: `(:Item)-[:HAS_BRAND]->(:Brand)`, `(:Item)-[:BELONGS_TO_CATEGORY]->(:Category)`, `(:Item)-[:HAS_ATTRIBUTE]->(:Attribute)`.
+-- Vector index status
+SHOW INDEXES WHERE type = 'VECTOR';
 
-* [ ] **F1.5 — Lexical GraphRAG Layer** (`[:CHUNK_OF]`, `[:MENTIONS]`): Script `scripts/build_graphrag_chunks.py`. For each REDIAL item, chunk its Amazon description and top Amazon reviews into overlapping 200-token segments. Create `(:Chunk {text, position})` nodes linked via `[:CHUNK_OF]->(:Item)`. Extract entity mentions (brands, categories, attributes) from chunk text and create `(:Chunk)-[:MENTIONS]->(entity)` edges. This layer is the foundation for KECR graph path traversal.
+-- Relationship counts
+MATCH ()-[r]->() RETURN type(r) AS rel_type, count(r) AS count ORDER BY count DESC;
 
-* [ ] **F1.6 — Embedding Generation**: Re-run `src/knowledge_graph/graphdb/backfill_embeddings.py` against the new REDIAL-sourced graph. Embed all `(:Item)`, `(:Brand)`, `(:Category)`, `(:Attribute)`, and `(:Chunk)` nodes using a "Rich Context String" (title + category hierarchy + primary features). **The existing embeddings (Amazon-only nodes) are invalid and must be regenerated.**
+-- Sample product
+MATCH (p:ParentProduct) RETURN p LIMIT 1;
+```
 
-* [ ] **F1.7 — Vector Index Creation (Cypher 25 DDL)**: Drop all existing vector indexes. Run updated `setup_indexes.py` using Cypher 25 `CREATE VECTOR INDEX ... IF NOT EXISTS FOR (n:Label) ON (n.embedding) OPTIONS {indexConfig: {vector.dimensions: 384, vector.similarity_function: 'cosine'}}`. Indexes required: `item_embedding_index`, `brand_embedding_index`, `category_embedding_index`, `attribute_embedding_index`, `chunk_embedding_index`.
+* [ ] **F1.2 — Ingestion Script Audit**: Evaluate whether `sample_ingest.py` can be reused for the curated subset (see F2). Key issues to verify:
+  - Script currently expects `Electronics.jsonl` + `meta_Electronics.jsonl` (raw JSONL format). The processed CSVs (`processed_reviews.csv`, `combined_product_data.csv`) are a different format — script may need path/format adaptation.
+  - Script has a `--user-limit` / `--product-limit` argument capability (check arg parser) — if present, use it for the curated subset; otherwise add it.
+  - `constraints.cypher` already has `:User` node type defined — compatible with future REDIAL extension.
+
+### F2 — Curated Amazon Subset — Dataset Selection
+
+> **Strategy**: Select a small, representative slice of the Amazon Electronics dataset that exercises all graph features (dense users, cold-start users, popular products, obscure products). The existing graph will NOT be deleted — a new Neo4j database (`neo4j` → `kg_curated`) will be used for the fresh build.
+
+**Selected users and products (based on dataset analysis — 2026-07-11):**
+
+* [ ] **F2.1 — Select Active Users (20 users)**: Use the top 20 most active reviewers identified in the dataset analysis. These users have 147–532 reviews each, spanning hundreds of distinct products — ideal for testing multi-turn preference accumulation and profile richness.
+
+  ```
+  Top 20 active users (by review count):
+  1.  AHMNA5UK3V66O2V3DZSBJA4FYMOA  (532 reviews, 528 products)
+  2.  AEIIRIHLIYKQGI7ZOCIJTRDF5NPQ  (513 reviews, 506 products)
+  3.  AECTQQX663PTF5UQ2RA5TUL3BXVQ  (428 reviews, 426 products)
+  4.  AG73BVBKUOH22USSFJA5ZWL7AKXA  (342 reviews, 337 products)
+  5.  AGZZXSMMS4WRHHJRBUJZI4FZDHKQ  (283 reviews, 281 products)
+  6.  AG375WAXLZ7PIOQKIQ6KQB4J3JVQ  (275 reviews, 270 products)
+  7.  AFTZWAK3ZHAPCNSOT5GCKQDECBTQ  (262 reviews, 261 products)
+  8.  AEP4KJDGBH6XPJKFEHPYSAPUNDBQ  (259 reviews, 258 products)
+  9.  AHDZKPPKUT7HD47LXCBN7RQNN6KQ  (248 reviews, 247 products)
+  10. AGUTZC4GHLTGYHA3KBEDRF6MHB6A  (226 reviews, 225 products)
+  11. AGRPLHGW2CR6WWOHT5TOWXDGIZEQ  (217 reviews, 216 products)
+  12. AFE54MELB5IGFUYBSOBGJOSOMEPA  (214 reviews, 213 products)
+  13. AEBNDHJJSZXWZRVW63ELWOPXPNOA  (202 reviews, 200 products)
+  14. AHTDYGXHONM2BHENDRMKMC34ZZZA  (181 reviews, 180 products)
+  15. AHXZR7HLPSKRUPHX35GKRLVTX3ZA  (178 reviews, 170 products)
+  16. AGBG3KK74IKWJNQVMQAGVBWJ7FAQ  (178 reviews, 176 products)
+  17. AGDSEYGSA5K664EUHWKV3ARDXO2Q  (174 reviews, 173 products)
+  18. AEHOFUNZP6VT74RUDDCJ2VVIT56A  (173 reviews, 173 products)
+  19. AH665SQ6SQF6DXAGYIQFCX76LALA  (171 reviews, 171 products)
+  20. AGAV7IY4HWGYRUIAGUZRXYUJ22DA  (170 reviews, 169 products)
+  ```
+
+* [ ] **F2.2 — Select Cold-Start Users (5 users)**: Pick 5 users with exactly 1 review to simulate cold-start scenarios for evaluation.
+
+  ```
+  Cold-start users (1 review each — sample):
+  1. AHZYQWEOFG4GKOFO2A3I7KLVEYDA
+  2. AFRBIEE3U37BWO56ILWIH7Y7Y4LA
+  3. AFHVNPC6357YJ5I5WFRJPE5SA6AA
+  4. AH4GXL7PEROO3HI3IO4BGRB7J4QQ
+  5. AFOISMISSFFNL4DYVAZLKTBG5GTA
+  ```
+
+* [ ] **F2.3 — Select Well-Reviewed Products (20 products)**: Top 20 products by review count — each has 243–519 reviews and 241–475 unique reviewers. Rich attribute and review data for KECR path extraction.
+
+  ```
+  Top 20 products (by review count):
+  1.  B094V7S7D7  (519 reviews, 475 users)
+  2.  B07S764D9V  (473 reviews, 465 users)
+  3.  B06XRTFG29  (464 reviews, 462 users)
+  4.  B07BSVLHYD  (413 reviews, 408 users)
+  5.  B0BX65VLJ9  (378 reviews, 373 users)
+  6.  B09CKV22L7  (366 reviews, 358 users)
+  7.  B0B4SWZTZ1  (361 reviews, 360 users)
+  8.  B088C3ZJHV  (348 reviews, 337 users)
+  9.  B089PMMT1X  (342 reviews, 330 users)
+  10. B07QYL62CZ  (335 reviews, 330 users)
+  11. B073VMG4FN  (332 reviews, 326 users)
+  12. B07454F4JH  (319 reviews, 319 users)
+  13. B092W3K376  (316 reviews, 315 users)
+  14. B0B4DCFYF9  (316 reviews, 316 users)
+  15. B07WNJQFP9  (315 reviews, 309 users)
+  16. B077TPFXZV  (314 reviews, 313 users)
+  17. B08484Q1JB  (311 reviews, 293 users)
+  18. B0BMQJYLQV  (309 reviews, 297 users)
+  19. B00DS4G2AW  (301 reviews, 301 users)
+  20. B0C1FRBK4K  (292 reviews, 275 users)
+  ```
+
+* [ ] **F2.4 — Select Low-Review Products (5 products)**: Products with 1–2 reviews for cold-item evaluation.
+
+  ```
+  Cold-start products (1 review each):
+  1. B00YBBTPUU
+  2. B013FMGP1C
+  3. B01H38F5PQ
+  4. B083TNQF4M
+  5. 6302453356  (2 reviews)
+  ```
+
+  > **Note**: The `combined_product_data.csv` contains only products that have ≥1 review (confirmed: 0 products with 0 reviews in the catalog). The 5 products above have the fewest reviews in the dataset.
+
+### F3 — Fresh Graph Build (Curated Subset, New DB)
+
+> **Important**: Do NOT delete or modify the existing Neo4j database. Create a separate database for the curated graph. In Neo4j Desktop / Aura: create a new database named `kg_curated`. Set `NEO4J_DATABASE=kg_curated` in `.env` when running the new pipeline.
+
+* [ ] **F3.1 — Write Curated Subset Extractor** (`scripts/extract_curated_subset.py`): Reads `processed_reviews.csv` and `combined_product_data.csv` / `processed_metadata.csv`. Filters to the 25 selected users + 5 cold-start users and 20 selected products + 5 cold-start products. Writes out:
+  - `datasets/curated/curated_reviews.csv` — reviews involving selected users AND selected products
+  - `datasets/curated/curated_products.csv` — metadata for selected products
+  - `datasets/curated/selection_manifest.json` — records exact IDs chosen and selection rationale
+
+* [ ] **F3.2 — Adapt / Reuse Ingestion Script**: Evaluate `sample_ingest.py` for reuse:
+  - **Reuse**: Core graph-building logic (node creation, relationship wiring, price bucket derivation, attribute extraction) is sound and well-structured.
+  - **Adapt**: Update file path arguments to accept the curated CSVs (currently expects raw JSONL). Add `--database` argument to target `kg_curated`. Ensure schema creates `:User` nodes (already in `constraints.cypher`) for future REDIAL compatibility.
+  - **New script**: If adaptation is too invasive, write `scripts/ingest_curated.py` wrapping the same logic but reading from `datasets/curated/`.
+
+* [ ] **F3.3 — Run Constraints & Ingestion**: Against `kg_curated` database:
+  1. Apply `constraints.cypher` (already has `:User` unique constraint — REDIAL-compatible)
+  2. Run adapted ingestion script
+  3. Verify with `MATCH (n) RETURN labels(n)[0], count(n)` — expect ~25 `:User`, ~25 `:ParentProduct`, N `:Brand`, M `:Category`, K `:Attribute`, L `:Review` nodes
+
+* [ ] **F3.4 — Embedding Generation**: Run `backfill_embeddings.py` against `kg_curated`.
+  - Embeds: `Attribute` (name + normalized value), `Brand` (name + domain), `Category` (name + parent hierarchy), `ParentProduct` (title + category + top-5 features + description)
+  - Model: `sentence-transformers/all-MiniLM-L6-v2` → 384-dim vectors
+  - **⚠️ GAP-003 prerequisite**: Must migrate deprecated index API before this step
+
+* [ ] **F3.5 — Vector Index Creation (Cypher 25 DDL)**: Create indexes on `kg_curated`:
+  ```cypher
+  CREATE VECTOR INDEX product_embedding_index IF NOT EXISTS
+    FOR (n:ParentProduct) ON (n.embedding)
+    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+  CREATE VECTOR INDEX brand_embedding_index IF NOT EXISTS
+    FOR (n:Brand) ON (n.embedding)
+    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+  CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
+    FOR (n:Category) ON (n.embedding)
+    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+  CREATE VECTOR INDEX attribute_embedding_index IF NOT EXISTS
+    FOR (n:Attribute) ON (n.embedding)
+    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+  ```
+
+* [ ] **F3.6 — Graph Verification**: After build, confirm end-to-end connectivity:
+  ```cypher
+  -- Spot check: one product, its brand, category, attributes, reviews, user
+  MATCH (u:User)-[:WROTE]->(r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
+        -[:HAS_BRAND]->(b:Brand)
+  RETURN u.user_id, r.rating, p.title, b.name LIMIT 5;
+
+  -- Embedding spot check
+  MATCH (p:ParentProduct) WHERE p.embedding IS NOT NULL
+  RETURN p.title, size(p.embedding) AS dims LIMIT 3;
+  ```
 
 ---
 
 ## 4. META-PHASE A — Recommendation Engine
 *Primary academic contribution. Fully evaluatable without UI or conversation layer. Requires Foundation complete.*
 
-**Boundary**: Components in this phase live in `src/tools/`, `src/knowledge_graph/`, `src/llm_interface/`, `src/agents/critic_agent.py`. They have **no dependency on** `src/agents/orchestrator.py`, `src/conversation/`, `src/user/`, or `src/ui/`. Each can be called directly from a Python script or test.
+**Boundary**: Components in this phase live in `src/tools/`, `src/knowledge_graph/`, `src/llm_interface/`, `src/agents/critic_agent.py`. No dependency on `src/agents/orchestrator.py`, `src/conversation/`, `src/user/`, or `src/ui/`.
 
 ### A1 — Hybrid Search Tool Verification & Hardening
-*Code exists in `src/tools/graph_search_tool.py`. Not yet verified against REDIAL-first graph.*
-
-* [ ] **Verify all 3 search strategies** (HYBRID / VECTOR_ONLY / FILTER_ONLY) work correctly against REDIAL-sourced nodes after F0 API migration and F1 graph rebuild.
-* [ ] **Verify `ResolverService`** brand/category normalization resolves correctly against REDIAL-sourced `(:Brand)`, `(:Category)` nodes via the new Cypher 25 vector indexes.
-* [ ] **Write integration tests**: `tests/test_graph_search_tool.py` — assert each strategy returns ≥1 result for known REDIAL items; assert filter normalization maps "asus" → canonical brand node.
-* [ ] **Add `excluded_asins` filter support** to `_build_filters()`: `WHERE node.item_id NOT IN $excluded_items` — prerequisite for GAP-010 Recoverability.
+* [ ] Verify all 3 search strategies work against `kg_curated` after F0 API migration
+* [ ] Verify `ResolverService` brand/category normalization against new graph
+* [ ] Write integration tests: `tests/test_graph_search_tool.py`
+* [ ] Add `excluded_asins` filter support to `_build_filters()` (prerequisite for B4 Recoverability)
 
 ### A2 — CriticAgent Verification & Testing
-*Code exists in `src/agents/critic_agent.py`. Async, but blocked by asyncio bug until F0 GAP-001 is fixed.*
-
-* [ ] **Verify async evaluation** works end-to-end with real Neo4j candidates after F0 fix.
-* [ ] **Write unit tests**: `tests/test_critic_agent.py` — mock LLM responses, assert reranking logic sorts by `fit_score`, assert `is_recommended=false` items are dropped.
-* [ ] **Verify `fetch_product_attributes()`** returns correct attributes from REDIAL-enriched `(:Attribute)` and `(:Review)` nodes.
+* [ ] Verify async evaluation end-to-end after GAP-001 asyncio fix
+* [ ] Write unit tests: `tests/test_critic_agent.py`
+* [ ] Verify `fetch_product_attributes()` returns correct data from curated graph
 
 ### A3 — PromptConstructor — Graph Path Injection Slots
-*Code exists in `src/llm_interface/prompt_constructor.py`. Currently has no graph-path injection (confirmed GAP-007 structural gap).*
-
-* [ ] **Add `graph_reasoning_paths` parameter** to `construct_recommendation_prompt()`. When provided, inject a `[GRAPH EVIDENCE]` section into the prompt forcing the LLM to ground its response in the supplied paths.
-* [ ] **Strengthen system instruction**: Replace the current generic "explain why each item was recommended" with an explicit graph-grounding constraint: *"You MUST justify each recommendation using ONLY the graph evidence provided. Do not invent product features."*
-* [ ] **Write tests**: assert that when `graph_reasoning_paths` is provided, the resulting prompt contains `[GRAPH EVIDENCE]` and the path strings.
+* [ ] Add `graph_reasoning_paths` parameter to `construct_recommendation_prompt()`
+* [ ] Add `[GRAPH EVIDENCE]` section to prompt with graph-grounding constraint
+* [ ] Write tests asserting path injection when paths provided
 
 ### A4 — KECR — Knowledge-Enhanced Reasoning Path Extraction
-*Not yet implemented. Primary academic contribution per Vision Report Section 4.*
-
-* [ ] **Implement `src/tools/kecr_tool.py`** — `KnowledgePathExtractor` class with method `extract_paths(item_ids: List[str], user_preferences: Dict) -> List[str]`. For each top-K candidate item, execute a Neo4j shortest-path query connecting known user preference entities (brands, categories, attributes) to the item via any relationship type. Return human-readable path strings: `"Prefers Gaming → [:BELONGS_TO_CATEGORY] → Category:Gaming Laptops → [:HAS_ATTRIBUTE] → Attribute:GPU=RTX4070 → [:HAS_ATTRIBUTE] → Item:ASUS ROG Zephyrus"`.
-* [ ] **Wire into recommendation pipeline**: After `CriticAgent.evaluate_candidates()` returns top-3, call `KnowledgePathExtractor.extract_paths()` for those 3 items. Pass the returned path strings to `PromptConstructor.construct_recommendation_prompt(graph_reasoning_paths=paths)`.
-* [ ] **Write tests**: `tests/test_kecr_tool.py` — verify path extraction returns non-empty results for known REDIAL items with populated user preferences.
+* [ ] Implement `src/tools/kecr_tool.py` — `KnowledgePathExtractor` class
+* [ ] Neo4j shortest-path queries connecting user preference entities → item
+* [ ] Wire into recommendation pipeline after CriticAgent top-3 selection
+* [ ] Write tests: `tests/test_kecr_tool.py`
 
 ### A5 — Explainable Response Generation (End-to-End)
-*Combines A3 + A4. The full SEARCH path from query → graph-grounded natural language recommendation.*
-
-* [ ] **End-to-end integration test** `tests/test_recommendation_pipeline.py`: Given a structured query `{semantic_query: "gaming laptop", structured_filters: {price_max: 2000}}`, trace the full pipeline — `GraphSearchTool.search()` → `CriticAgent.evaluate_candidates()` → `KnowledgePathExtractor.extract_paths()` → `PromptConstructor` → `SimpleLLMHandler.query()` → assert the response contains at least one item name and at least one graph-path-derived justification phrase.
-* [ ] **Manual review**: Run the pipeline against 5 diverse LLM-REDIAL test dialogues. Confirm responses reference graph evidence (brand names, categories, attributes) from the actual Neo4j data — not hallucinated features.
+* [ ] End-to-end integration test: `tests/test_recommendation_pipeline.py`
+* [ ] Manual review: 5 diverse test queries against curated graph
 
 ### A6 — Quantitative & Qualitative Evaluation
-*Thesis finalization. Requires Foundation + A1–A5 complete.*
-
-* [ ] **`scripts/evaluate_retrieval.py`**: Load LLM-REDIAL test split. For each dialogue, extract the ground-truth target item. Call `GraphSearchTool.search()` with the dialogue context as `semantic_query`. Compute **Hit@5, Hit@10, MRR, NDCG@10** across the full test set. Compare HYBRID vs VECTOR_ONLY vs FILTER_ONLY strategies. Output: `production_artifacts/eval_retrieval_results.csv` + summary.
-
-* [ ] **`scripts/evaluate_generative.py`** (LLM-as-a-Judge): Sample 50–100 dialogues from the LLM-REDIAL test split. Generate full responses via the A5 pipeline. Evaluate each response using GPT-4o as judge on a 0–5 rubric for: **Groundedness** (no hallucinated features), **Explainability** (graph paths cited), **Coherence** (follows dialogue intent), **Recoverability** (handles negative feedback). Output: `production_artifacts/eval_generative_results.csv` + summary.
+* [ ] `scripts/evaluate_retrieval.py` — Hit@5, Hit@10, MRR, NDCG@10
+* [ ] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability
 
 ---
 
-## 5. META-PHASE B — Conversational Flow
-*CRS packaging layer. Wraps Meta-Phase A with intent routing, session memory, and multi-turn fluidity. Requires Foundation complete. Should begin once A1–A2 are verified.*
+## 5. META-PHASE B — Conversational Flow + REDIAL Integration
+*CRS packaging layer. Builds on top of Meta-Phase A. Also includes LLM-REDIAL dataset integration when access is granted.*
 
-**Boundary**: Components in this phase primarily live in `src/agents/orchestrator.py`, `src/conversation/`, `src/user/`, `src/ui/`. They import from Meta-Phase A components but add no new recommendation logic.
-
-### B1 — AgentOrchestrator — Full Async & Integration
-*Code exists but has production-breaking asyncio bug (GAP-001, fixed in Foundation F0).*
-
-* [ ] **Post-F0 verification**: After asyncio refactor, run `orchestrator.run()` from within a Chainlit async context. Assert no `RuntimeError`. Assert all 5 actions (SEARCH, CLARIFY, UPDATE_PROFILE, READ_PROFILE, ANSWER) route correctly.
-* [ ] **Wire Meta-Phase A pipeline into SEARCH path**: Ensure orchestrator calls the updated `GraphSearchTool` (A1) → `CriticAgent` (A2) → `KnowledgePathExtractor` (A4) → updated `PromptConstructor` (A3) in sequence. The orchestrator should be a thin coordinator — no recommendation logic inside it.
+### B1 — AgentOrchestrator Full Async & Integration
+* [ ] Post-GAP-001 verification in Chainlit async context
+* [ ] Wire Meta-Phase A pipeline into SEARCH path
 
 ### B2 — MemoCRS Persistent Memory
-*In-memory only (GAP-002 — elevated to 🔴 Critical). Cross-session persistence absent.*
-
-* [ ] **`src/user/sqlite_profile_manager.py`**: Implement `SQLiteProfileManager(AbstractProfileManager)` with `data/profiles.db` (SQLite, `sqlite3` stdlib). Store profiles as JSON blobs keyed by `user_id`. Methods: `get_profile(user_id)`, `update_profile(user_id, preferences)`, `delete_profile(user_id)`.
-* [ ] **`src/conversation/sqlite_history_manager.py`**: Implement `SQLiteHistoryManager(AbstractHistoryManager)` with per-user conversation history in SQLite. Add `get_relevant_history(user_id, query, k=5)` using cosine similarity via `EmbeddingService` to retrieve semantically relevant past turns.
-* [ ] **Update `AgentOrchestrator.__init__()`**: Default to `SQLiteProfileManager` and `SQLiteHistoryManager`. Add `data/` to `.gitignore`.
-* [ ] **Tests**: Create profile → restart manager → assert profile recovered. Add 10 history turns → call `get_relevant_history` → assert top-k are semantically relevant.
+* [ ] `src/user/sqlite_profile_manager.py` — `SQLiteProfileManager`
+* [ ] `src/conversation/sqlite_history_manager.py` — `SQLiteHistoryManager` with semantic retrieval
+* [ ] LangGraph `SqliteSaver` checkpointer integration
+* [ ] Tests: session persistence across restart
 
 ### B3 — CLARIFY Path — Context-Aware Questioning
-*Currently a 3-line hardcoded stub ignoring all context (GAP-012).*
-
-* [ ] **Add `pending_clarification: Optional[str]`** to `ConversationState` in `src/agents/state.py`.
-* [ ] **Refactor CLARIFY execution** in `AgentOrchestrator._execute_step()`: Replace hardcoded prompt with a structured template injecting `active_filters` (known constraints) and `user_profile` (known preferences). Logic: identify the highest-priority missing dimension from `[budget, use_case, brand, features]` and ask one targeted question. Pass `pending_clarification` to router so it can distinguish "user answering clarification" from "new request".
-* [ ] **Tests**: Assert that with `active_filters = {category: "laptop"}` and no `price_max`, the CLARIFY response asks about budget — not a generic question.
+* [ ] Add `pending_clarification` to `ConversationState`
+* [ ] Replace hardcoded CLARIFY stub with context-aware template
+* [ ] Tests: assert budget question asked when `price_max` missing
 
 ### B4 — Recoverability Mechanism
-*Not implemented (GAP-010 — Vision Section 5B metric).*
+* [ ] Add `REJECT` action to router prompt
+* [ ] Add `excluded_items: List[str]` to `ConversationState`
+* [ ] Update orchestrator REJECT handler and `GraphSearchTool`
+* [ ] Tests: rejected item excluded from next search
 
-* [ ] **Add `REJECT` action to `src/llm_interface/prompts/router_prompt.py`**: Triggered by negative item feedback ("not this one", "show me something else", "I don't like that").
-* [ ] **Add `excluded_items: List[str]` and `disliked_attributes: List[str]`** to `ConversationState` in `src/agents/state.py`.
-* [ ] **Update orchestrator REJECT handler**: Accumulate rejected item IDs in `excluded_items`. Pass to `GraphSearchTool.search()` via the `excluded_asins` filter added in A1. Store negative signals in `ProfileTool`.
-* [ ] **Tests**: User receives 3 items → says "not the first one" → next response excludes the rejected item ID.
+### B5 — LLM-REDIAL Integration *(requires dataset access)*
+> **Note**: LLM-REDIAL requires author approval. Request access at: `https://github.com/LitGreenhand/LLM-Redial`. This step is deferred until access is granted.
 
-### B5 — End-to-End Conversational Integration & Cleanup
-* [ ] **Full Chainlit smoke test**: Multi-turn dialogue covering SEARCH → CLARIFY → UPDATE_PROFILE → REJECT → second SEARCH with refined results. Confirm all turns persist across a simulated session restart (via SQLite managers).
-* [ ] **Remove `ResponseGenerator` dead code** (`src/llm_interface/response_generator.py` — GAP-013): Never imported. Delete.
-* [ ] **Move `PreferenceAgentFlow`** (`src/dialog_manager/preference_agent_flow.py`) to `src/legacy/` with docstring: `# LEGACY: Superseded by AgentOrchestrator (Phase 2). Retained for reference only.`
-* [ ] **Final dependency audit**: Confirm `requirements.txt` lists all packages actually imported in `src/`. Confirm `.env.example` is complete.
+* [ ] **LLM-REDIAL Acquisition**: Clone `LitGreenhand/LLM-Redial` once access granted. Parse dialogue JSON files. Extract canonical item set.
+* [ ] **REDIAL Node Ingestion** (into `kg_curated` or a new `kg_redial` database): Create `(:Dialogue)`, `(:Turn)` nodes from REDIAL conversations. Link to existing `(:Item)` nodes via `[:MENTIONS]`. Create `(:User)` nodes for REDIAL users (schema already supports this).
+* [ ] **Amazon Enrichment for REDIAL items**: For REDIAL items not in the curated subset, look up Amazon metadata and add to graph.
+* [ ] **Cross-dataset evaluation**: Re-run A6 evaluation scripts using REDIAL test split as ground truth.
+
+### B6 — End-to-End Integration & Cleanup
+* [ ] Full Chainlit smoke test: SEARCH → CLARIFY → UPDATE_PROFILE → REJECT → refined SEARCH
+* [ ] Remove `ResponseGenerator` dead code (GAP-013)
+* [ ] Move `PreferenceAgentFlow` to `src/legacy/`
+* [ ] Final dependency audit
 
 ---
 
 ## 6. Gap Cross-Reference
 
-| GAP ID | Title | Meta-Phase | Status |
-|--------|-------|------------|--------|
+| GAP ID | Title | Phase | Status |
+|--------|-------|-------|--------|
 | GAP-001 | asyncio Event Loop Fix | Foundation F0 | ❌ Not done |
 | GAP-002 | MemoCRS Persistence | Meta-Phase B2 | ❌ Not done |
 | GAP-003 | Neo4j Deprecated API | Foundation F0 | ❌ Not done |
-| GAP-004 | LLM-REDIAL Dataset | Foundation F1.1–F1.3 | ❌ Not done |
-| GAP-005 | Lexical GraphRAG Layer | Foundation F1.5 | ❌ Not done |
+| GAP-004 | LLM-REDIAL Dataset | Meta-Phase B5 | ⏳ Deferred (access required) |
+| GAP-005 | Lexical GraphRAG Layer | Foundation F3 | ❌ Not done |
 | GAP-006 | KECR Reasoning Paths | Meta-Phase A4 | ❌ Not done |
 | GAP-007 | Explainable Generation | Meta-Phase A3+A5 | ❌ Not done |
 | GAP-008 | Quantitative Evaluation | Meta-Phase A6 | ❌ Not done |
@@ -188,13 +324,15 @@ The system has two independent execution axes that share a common data foundatio
 | GAP-010 | Recoverability Mechanism | Meta-Phase B4 | ❌ Not done |
 | GAP-011 | requirements.txt Hygiene | Foundation F0 | ❌ Not done |
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
-| GAP-013 | ResponseGenerator Cleanup | Meta-Phase B5 | ❌ Not done |
+| GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 
 ---
 
 ## 7. Work Methodology
 
 * **Foundation first, always**: Nothing from Meta-Phase A or B is started until all Foundation items are marked `[x]`.
-* **Iterative approach**: Force the system to handle 1 LLM-REDIAL dialogue correctly end-to-end at each phase. Verify manually. Then expand.
+* **Amazon curated subset as testbed**: The 25-user / 25-product curated graph gives a fast, manageable environment to verify the full pipeline before scaling up.
+* **REDIAL-compatible schema from day one**: `:User` and `:Item` node types in `constraints.cypher` already support REDIAL extension. No schema migration needed when REDIAL access is granted.
+* **Iterative approach**: Handle 1 query correctly end-to-end before expanding.
 * **KISS Principle**: No custom GNN/LoRA training. Rely on robust prompting, structured tool calls, and explicit Neo4j path-finding.
-* **Evaluation-driven**: A6 evaluation scripts are written alongside A4/A5 implementation — not as an afterthought. If a component cannot be evaluated, it is not done.
+* **Evaluation-driven**: A6 evaluation scripts written alongside A4/A5 implementation — not as an afterthought.
