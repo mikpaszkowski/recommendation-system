@@ -1,4 +1,5 @@
 ---
+name: implement
 description: "Execute the full Research → Spec → Code → Audit → Document pipeline for implementing a new feature or capability in the CRS recommendation system."
 ---
 

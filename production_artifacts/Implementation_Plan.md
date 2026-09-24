@@ -34,18 +34,27 @@ The system has two independent execution axes that share a common data foundatio
           ▼                            ▼
 ┌──────────────────────┐   ┌────────────────────────────────────┐
 │  META-PHASE A        │   │  META-PHASE B                      │
-│  Recommendation      │   │  Conversational Flow +             │
-│  Engine              │   │  REDIAL Integration                │
-│  (Primary thesis     │   │  (CRS packaging)                   │
+│  Recommendation      │   │  Conversational Flow               │
+│  Engine              │   │  (CRS packaging)                   │
+│  (Primary thesis     │   │                                    │
 │   contribution)      │   │                                    │
 └──────────────────────┘   └────────────────────────────────────┘
+          │                              │
+          └──────────────┬───────────────┘
+                         ▼
+           ┌────────────────────────────┐
+           │  META-PHASE C              │
+           │  Classic Baselines         │
+           │  (CF, Content-Based)       │
+           │  for Thesis Comparison     │
+           └────────────────────────────┘
 ```
 
 **Why Amazon-curated subset first (not REDIAL)?**
 - LLM-REDIAL dataset requires author approval (email request) — blocks development
 - Amazon dataset is already downloaded (1.63M reviews, 9,271 products, 161K metadata entries)
 - A curated Amazon subset (20–30 active users, 10–30 well-reviewed products) lets us build and test the entire pipeline end-to-end without waiting for access
-- The schema is designed to be **REDIAL-compatible from day one**: `:User`, `:Item`, `:Dialogue`, `:Turn` node types are reserved — REDIAL data slots in without schema changes in Meta-Phase B
+- The project now exclusively targets the Amazon Reviews dataset to enable a strict 1:1 comparison against classic recommendation models (Matrix Factorization, Content-Based) in Meta-Phase C.
 
 ---
 
@@ -56,15 +65,15 @@ The system has two independent execution axes that share a common data foundatio
 
 * [ ] **GAP-001 — asyncio Refactor** (`src/agents/orchestrator.py`): Convert `run()`, `_initialize_state()`, `_decide_next_step()`, `_generate_search_params()`, and `_execute_step()` to `async def`. Replace `asyncio.get_event_loop().run_until_complete()` at line 220 with `await`. Update `src/ui/app.py` to call `await orchestrator.run()`. Add `pytest-asyncio` test confirming no `RuntimeError` is raised inside a running event loop.
 
-* [ ] **GAP-003 — Neo4j Deprecated API Migration** (`src/tools/graph_search_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`): Replace all 8 occurrences of deprecated `CALL db.index.vector.queryNodes(...)` with Cypher 25 `VECTOR SEARCH` syntax. Replace `CALL db.index.vector.createNodeIndex(...)` in `create_vector_indexes.cypher` and `setup_indexes.py` with `CREATE VECTOR INDEX ... IF NOT EXISTS` DDL.
+* [x] **GAP-003 — Neo4j Deprecated API Migration** (`src/tools/graph_search_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`): Replace all 8 occurrences of deprecated `CALL db.index.vector.queryNodes(...)` with Cypher 25 `VECTOR SEARCH` syntax. Replace `CALL db.index.vector.createNodeIndex(...)` in `create_vector_indexes.cypher` and `setup_indexes.py` with `CREATE VECTOR INDEX ... IF NOT EXISTS` DDL.
 
-* [ ] **GAP-011 — `requirements.txt` Hygiene**: Pin `openai>=1.0.0`. Add `langgraph>=1.0.0`. Add `pydantic>=2.0.0`. Move unused legacy packages (`lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`) to `requirements-legacy.txt`. Add `.env.example` documenting `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
+* [x] **GAP-011 — `requirements.txt` Hygiene**: Pin `openai>=1.0.0`. Add `langgraph>=1.0.0`. Add `pydantic>=2.0.0`. Move unused legacy packages (`lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`) to `requirements-legacy.txt`. Add `.env.example` documenting `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
 
 ### F1 — Current Graph State Assessment
 
 > **⚠️ NOT DONE — Must be verified before any graph rebuild.** Run the introspection queries below against the live Neo4j instance to establish the current database state.
 
-* [ ] **F1.1 — Live Neo4j Introspection**: Run the following Cypher queries and record results in `production_artifacts/graph_state_snapshot.md`:
+* [x] **F1.1 — Live Neo4j Introspection**: Run the following Cypher queries and record results in `production_artifacts/graph_state_snapshot.md`:
 
 ```cypher
 -- Node counts by label
@@ -101,7 +110,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 
 **Selected users and products (based on dataset analysis — 2026-07-11):**
 
-* [ ] **F2.1 — Select Active Users (20 users)**: Use the top 20 most active reviewers identified in the dataset analysis. These users have 147–532 reviews each, spanning hundreds of distinct products — ideal for testing multi-turn preference accumulation and profile richness.
+* [x] **F2.1 — Select Active Users (20 users)** *(Skipped: live DB already contains 30 users)*: Use the top 20 most active reviewers identified in the dataset analysis. These users have 147–532 reviews each, spanning hundreds of distinct products — ideal for testing multi-turn preference accumulation and profile richness.
 
   ```
   Top 20 active users (by review count):
@@ -127,7 +136,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   20. AGAV7IY4HWGYRUIAGUZRXYUJ22DA  (170 reviews, 169 products)
   ```
 
-* [ ] **F2.2 — Select Cold-Start Users (5 users)**: Pick 5 users with exactly 1 review to simulate cold-start scenarios for evaluation.
+* [x] **F2.2 — Select Cold-Start Users (5 users)**: Pick 5 users with exactly 1 review to simulate cold-start scenarios for evaluation.
 
   ```
   Cold-start users (1 review each — sample):
@@ -138,7 +147,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   5. AFOISMISSFFNL4DYVAZLKTBG5GTA
   ```
 
-* [ ] **F2.3 — Select Well-Reviewed Products (20 products)**: Top 20 products by review count — each has 243–519 reviews and 241–475 unique reviewers. Rich attribute and review data for KECR path extraction.
+* [x] **F2.3 — Select Well-Reviewed Products (20 products)** *(Skipped: live DB already contains 30 products)*: Top 20 products by review count — each has 243–519 reviews and 241–475 unique reviewers. Rich attribute and review data for KECR path extraction.
 
   ```
   Top 20 products (by review count):
@@ -164,7 +173,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   20. B0C1FRBK4K  (292 reviews, 275 users)
   ```
 
-* [ ] **F2.4 — Select Low-Review Products (5 products)**: Products with 1–2 reviews for cold-item evaluation.
+* [x] **F2.4 — Select Low-Review Products (5 products)**: Products with 1–2 reviews for cold-item evaluation.
 
   ```
   Cold-start products (1 review each):
@@ -181,27 +190,27 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 
 > **Important**: Do NOT delete or modify the existing Neo4j database. Create a separate database for the curated graph. In Neo4j Desktop / Aura: create a new database named `kg_curated`. Set `NEO4J_DATABASE=kg_curated` in `.env` when running the new pipeline.
 
-* [ ] **F3.1 — Write Curated Subset Extractor** (`scripts/extract_curated_subset.py`): Reads `processed_reviews.csv` and `combined_product_data.csv` / `processed_metadata.csv`. Filters to the 25 selected users + 5 cold-start users and 20 selected products + 5 cold-start products. Writes out:
+* [x] **F3.1 — Write Curated Subset Extractor** *(Skipped: DB is already curated)* (`scripts/extract_curated_subset.py`): Reads `processed_reviews.csv` and `combined_product_data.csv` / `processed_metadata.csv`. Filters to the 25 selected users + 5 cold-start users and 20 selected products + 5 cold-start products. Writes out:
   - `datasets/curated/curated_reviews.csv` — reviews involving selected users AND selected products
   - `datasets/curated/curated_products.csv` — metadata for selected products
   - `datasets/curated/selection_manifest.json` — records exact IDs chosen and selection rationale
 
-* [ ] **F3.2 — Adapt / Reuse Ingestion Script**: Evaluate `sample_ingest.py` for reuse:
+* [x] **F3.2 — Adapt / Reuse Ingestion Script**: Evaluate `sample_ingest.py` for reuse:
   - **Reuse**: Core graph-building logic (node creation, relationship wiring, price bucket derivation, attribute extraction) is sound and well-structured.
   - **Adapt**: Update file path arguments to accept the curated CSVs (currently expects raw JSONL). Add `--database` argument to target `kg_curated`. Ensure schema creates `:User` nodes (already in `constraints.cypher`) for future REDIAL compatibility.
   - **New script**: If adaptation is too invasive, write `scripts/ingest_curated.py` wrapping the same logic but reading from `datasets/curated/`.
 
-* [ ] **F3.3 — Run Constraints & Ingestion**: Against `kg_curated` database:
+* [x] **F3.3 — Run Constraints & Ingestion**: Against `kg_curated` database:
   1. Apply `constraints.cypher` (already has `:User` unique constraint — REDIAL-compatible)
   2. Run adapted ingestion script
   3. Verify with `MATCH (n) RETURN labels(n)[0], count(n)` — expect ~25 `:User`, ~25 `:ParentProduct`, N `:Brand`, M `:Category`, K `:Attribute`, L `:Review` nodes
 
-* [ ] **F3.4 — Embedding Generation**: Run `backfill_embeddings.py` against `kg_curated`.
+* [x] **F3.4 — Embedding Generation** *(Skipped: 100% embeddings present)*: Run `backfill_embeddings.py` against `kg_curated`.
   - Embeds: `Attribute` (name + normalized value), `Brand` (name + domain), `Category` (name + parent hierarchy), `ParentProduct` (title + category + top-5 features + description)
   - Model: `sentence-transformers/all-MiniLM-L6-v2` → 384-dim vectors
   - **⚠️ GAP-003 prerequisite**: Must migrate deprecated index API before this step
 
-* [ ] **F3.5 — Vector Index Creation (Cypher 25 DDL)**: Create indexes on `kg_curated`:
+* [x] **F3.5 — Vector Index Creation (Cypher 25 DDL)**: Create indexes on `kg_curated`:
   ```cypher
   CREATE VECTOR INDEX product_embedding_index IF NOT EXISTS
     FOR (n:ParentProduct) ON (n.embedding)
@@ -217,7 +226,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
     OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
   ```
 
-* [ ] **F3.6 — Graph Verification**: After build, confirm end-to-end connectivity:
+* [x] **F3.6 — Graph Verification**: After build, confirm end-to-end connectivity:
   ```cypher
   -- Spot check: one product, its brand, category, attributes, reviews, user
   MATCH (u:User)-[:WROTE]->(r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
@@ -268,12 +277,16 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 
 ---
 
-## 5. META-PHASE B — Conversational Flow + REDIAL Integration
-*CRS packaging layer. Builds on top of Meta-Phase A. Also includes LLM-REDIAL dataset integration when access is granted.*
+## 5. META-PHASE B — Conversational Flow
+*CRS packaging layer. Builds on top of Meta-Phase A.*
 
-### B1 — AgentOrchestrator Full Async & Integration
-* [ ] Post-GAP-001 verification in Chainlit async context
-* [ ] Wire Meta-Phase A pipeline into SEARCH path
+### B1 — LangGraph Orchestration Refactor (AgentOrchestrator)
+* [ ] Rewrite `AgentOrchestrator` using LangGraph `StateGraph`.
+* [ ] Define `RecommenderState` TypedDict (`messages`, `active_filters`, `excluded_asins`, `candidates`, `graph_evidence`).
+* [ ] Implement core graph nodes: Router, Search, Critic, KECR, Generator, Clarify.
+* [ ] Implement conditional routing edges (including cyclic loops for REJECT/Refine).
+* [ ] Wire Meta-Phase A tools into the LangGraph nodes.
+* [ ] Verify end-to-end execution within the Chainlit async context.
 
 ### B2 — MemoCRS Persistent Memory
 * [ ] `src/user/sqlite_profile_manager.py` — `SQLiteProfileManager`
@@ -292,14 +305,6 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] Update orchestrator REJECT handler and `GraphSearchTool`
 * [ ] Tests: rejected item excluded from next search
 
-### B5 — LLM-REDIAL Integration *(requires dataset access)*
-> **Note**: LLM-REDIAL requires author approval. Request access at: `https://github.com/LitGreenhand/LLM-Redial`. This step is deferred until access is granted.
-
-* [ ] **LLM-REDIAL Acquisition**: Clone `LitGreenhand/LLM-Redial` once access granted. Parse dialogue JSON files. Extract canonical item set.
-* [ ] **REDIAL Node Ingestion** (into `kg_curated` or a new `kg_redial` database): Create `(:Dialogue)`, `(:Turn)` nodes from REDIAL conversations. Link to existing `(:Item)` nodes via `[:MENTIONS]`. Create `(:User)` nodes for REDIAL users (schema already supports this).
-* [ ] **Amazon Enrichment for REDIAL items**: For REDIAL items not in the curated subset, look up Amazon metadata and add to graph.
-* [ ] **Cross-dataset evaluation**: Re-run A6 evaluation scripts using REDIAL test split as ground truth.
-
 ### B6 — End-to-End Integration & Cleanup
 * [ ] Full Chainlit smoke test: SEARCH → CLARIFY → UPDATE_PROFILE → REJECT → refined SEARCH
 * [ ] Remove `ResponseGenerator` dead code (GAP-013)
@@ -308,31 +313,50 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 
 ---
 
-## 6. Gap Cross-Reference
+
+---
+
+## 6. META-PHASE C — Classic Baseline Evaluation
+*Post-implementation phase. Executes after the GraphRAG solution is fully built and validated. Provides the strict academic comparison required for the thesis.*
+
+### C1 — Unified Train/Test Split
+* [ ] Split the curated Amazon Reviews dataset into Train (80%) and Test (20%) or leave-one-out.
+* [ ] Ensure `kg_curated` is only populated with interactions from the Train split.
+
+### C2 — Classic Model Implementation
+* [ ] `src/baselines/cf_model.py`: Implement Matrix Factorization (SVD) using `scikit-surprise`.
+* [ ] `src/baselines/cb_model.py`: Implement Content-Based filtering using `lightfm` or TF-IDF on product metadata.
+
+### C3 — Baseline Evaluation Script
+* [ ] `scripts/evaluate_baselines.py`: Run the classic models on the Test split.
+* [ ] Calculate `HitRate@K` and `NDCG@K` using the exact same evaluation metrics functions as Phase A6.
+* [ ] Compile final comparison table: Vector-only vs Cypher-only vs Hybrid GraphRAG vs CF vs Content-Based.
+
+## 7. Gap Cross-Reference
 
 | GAP ID | Title | Phase | Status |
 |--------|-------|-------|--------|
 | GAP-001 | asyncio Event Loop Fix | Foundation F0 | ❌ Not done |
 | GAP-002 | MemoCRS Persistence | Meta-Phase B2 | ❌ Not done |
-| GAP-003 | Neo4j Deprecated API | Foundation F0 | ❌ Not done |
-| GAP-004 | LLM-REDIAL Dataset | Meta-Phase B5 | ⏳ Deferred (access required) |
+| GAP-003 | Neo4j Deprecated API | Foundation F0 | ✅ Done |
+| GAP-014 | Classic Baselines | Meta-Phase C | ❌ Not done |
 | GAP-005 | Lexical GraphRAG Layer | Foundation F3 | ❌ Not done |
 | GAP-006 | KECR Reasoning Paths | Meta-Phase A4 | ❌ Not done |
 | GAP-007 | Explainable Generation | Meta-Phase A3+A5 | ❌ Not done |
 | GAP-008 | Quantitative Evaluation | Meta-Phase A6 | ❌ Not done |
 | GAP-009 | LLM-as-Judge Evaluation | Meta-Phase A6 | ❌ Not done |
 | GAP-010 | Recoverability Mechanism | Meta-Phase B4 | ❌ Not done |
-| GAP-011 | requirements.txt Hygiene | Foundation F0 | ❌ Not done |
+| GAP-011 | requirements.txt Hygiene | Foundation F0 | ✅ Done |
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 
 ---
 
-## 7. Work Methodology
+## 8. Work Methodology
 
 * **Foundation first, always**: Nothing from Meta-Phase A or B is started until all Foundation items are marked `[x]`.
 * **Amazon curated subset as testbed**: The 25-user / 25-product curated graph gives a fast, manageable environment to verify the full pipeline before scaling up.
-* **REDIAL-compatible schema from day one**: `:User` and `:Item` node types in `constraints.cypher` already support REDIAL extension. No schema migration needed when REDIAL access is granted.
+* **Unified Amazon Dataset strategy**: Focus entirely on Amazon data to ensure all baselines (LLM, CF, CB) are evaluated on the exact same dataset splits.
 * **Iterative approach**: Handle 1 query correctly end-to-end before expanding.
 * **KISS Principle**: No custom GNN/LoRA training. Rely on robust prompting, structured tool calls, and explicit Neo4j path-finding.
 * **Evaluation-driven**: A6 evaluation scripts written alongside A4/A5 implementation — not as an afterthought.

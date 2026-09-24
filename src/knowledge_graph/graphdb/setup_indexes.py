@@ -28,7 +28,7 @@ def setup_indexes():
     with open(cypher_file, "r") as f:
         content = f.read()
 
-    # robust parsing: find all CALL ... ;
+    # robust parsing: find all CREATE ... ;
     # We use regex to extract the full command ending with ;
     # This ignores comments because . matches anything but newline (usually) 
     # but we want to capture multiline commands if needed.

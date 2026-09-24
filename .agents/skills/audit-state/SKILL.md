@@ -1,4 +1,5 @@
 ---
+name: audit-state
 description: "Perform a backward-looking validation of the project: verify Vision staleness, map end-to-end flow coverage against the Implementation Plan, identify all gaps with implementation order, and feed results into the /implement workflow."
 ---
 

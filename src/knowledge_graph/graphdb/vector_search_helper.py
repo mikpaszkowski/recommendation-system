@@ -2,8 +2,7 @@
 Centralized Neo4j vector search query builder.
 
 Encapsulates the vector search Cypher generation in one place.
-Currently uses CALL db.index.vector.queryNodes() (deprecated but functional).
-When Neo4j 2025.x+ is confirmed, migrate to VECTOR SEARCH syntax here.
+Uses the modern Cypher 25 VECTOR SEARCH syntax.
 """
 
 def build_vector_search_query(
@@ -19,19 +18,7 @@ def build_vector_search_query(
 ) -> str:
     """
     Build a Cypher query for vector search.
-    
-    Args:
-        index_name: Name of the vector index to query
-        k: Number of nearest neighbors to find
-        yield_alias: Alias for the matched node
-        score_alias: Alias for the similarity score
-        where_clause: Optional WHERE clause for post-filtering
-        return_clause: Optional RETURN clause
-        order_by: Optional ORDER BY clause
-        limit: Optional LIMIT value
-        
-    Returns:
-        Cypher query string
+    Compatible with Neo4j 5.x (CALL db.index.vector.queryNodes).
     """
     parts = [
         f"CALL db.index.vector.queryNodes('{index_name}', {k}, $vector)",

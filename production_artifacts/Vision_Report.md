@@ -25,9 +25,9 @@ The project moves away from rigid processing pipelines and pure Text-to-Cypher g
 ## 4. Key Architectural Decisions & Scope Definition
 To guarantee the successful execution and focus of the master's thesis, the project scope is rigorously defined:
 * **Abandoning Custom Model Training**: The project consciously avoids the extreme computational burden of training custom Relational Graph Convolutional Networks (R-GCN, KGAT, LoRA). It focuses entirely on Prompt Engineering, RAG architecture, and high-quality pre-trained LLM embedding models applied to enriched textual representations of graph nodes.
-* **Dual-Dataset Graph Construction (Scope Protection)**: The project utilizes a highly targeted, dual-dataset strategy. The modern **LLM-REDIAL dataset** will serve as the conversational and behavioral foundation, providing validated multi-turn dialogues. To construct the Knowledge Graph without unmanageable data engineering overhead, the system will use the **Amazon Reviews 2023 dataset** strictly as a metadata lookup. Only the items specifically present in the selected LLM-REDIAL domains will be extracted from the massive Amazon catalog to populate the graph's rich structural (Products, Brands, Categories) and lexical (Review Chunks) nodes.
+* **Single-Dataset Graph Construction & Unified Baseline Strategy**: The project utilizes the **Amazon Reviews 2023 dataset** exclusively. By dropping the LLM-REDIAL dependency, we ensure a perfect 1:1 comparison against classic recommendation baselines (Matrix Factorization, Content-Based, Sequential models) which will be trained and evaluated on the exact same Amazon dataset splits. The graph will be populated with rich structural (Products, Brands, Categories) and lexical (Review Chunks) nodes directly from Amazon data.
 * **Knowledge Graph as Grounding**: The system relies on the graph structure to completely prevent LLM hallucinations. The system cannot invent a product or its features.
-* **Primary Academic Contribution**: The thesis will academically demonstrate how the integration of Hybrid GraphRAG retrieval and Multi-Agent verification significantly enhances the groundedness and user-perceived explainability of conversational recommendations compared to baseline LLM retrieval methodologies.
+* **Primary Academic Contribution**: The thesis will academically demonstrate how the integration of Hybrid GraphRAG retrieval and Multi-Agent verification significantly enhances recommendation accuracy, groundedness, and user-perceived explainability compared to both baseline LLM retrieval methodologies (Vector-only, Cypher-only) AND classic recommendation models (Collaborative Filtering, Content-Based) evaluated on the exact same dataset splits.
 
 ## 5. Metrics and Evaluation (How do we measure success?)
 Evaluating conversational recommender systems (CRS) requires a dual-dimensional approach based on modern research standards:
@@ -83,4 +83,14 @@ We will use an advanced LLM model to evaluate the generated responses according 
 - 20 well-reviewed products (292–519 reviews each) + 5 low-review products (1–2 reviews each)
 - Target database:  (separate from existing graph — existing data preserved)
 **Rationale**: Unblocks the entire development pipeline immediately. The curated subset is sufficient to test KECR, CriticAgent, hybrid search, evaluation scripts, and the full recommendation engine. REDIAL adds conversational dialogue data — important for evaluation quality but not required for building the recommendation engine.
+**Status**: ✅ Accepted
+
+### Decision 2026-09-23-005: Unified Baseline Strategy (Amazon Only)
+**Date**: 2026-09-23
+**Trigger**: Need for robust academic baselines (Matrix Factorization, Content-Based, Sequential) trained on the exact same dataset as the Knowledge Graph.
+**Decision**: 
+1. Abandon the LLM-REDIAL dataset dependency entirely. The project will use the Amazon Reviews dataset exclusively for both the Knowledge Graph and the classic baselines.
+2. Introduce **Meta-Phase C (Classic Baseline Comparison)** to the Implementation Plan. This phase will implement `scikit-surprise` (CF) and `lightfm` (Content-Based) models on the Amazon dataset.
+3. Schedule Meta-Phase C to occur *after* Meta-Phase A and B are fully implemented and validated, ensuring the custom Hybrid GraphRAG solution is completely finished before comparative evaluation begins.
+**Rationale**: Comparing a modern LLM-driven Knowledge Graph system against classic recommendation algorithms on the exact same dataset provides a bulletproof evaluation section for the thesis. Moving this to a post-implementation phase protects the core development timeline.
 **Status**: ✅ Accepted

@@ -41,7 +41,7 @@ class ResolverService:
         with self.connector.session() as session:
             result = session.run(query, {
                 "k": k,
-                "embedding": embedding,
+                "vector": embedding,
                 "min_score": self.min_score
             })
 
@@ -74,7 +74,7 @@ class ResolverService:
         with self.connector.session() as session:
             result = session.run(query, {
                 "k": k, 
-                "embedding": embedding,
+                "vector": embedding,
                 "min_score": self.min_score
             })
             
@@ -108,7 +108,7 @@ class ResolverService:
         with self.connector.session() as session:
             result = session.run(query, {
                 "k": k, 
-                "embedding": embedding,
+                "vector": embedding,
                 "min_score": self.min_score
             })
             
