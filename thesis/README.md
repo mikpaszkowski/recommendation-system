@@ -1,0 +1,56 @@
+# Master's Thesis Scientific Contribution Registry
+
+> **Thesis Title**: *Explainable Hybrid GraphRAG for Conversational Recommendation*  
+> **Canonical Vision Reference**: [`production_artifacts/Vision_Report.md`](../production_artifacts/Vision_Report.md)  
+> **Evaluation Rubric & Skill**: [`.agents/skills/thesis_evaluator/SKILL.md`](../.agents/skills/thesis_evaluator/SKILL.md)  
+> **Auditing Agent**: `@thesis-evaluator`  
+
+---
+
+## Purpose
+
+This registry catalogs all codebase innovations, architectural mechanisms, and empirical artifacts that satisfy the **10-Point Academic Rubric** and qualify as substantive scientific contributions for the Master's Thesis document.
+
+Each contribution is documented in a dedicated markdown file conforming to the naming pattern:
+```
+thesis/<N>-doc-<one-two-words>.md
+```
+where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
+
+---
+
+## Academic Contribution Index
+
+| # | Document | Scope | Research Question ($RQ$) | Primary Thesis Chapter | Status |
+|---|---|---|---|---|---|
+| 1 | [`1-doc-dialogue-state.md`](./1-doc-dialogue-state.md) | `dialogue-state` | $\mathbf{RQ_1}$: Impact of canonical dialogue state representation and constraint reconciliation on attribute hallucination and constraint adherence | Chapter 3: System Architecture & Dialogue State Modeling | ✅ Documented |
+
+## Evaluation Summary
+- **Total Thesis Documents**: 1
+- **Active Research Questions**: $\mathbf{RQ_1}$
+- **Latest Evaluated Scope**: Commit `c8ba48e` (*"Refactor session context schema, adapters, preference parser, and dialogue manager"*)
+
+---
+
+## Master's Thesis Chapter Mapping
+
+* **Chapter 1: Introduction & Research Motivation**
+  * Problem statement: Hallucinations, lack of verifiable grounding, and cold-start in Conversational Recommender Systems (CRS).
+  * System Vision: Explainable Hybrid GraphRAG with Multi-Agent Orchestration.
+* **Chapter 2: State of the Art & Related Work**
+  * Evolution of CRS: Collaborative Filtering $\rightarrow$ Deep Sequential Models $\rightarrow$ LLM Conversational Agents $\rightarrow$ GraphRAG.
+  * Baseline paradigms: Matrix Factorization (`scikit-surprise`), Content-Based (`lightfm`), Vector-only retrieval vs. Structured Graph retrieval.
+* **Chapter 3: System Architecture & Dialogue State Modeling**
+  * Session Context modeling & Pydantic state representations (`session_schema.py`).
+  * Bidirectional downstream adapters (`session_adapter.py`).
+  * Dialogue State Management & Multi-turn preference accumulation (`dialogue_manager.py`).
+* **Chapter 4: Hybrid GraphRAG Retrieval & Multi-Agent Verification**
+  * Dense vector embedding of graph nodes + dynamic Cypher structural constraints.
+  * Critic Agent & Knowledge-Enhanced Conversational Reasoning (KECR).
+  * Path-based explainability & data provenance.
+* **Chapter 5: Empirical Evaluation & Comparative Analysis**
+  * Recommendation accuracy ($NDCG@K$, $HitRate@K$, $Recall@K$).
+  * Conversation quality & grounding (LLM-as-a-Judge Coherence, Explainability, Groundedness, Recoverability).
+  * Ablation studies & baseline comparisons (Amazon Reviews 2023 unified splits).
+* **Chapter 6: Conclusion & Future Research**
+  * Summary of contributions and verified hypotheses.
