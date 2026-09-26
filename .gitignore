@@ -12,4 +12,6 @@ my_env
 /checkpoints/*
 /analysis_output/*
 .chainlit
-.env
+*.bak
+*.tmp
+introspection_results.txt
