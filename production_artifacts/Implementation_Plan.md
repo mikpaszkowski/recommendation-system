@@ -332,7 +332,57 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] Calculate `HitRate@K` and `NDCG@K` using the exact same evaluation metrics functions as Phase A6.
 * [ ] Compile final comparison table: Vector-only vs Cypher-only vs Hybrid GraphRAG vs CF vs Content-Based.
 
-## 7. Gap Cross-Reference
+---
+
+## 7. META-PHASE D — Legacy Adapter Deprecation & Cleanup
+*Post-migration phase. Executes after Meta-Phase B is complete and all subsystems consume `SessionContext` natively. Goal: eliminate `session_adapter.py` and all legacy dict interfaces, making the typed Pydantic schema the single data contract.*
+
+> **Rationale**: `src/dialog_manager/session_adapter.py` (714 lines) exists solely as a bidirectional translation layer between the canonical `SessionContext` schema and legacy subsystems that still expect plain `{likes, dislikes, constraints}` dicts. Once all consumers are migrated to accept `SessionContext` directly, this entire file — and its 6 mapping functions — become dead code.
+
+### D1 — Audit & Inventory of Legacy Dict Consumers
+* [ ] Map every call site that currently receives or produces a legacy preferences dict (`{likes, dislikes, constraints, intent, notes}`).
+* [ ] Identify which adapter functions each consumer depends on:
+  - `hard_constraints_to_structured_filters()` → `GraphSearchTool._build_filters()`, `GraphSearchTool._normalize_filters()`
+  - `session_context_to_legacy_preferences()` → `PromptConstructor._format_preferences()`, `GraphQueryManager._ground_preferences()`, `PreferenceQuantifier.quantify()`, `ProfileTool`
+  - `session_context_to_user_persona()` → `CriticAgent.evaluate_candidates()`
+  - `session_context_to_dialogue_action()` → `AgentOrchestrator` router
+  - `legacy_preferences_to_session_context()` → reverse bridge (any component producing old dicts)
+  - `extract_semantic_query()` → `GraphSearchTool` semantic search input
+* [ ] Produce a migration checklist with dependency order (leaf consumers first, orchestrator last).
+
+### D2 — Migrate Leaf Consumers to Native `SessionContext`
+* [ ] **GraphSearchTool**: Refactor `_build_filters()` to accept `List[HardConstraint]` directly instead of a flat filter dict. Remove reliance on `hard_constraints_to_structured_filters()`.
+* [ ] **PromptConstructor**: Refactor `_format_preferences()` to read from `SessionContext.extracted_parameters` directly (soft preferences with polarity/confidence, hard constraints with operators).
+* [ ] **GraphQueryManager**: Refactor `_ground_preferences()` to consume `ExtractedParameters` instead of legacy `{likes, dislikes, constraints}`.
+* [ ] **PreferenceQuantifier**: Refactor `quantify()` to accept `List[SoftPreference]` natively — polarity and confidence are already first-class fields, no need for the adapter's weight calculation.
+* [ ] **CriticAgent**: Refactor `evaluate_candidates()` to accept `SessionContext` directly — build the persona internally instead of via the adapter.
+
+### D3 — Migrate Orchestrator & Top-Level Wiring
+* [ ] **AgentOrchestrator** (or LangGraph `StateGraph` from B1): Replace all internal dict-based state with `SessionContext` as the canonical state type. Read `dialogue_state.suggested_system_action` directly instead of going through `session_context_to_dialogue_action()`.
+* [ ] **ProfileTool**: Store and retrieve `SessionContext` objects directly — no round-tripping through legacy dicts.
+* [ ] Remove all `legacy_preferences_to_session_context()` call sites — no component should produce legacy dicts anymore.
+
+### D4 — Remove Adapter Layer & Dead Code
+* [ ] Delete `src/dialog_manager/session_adapter.py`.
+* [ ] Remove adapter re-exports from `src/dialog_manager/__init__.py`.
+* [ ] Delete or rewrite adapter-specific tests:
+  - `tests/test_session_adapter.py` (entire file — tests the now-deleted adapter)
+  - `tests/test_session_schema_adversarial.py` — keep schema validation tests, remove adapter function tests
+  - `tests/test_challenger_empirical.py` — remove adapter round-trip tests
+  - `tests/e2e/reference_impl.py` — remove adapter reference implementations
+  - `tests/e2e/conftest.py` — remove `adapter_functions` fixture
+  - `tests/e2e/test_tier*` and `tests/e2e/test_e2e_session_context.py` — rewrite to test native `SessionContext` consumption
+* [ ] Remove utility functions that only served the adapter: `_get_field()`, `_coerce_numeric()`, `_clamp()`, `_unwrap_session_context()`.
+
+### D5 — Schema Simplification (Optional)
+* [ ] Remove dict-emulation methods from `SessionContext` and `CurrentSessionContextWrapper` (`__getitem__`, `__contains__`, `get()`, `safe_get()`, `safe_contains()`) — these were only needed for backward compatibility with code expecting dict-like access.
+* [ ] Evaluate whether `CurrentSessionContextWrapper` is still needed or if `SessionContext` alone suffices as the root type.
+* [ ] Remove `HardConstraintOperator` backward-compat alias and lowercase enum aliases if no consumer relies on them.
+* [ ] Final test suite pass — all tests should work against the clean, typed-only schema.
+
+---
+
+## 8. Gap Cross-Reference
 
 | GAP ID | Title | Phase | Status |
 |--------|-------|-------|--------|
@@ -349,10 +399,11 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 | GAP-011 | requirements.txt Hygiene | Foundation F0 | ✅ Done |
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
+| GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
 
 ---
 
-## 8. Work Methodology
+## 9. Work Methodology
 
 * **Foundation first, always**: Nothing from Meta-Phase A or B is started until all Foundation items are marked `[x]`.
 * **Amazon curated subset as testbed**: The 25-user / 25-product curated graph gives a fast, manageable environment to verify the full pipeline before scaling up.

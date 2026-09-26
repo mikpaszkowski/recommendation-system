@@ -13,6 +13,16 @@ from src.tools.profile_tool import ProfileTool
 from src.llm.simple_llm_handler import SimpleLLMHandler
 from src.llm_interface.prompts.router_prompt import router_prompt_template
 from src.llm_interface.prompt_constructor import PromptConstructor
+from src.dialog_manager.dialogue_manager import DialogueManager
+from src.dialog_manager.session_adapter import (
+    hard_constraints_to_structured_filters,
+    session_context_to_structured_filters,
+    session_context_to_dialogue_action,
+    session_context_to_user_persona,
+    extract_semantic_query,
+)
+from src.dialog_manager.session_schema import SessionContext, CurrentSessionContextWrapper
+from src.llm_interface.preference_parser import LLMPreferenceParser
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +65,9 @@ class AgentOrchestrator:
                  profile_tool: Optional[ProfileTool] = None,
                  llm_handler: Optional[SimpleLLMHandler] = None,
                  history_manager: Optional[InMemoryHistoryManager] = None,
-                 critic_agent: Optional[CriticAgent] = None):
+                 critic_agent: Optional[CriticAgent] = None,
+                 dialogue_manager: Optional[DialogueManager] = None,
+                 preference_parser: Optional[LLMPreferenceParser] = None):
         
         self.graph_tool = graph_tool or GraphSearchTool()
         self.profile_tool = profile_tool or ProfileTool()
@@ -63,52 +75,81 @@ class AgentOrchestrator:
         self.history_manager = history_manager or InMemoryHistoryManager()
         self.prompt_constructor = PromptConstructor()
         self.critic_agent = critic_agent or CriticAgent(llm_handler=self.llm_handler)
+        self.dialogue_manager = dialogue_manager or DialogueManager()
+        self.preference_parser = preference_parser or LLMPreferenceParser(llm_handler=self.llm_handler)
         
-    async def run(self, user_id: str, user_message: str) -> Dict[str, Any]:
+    async def run(self, user_id: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Main entry point for the agent conversation loop.
         """
+        effective_session_id = session_id or user_id
         logger.info(f"{'='*60}")
-        logger.info(f"[STEP 0] New request from user={user_id}")
+        logger.info(f"[STEP 0] New request from user={user_id} (session={effective_session_id})")
         logger.info(f"[STEP 0] Message: '{user_message}'")
         
-        # 1. Initialize State
-        state = await self._initialize_state(user_id, user_message)
-        logger.info(f"[STEP 1] State initialized")
+        # 1. Preference Extraction & Multi-Turn State Accumulation
+        logger.info(f"[STEP 1a] Extracting preferences via preference_parser...")
+        try:
+            extraction = self.preference_parser.extract_preferences(user_message)
+        except Exception as e:
+            logger.warning(f"Preference extraction error: {e}. Falling back to empty extraction.")
+            extraction = {}
+            
+        logger.info(f"[STEP 1b] Updating dialogue state in DialogueManager...")
+        session_context = self.dialogue_manager.update_turn(
+            session_id=effective_session_id,
+            user_message=user_message,
+            extraction=extraction
+        )
+
+        # 2. Initialize State
+        state = await self._initialize_state(user_id, user_message, session_context=session_context)
+        logger.info(f"[STEP 1c] State initialized")
         logger.info(f"  - History turns loaded: {len(state['messages']) - 1}")
-        logger.info(f"  - Active filters from profile: {state.get('active_filters', {})}")
+        logger.info(f"  - Active filters from profile/session: {state.get('active_filters', {})}")
         logger.info(f"  - User profile keys: {list(state.get('user_profile', {}).keys())}")
+        logger.info(f"  - Session intent: {session_context.session_intent.value if hasattr(session_context.session_intent, 'value') else session_context.session_intent}")
+        logger.info(f"  - Ready for recommendation: {session_context.dialogue_state.ready_for_recommendation}")
         
-        # 2. Router Step: Decide next action
+        # 3. Router Step: Decide next action
         next_action, reasoning = await self._decide_next_step(state)
         logger.info(f"[STEP 2] Router decision: {next_action}")
         logger.info(f"  - Reasoning: {reasoning}")
         state["next_step"] = next_action
         
-        # 3. Execution Step
+        # 4. Execution Step
         logger.info(f"[STEP 3] Executing action: {next_action}")
-        response_payload = await self._execute_step(user_id, state)
+        response_payload = await self._execute_step(user_id, state, session_context=session_context)
         
-        # 4. Save History (Post-Execution)
+        # 5. Save History (Post-Execution)
         agent_answer = response_payload.get("answer", "")
         self.history_manager.add_turn(user_id, user_message, agent_answer)
         logger.info(f"[STEP 4] History saved. Answer length: {len(agent_answer)} chars")
         logger.info(f"{'='*60}")
         
+        # Include session_context in payload for transparent downstream verification
+        response_payload["session_context"] = session_context.to_dict()
+        
         return response_payload
 
-    async def _initialize_state(self, user_id: str, user_message: str) -> ConversationState:
+    async def _initialize_state(self, user_id: str, user_message: str, session_context: Optional[SessionContext] = None) -> ConversationState:
         """Loads history and profile to build the initial state."""
         profile = self.profile_tool.get_profile(user_id)
+        if not isinstance(profile, dict):
+            profile = {"preferences": {}, "history": []}
+        elif profile.get("preferences") is None:
+            profile = {**profile, "preferences": {}}
+            
+        raw_prefs = profile.get("preferences")
+        active_filters = raw_prefs.copy() if isinstance(raw_prefs, dict) else {}
         
-        # Load persistent preferences as starting active filters if not present?
-        # For now, we assume active_filters are effectively the session's working memory of constraints.
-        # We initialize them from the user's permanent preferences.
-        active_filters = profile.get("preferences", {}).copy()
-        
-        # NOTE: In a real persistent state system (e.g. Redis), we would load the specific 
-        # 'session_state' here which might differ from long-term 'profile'.
-        # For this MVP, we re-initialize from profile.
+        # Retrieve active session context if not explicitly passed
+        if session_context is None:
+            session_context = self.dialogue_manager.get_context(user_id)
+            
+        # Synchronize active_filters with structured filters from session context
+        session_filters = session_context_to_structured_filters(session_context)
+        active_filters.update(session_filters)
         
         history = self.history_manager.get_history(user_id)
         # Convert history to BaseMessages if needed, or just keep raw for logic.
@@ -125,7 +166,7 @@ class AgentOrchestrator:
         return {
             "messages": messages,
             "next_step": None,
-            "current_context": {},
+            "current_context": session_context.to_dict(),
             "user_profile": profile,
             "active_filters": active_filters
         }
@@ -135,6 +176,8 @@ class AgentOrchestrator:
         user_message = state["messages"][-1].content
         profile = state.get("user_profile", {})
         active_filters = state.get("active_filters", {})
+        current_context = state.get("current_context", {})
+        suggested_action = session_context_to_dialogue_action(current_context)
         
         # Format history for prompt
         # We take the last 5 turns (excluding current)
@@ -144,28 +187,43 @@ class AgentOrchestrator:
         if not history_text:
             history_text = "No recent history."
         
-        prompt = router_prompt_template.format(
-            history=history_text,
-            user_profile=json.dumps(profile.get("preferences", {}), indent=2),
-            active_filters=json.dumps(active_filters, indent=2),
-            user_message=user_message
-        )
-        
         try:
+            profile_prefs = profile.get("preferences", {}) if isinstance(profile, dict) else {}
+            if profile_prefs is None:
+                profile_prefs = {}
+            prompt = router_prompt_template.format(
+                history=history_text,
+                user_profile=json.dumps(profile_prefs, indent=2, default=str),
+                active_filters=json.dumps(active_filters, indent=2, default=str),
+                user_message=user_message
+            )
             # Construct messages for the router
             messages = [HumanMessage(content=prompt)]
             response = await self.llm_handler.aquery(messages)
             
             # Expecting JSON
-            cleaned = response.replace("```json", "").replace("```", "").strip()
+            cleaned = self._clean_llm_json(response)
             data = json.loads(cleaned)
-            return data.get("action", "ANSWER"), data.get("reasoning", "")
+            raw_action = data.get("action", "ANSWER")
+            action = str(raw_action).upper().strip() if isinstance(raw_action, str) else "ANSWER"
+            reasoning = data.get("reasoning", "")
+            
+            # Guardrail: If router chose SEARCH, but dialogue state indicates critical attributes are missing,
+            # gracefully switch to CLARIFY to ask for missing required attributes
+            dialogue_state = current_context.get("dialogue_state", {})
+            ready = dialogue_state.get("ready_for_recommendation", True)
+            missing = dialogue_state.get("missing_critical_attributes", [])
+            if action == "SEARCH" and not ready and missing:
+                logger.info(f"Guardrail: Critical attributes missing {missing}. Switching SEARCH -> CLARIFY.")
+                action = "CLARIFY"
+                reasoning = f"Missing critical attributes ({', '.join(missing)}). Clarification required before searching."
+                
+            return action, reasoning
         except Exception as e:
-            logger.error(f"Router JSON parse error: {e}")
-            # Fallback
-            return "ANSWER", "Fallback due to error"
+            logger.error(f"Router JSON parse error: {e}. Falling back to dialogue action '{suggested_action}'.")
+            return suggested_action, f"Fallback to dialogue action due to error: {e}"
 
-    async def _execute_step(self, user_id: str, state: ConversationState) -> Dict[str, Any]:
+    async def _execute_step(self, user_id: str, state: ConversationState, session_context: Optional[SessionContext] = None) -> Dict[str, Any]:
         """Executes the determined action."""
         action = state["next_step"]
         user_message = state["messages"][-1].content
@@ -191,14 +249,27 @@ class AgentOrchestrator:
             new_filters = updates.get("structured_filters", {})
             for k, v in new_filters.items():
                 active_filters[k] = v
+                
+            if session_context:
+                session_filters = session_context_to_structured_filters(session_context)
+                for k, v in session_filters.items():
+                    if k not in active_filters or active_filters[k] is None:
+                        active_filters[k] = v
             
             logger.info(f"[STEP 3b] Merged active filters: {active_filters}")
             state["active_filters"] = active_filters
             
+            # Semantic query with fallback to extract_semantic_query
+            semantic_query = updates.get("semantic_query")
+            if not semantic_query and session_context:
+                semantic_query = extract_semantic_query(session_context)
+            if not semantic_query:
+                semantic_query = user_message
+                
             # 3c. Search (normalization + Cypher happens inside)
             logger.info(f"[STEP 3c] Calling GraphSearchTool.search()...")
             search_result = self.graph_tool.search(
-                semantic_query=updates.get("semantic_query"),
+                semantic_query=semantic_query,
                 structured_filters=active_filters,
                 limit=5
             )
@@ -213,8 +284,12 @@ class AgentOrchestrator:
             asins = [item.get("asin") for item in candidates if item.get("asin")]
             attributes_map = self.graph_tool.fetch_product_attributes(asins)
             
-            # CriticAgent evaluates directly using await
-            reranked_top = await self.critic_agent.evaluate_candidates(profile, candidates, attributes_map)
+            # Enrich profile with session persona for Critic Agent
+            critic_profile = dict(profile)
+            if session_context:
+                critic_profile["preferences"] = session_context_to_user_persona(session_context)
+                
+            reranked_top = await self.critic_agent.evaluate_candidates(critic_profile, candidates, attributes_map)
             
             # Replace candidates with the top 3 recommended items from Critic
             search_result["items"] = reranked_top[:3]
@@ -240,8 +315,14 @@ class AgentOrchestrator:
             }
 
         elif action == "CLARIFY":
-            # Generate a clarification question
-            prompt = f"The user information is incomplete. Ask a clarifying question to better understand their needs regarding: {user_message}"
+            # Generate a clarification question enriched with missing critical attributes if available
+            missing_attrs = []
+            if session_context:
+                missing_attrs = session_context.dialogue_state.missing_critical_attributes
+            if missing_attrs:
+                prompt = f"The user is looking for a product, but critical details are missing: {', '.join(missing_attrs)}. Ask a polite clarifying question to find out their requirements for {', '.join(missing_attrs)} regarding: {user_message}"
+            else:
+                prompt = f"The user information is incomplete. Ask a clarifying question to better understand their needs regarding: {user_message}"
             messages = [
                 SystemMessage(content="You are a helpful assistant."),
                 HumanMessage(content=prompt)
@@ -285,7 +366,7 @@ class AgentOrchestrator:
     async def _generate_search_params(self, user_message: str, current_filters: Dict[str, Any], history_text: str = "") -> Dict[str, Any]:
         """Uses LLM to generate semantic query and structured filters."""
         try:
-            filters_context = json.dumps(current_filters, indent=2)
+            filters_context = json.dumps(current_filters, indent=2, default=str)
             prompt = f"{SEARCH_GENERATION_PROMPT}\n\n[CONVERSATION HISTORY]\n{history_text}\n\n[ACTIVE FILTERS]\n{filters_context}\n\n[USER MESSAGE]\n{user_message}"
             
             messages = [
@@ -318,3 +399,12 @@ class AgentOrchestrator:
         # Remove trailing commas before } or ]
         cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
         return cleaned
+
+    def get_session_context(self, session_id: str) -> CurrentSessionContextWrapper:
+        """Direct accessor to dialogue manager session wrapper."""
+        return self.dialogue_manager.get_wrapper(session_id)
+
+    def reset_session(self, session_id: str) -> None:
+        """Reset dialogue state for a given session/user."""
+        self.dialogue_manager.reset_session(session_id)
+
