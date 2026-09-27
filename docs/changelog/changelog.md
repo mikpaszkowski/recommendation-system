@@ -5,6 +5,47 @@
 
 ---
 
+## 📅 2026-09-27
+
+### Changelog (względem stanu z 2026-09-23)
+
+> **Kontekst**: Wdrożenie fundamentów Meta-Fazy B (MemoCRS, zarządzanie sesją), restrukturyzacja agentów oraz dodanie zautomatyzowanego potoku ewaluacji dla pracy magisterskiej.
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Nowa warstwa danych i modelowania sesji (`src/dialog_manager/session_schema.py` & `session_adapter.py`):**
+    *   Wprowadzono ustandaryzowany schemat Pydantic (`SessionContext`, `ExtractedPreferences`) dla twardego typowania preferencji użytkownika i stanu konwersacji.
+    *   Dodano `SessionAdapter` jako warstwę kompatybilności dla starszego formatu orkiestratora.
+    *   *Stanowi to krytyczny fundament pod wdrożenie trwałej persystencji (MemoCRS) w Meta-Fazie B.*
+2.  **`DialogueManager` (`src/dialog_manager/dialogue_manager.py`):**
+    *   Nowy, scentralizowany menedżer przepływu. Integruje ekstrakcję przez LLM z persystencją stanu sesji, oddzielając zarządzanie dialogiem od logiki routingu.
+3.  **Framework Ewaluacyjny (Benchmark) (`tests/benchmarks/scripts/run_benchmark.py`):**
+    *   Zbudowano potężny zestaw narzędzi i testów (`tests/benchmarks/`) do zautomatyzowanej ewaluacji strategii promptów LLM (Zero-Shot, Few-Shot, CoT). Framework generuje wizualizacje (Seaborn) i statystyki skuteczności ekstrakcji.
+4.  **Ewaluator Pracy Magisterskiej (`.agents/skills/thesis_evaluator/SKILL.md`):**
+    *   Nowa rola agentowa `@thesis-evaluator` odpowiedzialna za audyt wprowadzanych zmian pod kątem rygoru naukowego i automatyczne strukturyzowanie rozdziałów w katalogu `thesis/` (wygenerowano `1-doc-dialogue-state.md` oraz `2-doc-preference-benchmark.md`).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`LLMPreferenceParser` i Prompty (`src/llm_interface/preference_parser.py`)**:
+    *   Przebudowane tak, by wymuszać ustrukturyzowane wyjście JSON poprzez Pydantic. Znacznie zredukowano ryzyko błędów parsowania.
+2.  **`ProfileTool` (`src/tools/profile_tool.py`)**:
+    *   Gruntownie zrefaktoryzowany pod ścisłą integrację z nowym `SessionAdapter` i `DialogueManager`.
+3.  **Architektura Agent Skills**:
+    *   Zmigrowano luźne pliki konfiguracyjne agentów (z plików `*.md` na nową strukturę `SKILL.md` w podfolderach `skills/`), ułatwiając odkrywalność i modularność.
+4.  **Rozszerzenie testów E2E**:
+    *   Ogromna rozbudowa zestawu testów pokrywająca cały nowy cykl zarządzania sesją dialogową.
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Mechanizmy bezpośredniego wyszukiwania na grafie (`GraphSearchTool`, Cypher resolver) w `src/tools/` i `src/knowledge_graph/`.
+*   Zasady działania `CriticAgent`.
+*   Interfejs Chainlit (`src/ui/app.py`).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   Implementacja GraphRAG (brak chunków tekstu, brak połączeń `MENTIONS` w grafie).
+*   Pełna integracja `LangGraph` dla orkiestratora z bazą `SqliteSaver` (zadeklarowana w Meta-Fazie B w zaktualizowanym raporcie wizji).
+
 
 ## 📅 2026-09-23 (F1.1 Introspection)
 

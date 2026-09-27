@@ -11,20 +11,20 @@ Features:
 - Automated demo mode (--demo) with realistic multi-turn scenarios
 - Interactive CLI mode with session management commands (/reset, /summary, /json, /exit)
 - Single-utterance evaluation mode (backward-compatible CLI arguments)
-- Resilient category extraction and optional Neo4j vector resolution
+- Integrated category embedding vector search via Neo4j category_embedding_index
 
 Usage:
-  # Automated demo mode (runs offline with mock parser if OPENAI_API_KEY is absent)
+  # Automated demo mode (category vector search enabled by default)
   python scripts/run_preference_parser.py --demo
 
   # Interactive multi-turn CLI session
   python scripts/run_preference_parser.py --interactive
 
-  # Single utterance evaluation
+  # Single utterance evaluation with category vector search
   python scripts/run_preference_parser.py "I want a lightweight laptop under $1000 without ChromeOS"
 
-  # Force offline mock parser
-  python scripts/run_preference_parser.py --demo --mock
+  # Force offline mock parser without vector resolution
+  python scripts/run_preference_parser.py --demo --mock --no-resolve-categories
 """
 
 from __future__ import annotations
@@ -336,13 +336,15 @@ def _extract_categories(payload: Union[Dict[str, Any], Any]) -> List[str]:
         if isinstance(params, dict):
             for hc in params.get("hard_constraints", []):
                 if isinstance(hc, dict) and hc.get("attribute", "").lower().strip() in (
-                    "category", "product_category", "product_type"
+                    "category", "product_category", "product_type", "categories", "type"
                 ):
                     val = str(hc.get("value", "")).strip()
                     if val and val not in categories:
                         categories.append(val)
             for sp in params.get("soft_preferences", []):
-                if isinstance(sp, dict) and sp.get("category", "").lower().strip() == "category":
+                if isinstance(sp, dict) and sp.get("category", "").lower().strip() in (
+                    "category", "product_category", "product_type", "categories", "type"
+                ):
                     val = str(sp.get("value", "")).strip()
                     if val and val not in categories:
                         categories.append(val)
@@ -372,7 +374,61 @@ def _extract_categories(payload: Union[Dict[str, Any], Any]) -> List[str]:
     return categories
 
 
-def _resolve_categories(categories: List[str]) -> Optional[Dict[str, List[Dict[str, Any]]]]:
+# ------------------------------------------------------------------------------
+# Cached ResolverService Singleton
+# ------------------------------------------------------------------------------
+
+_RESOLVER_INSTANCE: Optional[Any] = None
+_RESOLVER_FAILED: bool = False
+
+
+def get_category_resolver() -> Optional[Any]:
+    """
+    Get or create a cached ResolverService instance.
+    Degrades gracefully if Neo4j or sentence-transformers is unavailable.
+    """
+    global _RESOLVER_INSTANCE, _RESOLVER_FAILED
+    if _RESOLVER_FAILED:
+        return None
+    if _RESOLVER_INSTANCE is not None:
+        return _RESOLVER_INSTANCE
+
+    try:
+        from src.knowledge_graph.graphdb.resolver_service import ResolverService
+        _RESOLVER_INSTANCE = ResolverService()
+        return _RESOLVER_INSTANCE
+    except ImportError as e:
+        logger.info(f"ResolverService could not be imported: {e}. Vector resolution disabled.")
+        _RESOLVER_FAILED = True
+        return None
+    except Exception as e:
+        logger.warning(f"Could not connect to Neo4j or initialize ResolverService: {e}")
+        _RESOLVER_FAILED = True
+        return None
+
+
+def _format_category_path(path: Any) -> str:
+    """Format category hierarchy path into a clean string (e.g. A > B > C)."""
+    if isinstance(path, list):
+        return " > ".join(str(p).strip() for p in path if str(p).strip())
+    if isinstance(path, str) and path.strip():
+        if path.startswith("[") and path.endswith("]"):
+            try:
+                import ast
+                parsed = ast.literal_eval(path)
+                if isinstance(parsed, list):
+                    return " > ".join(str(p).strip() for p in parsed if str(p).strip())
+            except Exception:
+                pass
+        return path.strip()
+    return ""
+
+
+def _resolve_categories(
+    categories: List[str],
+    resolver: Optional[Any] = None,
+    k: int = 3,
+) -> Optional[Dict[str, List[Dict[str, Any]]]]:
     """
     Run an embedding vector search against the knowledge graph for each
     category string and return the matched Category nodes.
@@ -381,40 +437,37 @@ def _resolve_categories(categories: List[str]) -> Optional[Dict[str, List[Dict[s
     if not categories:
         return None
 
-    try:
-        from src.knowledge_graph.graphdb.resolver_service import ResolverService
-        resolver = ResolverService()
-    except ImportError:
-        print("Notice: ResolverService could not be imported. Vector resolution skipped.")
-        return None
-    except Exception as e:
-        print(f"Notice: Could not connect to Neo4j or initialize ResolverService: {e}")
+    active_resolver = resolver if resolver is not None else get_category_resolver()
+    if active_resolver is None:
         return None
 
     results: Dict[str, List[Dict[str, Any]]] = {}
     for cat in categories:
         try:
-            matches = resolver.resolve_category(cat, k=3)
+            matches = active_resolver.resolve_category(cat, k=k)
             results[cat] = matches
         except Exception as e:
-            print(f"  Notice: Error resolving category '{cat}': {e}")
+            logger.warning(f"Error resolving category '{cat}' via vector embedding search: {e}")
             results[cat] = []
 
     return results
 
 
 def _print_resolved_categories(resolved: Dict[str, List[Dict[str, Any]]]) -> None:
-    """Pretty-print the embedding-resolved category matches."""
-    print("\n=== Vector Category Resolution ===")
+    """Pretty-print the embedding-resolved category matches with similarity scores and paths."""
+    print("\n[Category Vector Search (Embedding Index: category_embedding_index)]")
     for cat, matches in resolved.items():
-        print(f"Resolving category '{cat}' via embeddings...")
+        print(f"  • Query Category : '{cat}'")
         if not matches:
-            print("  (no matches above score threshold)")
-        for match in matches:
-            score = match.get("score", 0.0)
-            path = match.get("path", "")
-            path_info = f"  Path: {path}" if path else ""
-            print(f"  - Match: {match['name']} (Score: {score:.4f}){path_info}")
+            print("    ↳ (no matches found above score threshold in knowledge graph)")
+        else:
+            print("    ↳ Matched Knowledge Graph Categories:")
+            for idx, match in enumerate(matches, start=1):
+                name = match.get("name", "Unknown")
+                score = match.get("score", 0.0)
+                path = _format_category_path(match.get("path"))
+                path_info = f" | Hierarchy: {path}" if path else ""
+                print(f"        {idx}. {name} (Similarity: {score:.4f}){path_info}")
 
 
 # ==============================================================================
@@ -428,10 +481,12 @@ def print_turn_evolution(
     consolidated_wrapper: CurrentSessionContextWrapper,
     prev_summary: Optional[Dict[str, Any]] = None,
     raw_json_only: bool = False,
+    resolved_categories: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """
     Pretty-print the consolidated JSON schema (current_session_context) showing
     how session_intent, hard_constraints, soft_preferences, and dialogue_state evolve.
+    Integrates category vector search results if resolved_categories is provided.
     """
     if raw_json_only:
         print(consolidated_wrapper.to_json(indent=2))
@@ -440,6 +495,7 @@ def print_turn_evolution(
             "intent": ctx.session_intent.value if hasattr(ctx.session_intent, "value") else str(ctx.session_intent),
             "hard_count": len(ctx.extracted_parameters.hard_constraints),
             "soft_count": len(ctx.extracted_parameters.soft_preferences),
+            "resolved_categories": resolved_categories,
         }
 
     ctx = consolidated_wrapper.current_session_context
@@ -451,6 +507,7 @@ def print_turn_evolution(
         "ready": ctx.dialogue_state.ready_for_recommendation,
         "missing": list(ctx.dialogue_state.missing_critical_attributes),
         "action": ctx.dialogue_state.suggested_system_action.value if hasattr(ctx.dialogue_state.suggested_system_action, "value") else str(ctx.dialogue_state.suggested_system_action),
+        "resolved_categories": resolved_categories,
     }
 
     print("\n" + "=" * 80)
@@ -494,6 +551,20 @@ def print_turn_evolution(
                 ConstraintOperator.EXCLUDE: "exclude",
             }.get(hc.operator, hc.operator.value if hasattr(hc.operator, "value") else str(hc.operator))
             op_label = hc.operator.value if hasattr(hc.operator, "value") else str(hc.operator)
+
+            # Show vector resolution inline for category constraints
+            if hc.attribute in ("category", "product_category", "product_type", "type") and resolved_categories:
+                cat_val = str(hc.value).strip()
+                matches = resolved_categories.get(cat_val) or resolved_categories.get(cat_val.lower(), [])
+                if matches:
+                    best = matches[0]
+                    best_name = best.get("name", "")
+                    best_score = best.get("score", 0.0)
+                    best_path = _format_category_path(best.get("path"))
+                    path_str = f" | {best_path}" if best_path else ""
+                    print(f"      - [{hc.attribute}] {op_sym} {hc.value!r} ({op_label})")
+                    print(f"          ↳ Vector Match: {best_name!r} (similarity: {best_score:.4f}{path_str})")
+                    continue
             print(f"      - [{hc.attribute}] {op_sym} {hc.value!r} ({op_label})")
 
     # Soft preferences
@@ -517,6 +588,10 @@ def print_turn_evolution(
     print(f"      - Missing Critical Fields  : {missing_str}")
     print(f"      - Suggested System Action  : {act_str}")
 
+    # 3. Vector Category Resolution Display
+    if resolved_categories:
+        _print_resolved_categories(resolved_categories)
+
     print(f"\n[Canonical JSON: current_session_context]")
     print(consolidated_wrapper.to_json(indent=2))
     print("-" * 80)
@@ -536,18 +611,27 @@ def process_dialogue_turn(
     turn_num: int = 1,
     prev_summary: Optional[Dict[str, Any]] = None,
     raw_json_only: bool = False,
-    resolve_categories: bool = False,
+    resolve_categories: bool = True,
+    resolver: Optional[Any] = None,
 ) -> Tuple[Dict[str, Any], CurrentSessionContextWrapper, Dict[str, Any]]:
     """
     Process a single dialogue turn end-to-end:
     1. Parse preferences from utterance.
     2. Accumulate turn into DialogueManager.
     3. Retrieve canonical CurrentSessionContextWrapper.
-    4. Pretty-print state evolution and JSON schema.
+    4. Perform category embedding vector search against Knowledge Graph.
+    5. Pretty-print state evolution, category vector matches, and JSON schema.
     """
     turn_extraction = parser_agent.extract_preferences(user_utterance)
     dialogue_manager.update_turn(session_id, user_utterance, turn_extraction)
     wrapper = dialogue_manager.get_wrapper(session_id)
+
+    # Perform category embedding vector search against Knowledge Graph
+    resolved_categories: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    if resolve_categories and not raw_json_only:
+        categories = _extract_categories(wrapper)
+        if categories:
+            resolved_categories = _resolve_categories(categories, resolver=resolver)
 
     curr_summary = print_turn_evolution(
         turn_num=turn_num,
@@ -556,14 +640,8 @@ def process_dialogue_turn(
         consolidated_wrapper=wrapper,
         prev_summary=prev_summary,
         raw_json_only=raw_json_only,
+        resolved_categories=resolved_categories,
     )
-
-    if resolve_categories and not raw_json_only:
-        categories = _extract_categories(wrapper)
-        if categories:
-            resolved = _resolve_categories(categories)
-            if resolved is not None:
-                _print_resolved_categories(resolved)
 
     return turn_extraction, wrapper, curr_summary
 
@@ -593,7 +671,8 @@ def run_demo_scenario(
     dialogue_manager: DialogueManager,
     session_id: str = "demo_session",
     raw_json_only: bool = False,
-    resolve_categories: bool = False,
+    resolve_categories: bool = True,
+    resolver: Optional[Any] = None,
 ) -> None:
     """Execute pre-configured multi-turn conversational sequence."""
     utterances = DEMO_SCENARIOS.get(scenario_name)
@@ -619,6 +698,7 @@ def run_demo_scenario(
             prev_summary=prev_summary,
             raw_json_only=raw_json_only,
             resolve_categories=resolve_categories,
+            resolver=resolver,
         )
 
     if not raw_json_only:
@@ -639,9 +719,10 @@ def run_interactive_cli(
     dialogue_manager: DialogueManager,
     session_id: str = "interactive_cli_user",
     raw_json_only: bool = False,
-    resolve_categories: bool = False,
+    resolve_categories: bool = True,
+    resolver: Optional[Any] = None,
 ) -> None:
-    """Run an interactive CLI dialogue session."""
+    """Run an interactive CLI dialogue session with integrated category vector resolution."""
     print("\n================================================================================")
     print("  Preference Parser & Multi-Turn Dialogue Manager (Interactive Mode)")
     print("================================================================================")
@@ -649,6 +730,7 @@ def run_interactive_cli(
     print("  /reset    - Reset active conversational session context back to empty baseline")
     print("  /summary  - Display compact session history summary")
     print("  /json     - Toggle raw JSON output mode")
+    print("  /vector   - Toggle category vector embedding search")
     print("  /help     - Show this help message")
     print("  exit/quit - Exit interactive session\n")
 
@@ -682,8 +764,14 @@ def run_interactive_cli(
                 print(f"Raw JSON only mode: {raw_json_only}")
                 continue
 
+            if text == "/vector":
+                resolve_categories = not resolve_categories
+                status_str = "ENABLED" if resolve_categories else "DISABLED"
+                print(f"Category Vector Embedding Search is now: {status_str}")
+                continue
+
             if text == "/help":
-                print("Commands: /reset, /summary, /json, /help, exit, quit")
+                print("Commands: /reset, /summary, /json, /vector, /help, exit, quit")
                 continue
 
             turn_count += 1
@@ -696,6 +784,7 @@ def run_interactive_cli(
                 prev_summary=prev_summary,
                 raw_json_only=raw_json_only,
                 resolve_categories=resolve_categories,
+                resolver=resolver,
             )
 
         except (KeyboardInterrupt, EOFError):
@@ -755,7 +844,15 @@ def main() -> None:
     parser.add_argument(
         "--resolve-categories",
         action="store_true",
-        help="Attempt Neo4j vector category resolution if knowledge graph is available.",
+        default=True,
+        help="Perform Neo4j vector category resolution via category_embedding_index (default: True).",
+    )
+    parser.add_argument(
+        "--no-resolve-categories",
+        "--skip-vector",
+        dest="resolve_categories",
+        action="store_false",
+        help="Disable Neo4j vector category resolution.",
     )
 
     args = parser.parse_args()
@@ -779,6 +876,11 @@ def main() -> None:
     crit_attrs = [a.strip() for a in args.critical_attributes.split(",") if a.strip()]
     dialogue_manager = DialogueManager(critical_attributes=crit_attrs)
 
+    # Initialize cached category resolver if vector resolution is requested
+    resolver = None
+    if args.resolve_categories and not args.json:
+        resolver = get_category_resolver()
+
     # 1. Direct utterance evaluation mode
     if args.utterance:
         text = " ".join(args.utterance).strip()
@@ -790,6 +892,7 @@ def main() -> None:
             turn_num=1,
             raw_json_only=args.json,
             resolve_categories=args.resolve_categories,
+            resolver=resolver,
         )
         return
 
@@ -804,6 +907,7 @@ def main() -> None:
                     session_id=f"{args.session_id}_{sc}",
                     raw_json_only=args.json,
                     resolve_categories=args.resolve_categories,
+                    resolver=resolver,
                 )
         else:
             run_demo_scenario(
@@ -813,6 +917,7 @@ def main() -> None:
                 session_id=args.session_id,
                 raw_json_only=args.json,
                 resolve_categories=args.resolve_categories,
+                resolver=resolver,
             )
         return
 
@@ -823,6 +928,7 @@ def main() -> None:
         session_id=args.session_id,
         raw_json_only=args.json,
         resolve_categories=args.resolve_categories,
+        resolver=resolver,
     )
 
 
