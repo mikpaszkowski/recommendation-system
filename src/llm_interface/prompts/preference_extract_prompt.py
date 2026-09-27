@@ -3,7 +3,7 @@ src/llm_interface/prompts/preference_extract_prompt.py
 
 Upgraded system prompt and few-shot examples for conversational preference extraction.
 Strictly conforms to CurrentSessionContextWrapper JSON schema specification.
-Preserves XML tag hierarchy: <objective>, <rules>, <examples>, <input>.
+Preserves XML tag hierarchy: <objective>, <rules>, <examples>, <output_format>, <input>.
 """
 
 from __future__ import annotations
@@ -405,7 +405,12 @@ OUTPUT:
 }
 </example_6>
 
-</examples>"""
+</examples>
+<output_format>
+CRITICAL: Your response MUST consist of a single, valid JSON object and nothing else.
+Do NOT wrap it in markdown code fences. Do NOT add any explanatory text before or after the JSON.
+Ensure all numeric values for "greater_than" / "less_than" operators are raw numbers (e.g. 1000), never strings with currency symbols (e.g. "$1000").
+</output_format>"""
 
 
 def prompt(conversation_text: Optional[str] = None) -> str:

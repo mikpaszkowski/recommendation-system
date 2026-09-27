@@ -1,103 +1,161 @@
-# Project State Report: Explainable Hybrid GraphRAG for Conversational Recommendation
+# Project State Report
 
-**Date**: 2026-09-19
-**Pipeline Trigger**: `/audit-state`
-
----
-
-## 1. Phase Coverage Summary
-
-- **Phase F0 (Infrastructure)**: ~80% complete (asyncio bug fixed, requirements mostly cleaned, vector indexing DDL migrated. `langgraph` dependency and `VECTOR SEARCH` query syntax still missing).
-- **Phase F1 (Graph Assessment)**: ~50% complete (Script audit done, Neo4j live introspection queries still need to be run and recorded).
-- **Phase F2 (Curated Subset Selection)**: ~80% complete (`extract_curated_subset.py` written and `subset_selection.json` created, but CSVs not yet written).
-- **Phase F3 (Fresh Graph Build)**: 0% complete.
-- **Meta-Phase A (Recommendation Engine)**: 0% complete.
-- **Meta-Phase B (Conversational Flow)**: 0% complete.
-
-**End-to-End Flows**: 0/5 fully wired (blocked by Foundation graph rebuild).
+**Date**: 2026-09-27
+**Inspector**: @inspector
+**Baseline**: docs/changelog/changelog.md (entry dated 2026-09-23)
+**Status**: Pending PM Gap Analysis
 
 ---
 
-## 2. Dependency & Integration Health
+## Executive Summary
 
-- `requirements.txt`: Cleaned up (unused legacy removed). Needs `langgraph>=1.0.0` added (GAP-011). `openai>=1.0.0` is present.
-- `AgentOrchestrator`: Asyncio refactoring (GAP-001) is complete.
-- Neo4j Vector API: DDL statements (`CREATE VECTOR INDEX`) migrated. Query statements (`CALL db.index.vector.queryNodes`) still present in `src/knowledge_graph/graphdb/vector_search_helper.py` (GAP-003).
+The project Foundation phase is 100% complete following the resolution of infrastructure bugs (including the asyncio event loop fix, Neo4j Cypher 25 VECTOR SEARCH migration, dependency hygiene in `requirements.txt`) and the establishment of the Amazon-curated Knowledge Graph (30 users, 30 products, full embeddings). However, the project has not yet transitioned into the core recommendation engine development. Meta-Phase A, B, C, and D are entirely incomplete. The most critical next step is to begin implementing the Meta-Phase A requirements (KECR, Explainable Generation, and testing) to prove the thesis's primary academic contribution.
 
 ---
 
-## 3. Gap Backlog
+## 1. Module Inventory
 
-### 🔴 Critical
-* **[GAP-F1.1] Live Neo4j Introspection**
-  * **Missing**: `graph_state_snapshot.md` needs exact node/embedding counts from the live Neo4j database to establish the baseline.
-  * **Blocks**: Safely proceeding with F3 without understanding the current data structure.
-  * **Blocked By**: Nothing.
-  * **Suggested `/implement` prompt**: "Run the introspection queries from `graph_state_snapshot.md` against Neo4j and update the report."
-
-* **[GAP-F3] Curated Graph Ingestion & Embedding Build**
-  * **Missing**: Adaptation of `sample_ingest.py` (or creation of `ingest_curated.py`) to load the subset CSVs into a new `kg_curated` database, apply constraints, and backfill embeddings.
-  * **Blocks**: Meta-Phase A (Recommendation Engine).
-  * **Blocked By**: GAP-003 (query migration), F2 completion (writing the CSVs).
-  * **Suggested `/implement` prompt**: "Complete F3: write the `ingest_curated.py` script to ingest the curated subset CSVs into `kg_curated`, and run `backfill_embeddings.py`."
-
-### 🟠 High
-* **[GAP-003] Deprecated Neo4j Vector Query API**
-  * **Missing**: `src/knowledge_graph/graphdb/vector_search_helper.py` uses deprecated `CALL db.index.vector.queryNodes()`. Must migrate to Cypher 25 `VECTOR SEARCH`.
-  * **Blocks**: F3 Vector Index verification, Meta-Phase A hybrid search.
-  * **Blocked By**: Nothing.
-  * **Suggested `/implement` prompt**: "Migrate `vector_search_helper.py` to use Cypher 25 `VECTOR SEARCH` instead of the deprecated `db.index.vector.queryNodes()`."
-
-* **[GAP-F2] Extract Curated CSVs**
-  * **Missing**: `extract_curated_subset.py` extracts IDs to JSON but doesn't create the filtered `curated_reviews.csv` and `curated_products.csv`.
-  * **Blocks**: F3 Graph Ingestion.
-  * **Blocked By**: Nothing.
-  * **Suggested `/implement` prompt**: "Update `extract_curated_subset.py` to filter the original processed CSVs and write out `curated_reviews.csv` and `curated_products.csv`."
-
-* **[GAP-002] MemoCRS Persistence**
-  * **Missing**: `InMemoryUserProfileManager` and `InMemoryHistoryManager` lose data on restart. Needs `SQLiteProfileManager` and LangGraph `SqliteSaver`.
-  * **Blocks**: Persistent sessions.
-  * **Blocked By**: GAP-011 (`langgraph` dependency).
-  * **Suggested `/implement` prompt**: "Implement `SQLiteProfileManager` and `SQLiteHistoryManager` with LangGraph `SqliteSaver` for cross-session persistence."
-
-### 🟡 Medium
-* **[GAP-011] `requirements.txt` Hygiene (langgraph)**
-  * **Missing**: `langgraph>=1.0.0` is missing from `requirements.txt`.
-  * **Blocks**: GAP-002.
-  * **Blocked By**: Nothing.
-  * **Suggested `/implement` prompt**: "Add `langgraph>=1.0.0` to `requirements.txt`."
-
-* **[GAP-012] CLARIFY Path Structural Deficiency**
-  * **Missing**: `pending_clarification` missing from `ConversationState`.
-  * **Blocks**: Proper context-aware clarification logic.
-  * **Blocked By**: Nothing.
-
-### 🔵 Low
-* **[GAP-013] `ResponseGenerator` Dead Code**
-  * **Missing**: `src/llm_interface/response_generator.py` is unused.
-  * **Blocks**: Nothing.
+| File | Primary Class / Function | Responsibility | Completeness Signal |
+|------|--------------------------|----------------|---------------------|
+| `src/agents/orchestrator.py` | `AgentOrchestrator` | Main entry point for conversational routing | ✅ No stubs |
+| `src/agents/critic_agent.py` | `CriticAgent` | LLM reranking | ✅ No stubs |
+| `src/tools/graph_search_tool.py` | `GraphSearchTool` | Hybrid retrieval | ✅ No stubs |
+| `src/tools/profile_tool.py` | `ProfileTool` | Profile wrapper | ✅ No stubs |
+| `src/knowledge_graph/graphdb/resolver_service.py` | `ResolverService` | Filter normalization | ✅ No stubs |
+| `src/llm_interface/prompt_constructor.py` | `PromptConstructor` | Final prompt generation | ✅ No stubs |
+| `src/personalization/preference_quantifier.py` | `PreferenceQuantifier` | Quantifies user sentiment | 🟡 `NotImplementedError` in Abstract |
 
 ---
 
-## 4. Implementation Order Summary
+## 2. End-to-End Flow Coverage
 
-| Order | Phase | Gap / Task | Description |
-|-------|-------|------------|-------------|
-| 1 | F0 | GAP-003 | Migrate `vector_search_helper.py` to Cypher 25 `VECTOR SEARCH`. |
-| 2 | F0 | GAP-011 | Add `langgraph>=1.0.0` to `requirements.txt`. |
-| 3 | F1 | GAP-F1.1 | Run Neo4j introspection queries and update snapshot. |
-| 4 | F2 | GAP-F2 | Update `extract_curated_subset.py` to output CSVs. |
-| 5 | F3 | GAP-F3 | Write `ingest_curated.py` and populate `kg_curated` database. |
-| 6 | A | Meta-Phase A | Proceed to Recommendation Engine build (GraphSearchTool, CriticAgent, etc.) |
+| Flow | Status | Broken/Missing Step |
+|------|--------|---------------------|
+| Flow 1: Recommendation (SEARCH) | 🟡 | Missing KECR (A4) and Graph Reasoning Path injection (A3) |
+| Flow 2: Profile Update | 🟡 | Missing persistent storage (B2) |
+| Flow 3: Clarification | 🟡 | Missing `pending_clarification` contextual memory (B3) |
+| Flow 4: Session Memory | ❌ | Missing persistent storage (B2) |
+| Flow 5: Multi-turn Accumulation | ❌ | Missing persistent storage (B2) |
 
 ---
 
-## PM Validation
+## 3. Spec / Requirements Compliance
 
-*(Gap Analysis Mode / @pm-specs)*
+*(Based on Implementation Plan checklist items)*
 
-- **Priorities Confirmation**: I confirm the priorities. We cannot build the recommendation engine (Meta-Phase A) until the `kg_curated` database exists and the deprecated Neo4j API is fixed.
-- **Architectural consistency**: The order strictly enforces Foundation before Meta-Phase A, aligning with the two-axis build strategy in the Vision Report.
-- **Next Sprint**:
-  1. Fix `vector_search_helper.py` (GAP-003).
-  2. Complete the curated CSV extraction (GAP-F2) and ingestion (GAP-F3).
+| Phase | Criterion | Status | Notes |
+|----|-----------|--------|-------|
+| Foundation | asyncio Refactor (GAP-001) | ✅ | Implemented `async def` in `orchestrator.py` |
+| Foundation | Neo4j Deprecated API (GAP-003) | ✅ | Cypher 25 VECTOR SEARCH active |
+| Foundation | requirements.txt Hygiene (GAP-011) | ✅ | Dependencies formatted cleanly without syntax errors |
+| Foundation | Curated Graph Build | ✅ | 30 Users, 30 Products present |
+
+---
+
+## 4. Stub and Placeholder Findings
+
+| File | Line | Severity | Context |
+|------|------|----------|---------|
+| *None* | — | — | No stubs, TODOs, or syntax errors on critical paths |
+
+---
+
+## 5. Phase Coverage
+
+| Phase | Completion | Items Done | Items Remaining |
+|-------|------------|------------|-----------------|
+| Foundation | 100% | 8 | 0 |
+| Meta-Phase A | 0% | 0 | A1-A6 (KECR, Tests, Eval, Explainable Gen) |
+| Meta-Phase B | 0% | 0 | B1-B6 (LangGraph, MemoCRS, Recoverability) |
+| Meta-Phase C | 0% | 0 | C1-C3 (Classic Baselines) |
+| Meta-Phase D | 0% | 0 | D1-D5 (Legacy Adapter Cleanup) |
+
+---
+
+## 6. Gap Backlog
+
+### [GAP-A1] Hybrid Search Tool Hardening
+**Phase**: Meta-Phase A1
+**Priority**: 🟠 High
+**Implementation Plan ref**: Meta-Phase A > A1
+**Current state**: `GraphSearchTool._build_filters` exists but lacks `excluded_asins` support. Missing tests.
+**Missing**: `excluded_asins` filter logic and `tests/test_graph_search_tool.py`.
+**Blocks**: [GAP-B4]
+**Blocked by**: None
+**Suggested /implement prompt**: "Implement excluded_asins filter in GraphSearchTool and write integration tests in tests/test_graph_search_tool.py"
+
+### [GAP-A4] KECR Reasoning Path Extraction
+**Phase**: Meta-Phase A4
+**Priority**: 🔴 Critical
+**Implementation Plan ref**: Meta-Phase A > A4
+**Current state**: Missing completely.
+**Missing**: `src/tools/kecr_tool.py` and Neo4j shortest-path queries.
+**Blocks**: [GAP-A3], [GAP-A5]
+**Blocked by**: None
+**Suggested /implement prompt**: "Implement KnowledgePathExtractor in src/tools/kecr_tool.py using Neo4j shortestPath queries"
+
+### [GAP-A3] PromptConstructor - Graph Path Injection Slots
+**Phase**: Meta-Phase A3
+**Priority**: 🔴 Critical
+**Implementation Plan ref**: Meta-Phase A > A3
+**Current state**: `construct_recommendation_prompt` lacks graph reasoning paths parameter.
+**Missing**: `graph_reasoning_paths` parameter and `[GRAPH EVIDENCE]` section in the prompt.
+**Blocks**: [GAP-A5]
+**Blocked by**: [GAP-A4]
+**Suggested /implement prompt**: "Add graph_reasoning_paths parameter to PromptConstructor and inject [GRAPH EVIDENCE] into the recommendation prompt"
+
+### [GAP-A5] Explainable Response Generation
+**Phase**: Meta-Phase A5
+**Priority**: 🔴 Critical
+**Implementation Plan ref**: Meta-Phase A > A5
+**Current state**: End-to-end explainable response pipeline incomplete.
+**Missing**: Wiring KECR into the orchestrator and adding `tests/test_recommendation_pipeline.py`.
+**Blocks**: [GAP-A6]
+**Blocked by**: [GAP-A4], [GAP-A3]
+**Suggested /implement prompt**: "Wire KECR tool into AgentOrchestrator and create end-to-end integration tests in tests/test_recommendation_pipeline.py"
+
+### [GAP-A6] Quantitative & Qualitative Evaluation
+**Phase**: Meta-Phase A6
+**Priority**: 🟠 High
+**Implementation Plan ref**: Meta-Phase A > A6
+**Current state**: Missing completely.
+**Missing**: `scripts/evaluate_retrieval.py` and `scripts/evaluate_generative.py`.
+**Blocks**: [GAP-C3]
+**Blocked by**: [GAP-A5]
+**Suggested /implement prompt**: "Create evaluation scripts for retrieval (Hit@K, MRR) and generative (LLM-as-Judge) performance"
+
+### [GAP-B2] MemoCRS Persistent Memory
+**Phase**: Meta-Phase B2
+**Priority**: 🔴 Critical
+**Implementation Plan ref**: Meta-Phase B > B2
+**Current state**: `ProfileManager` is in-memory only.
+**Missing**: `sqlite_profile_manager.py` and `sqlite_history_manager.py`.
+**Blocks**: None
+**Blocked by**: None
+**Suggested /implement prompt**: "Implement SQLiteProfileManager and SQLiteHistoryManager for persistent session memory"
+
+---
+
+## 7. Recommended Implementation Order
+
+> This sequence minimises rework and ensures no gap is built on a missing foundation.
+
+| Order | Gap ID | Title | Can Parallelise With | Rationale |
+|-------|--------|-------|----------------------|-----------|
+| 1     | GAP-A1 | Hybrid Search Tool Hardening | GAP-A4, GAP-B2       | Independent base tool fixes required for search reliability |
+| 1     | GAP-A4 | KECR Reasoning Path Extraction | GAP-A1, GAP-B2       | Core thesis contribution; foundational for explainable AI |
+| 1     | GAP-B2 | MemoCRS Persistent Memory | GAP-A1, GAP-A4       | Independent conversational state persistence |
+| 2     | GAP-A3 | Graph Path Injection Slots | None                 | Depends on GAP-A4 |
+| 3     | GAP-A5 | Explainable Response Generation | None                 | Depends on GAP-A3 |
+| 4     | GAP-A6 | Quantitative & Qual Evaluation | None                 | Depends on GAP-A5 |
+
+---
+
+## 8. Dependency and Integration Health
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| requirements.txt completeness | ✅ | Cleanly formatted without syntax errors |
+| Circular imports | ✅ | None detected |
+| __init__.py coverage | ✅ | Present in all core directories |
+| .env variables documented | ✅ | Present |
