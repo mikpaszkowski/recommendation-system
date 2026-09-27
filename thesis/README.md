@@ -24,11 +24,12 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 | # | Document | Scope | Research Question ($RQ$) | Primary Thesis Chapter | Status |
 |---|---|---|---|---|---|
 | 1 | [`1-doc-dialogue-state.md`](./1-doc-dialogue-state.md) | `dialogue-state` | $\mathbf{RQ_1}$: Impact of canonical dialogue state representation and constraint reconciliation on attribute hallucination and constraint adherence | Chapter 3: System Architecture & Dialogue State Modeling | ✅ Documented |
+| 2 | [`2-doc-preference-benchmark.md`](./2-doc-preference-benchmark.md) | `preference-benchmark` | $\mathbf{RQ_2}$: Impact of Few-Shot and guided CoT vs Zero-Shot prompting on constraint schema compliance and intent accuracy | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
 
 ## Evaluation Summary
-- **Total Thesis Documents**: 1
-- **Active Research Questions**: $\mathbf{RQ_1}$
-- **Latest Evaluated Scope**: Commit `c8ba48e` (*"Refactor session context schema, adapters, preference parser, and dialogue manager"*)
+- **Total Thesis Documents**: 2
+- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$
+- **Latest Evaluated Scope**: Benchmark suite in `tests/benchmarks/`
 
 ---
 
