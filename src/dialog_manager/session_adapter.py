@@ -132,10 +132,22 @@ def hard_constraints_to_structured_filters(
     """
     filters: Dict[str, Any] = {}
     if not hard_constraints:
+        logger.debug("[Adapter] No hard constraints provided, returning empty filters.")
         return filters
 
+    logger.debug(f"[Adapter] Processing constraints of type: {type(hard_constraints)}")
+
     # Extract constraint list if wrapped in a session dict or model
-    raw_list: List[Any]
+    raw_list: List[Any] = []
+    
+    # Unwrap 'current_session_context' if present (either via dot access or dict)
+    if hasattr(hard_constraints, "current_session_context") and getattr(hard_constraints, "current_session_context"):
+        logger.debug("[Adapter] Unwrapping CurrentSessionContextWrapper object.")
+        hard_constraints = getattr(hard_constraints, "current_session_context")
+    elif isinstance(hard_constraints, dict) and "current_session_context" in hard_constraints:
+        logger.debug("[Adapter] Unwrapping current_session_context dict.")
+        hard_constraints = hard_constraints["current_session_context"]
+
     if isinstance(hard_constraints, dict):
         extracted_params = hard_constraints.get("extracted_parameters")
         if isinstance(extracted_params, dict) and "hard_constraints" in extracted_params:

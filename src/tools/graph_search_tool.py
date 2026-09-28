@@ -57,9 +57,10 @@ class GraphSearchTool:
         """
         # Handle aliases/legacy args
         text = semantic_query or query
-        filters = structured_filters or preferences
+        raw_filters = structured_filters or preferences or {}
+        filters = dict(raw_filters)
         
-        logger.info(f"[GST] Input: text='{text}', raw_filters={filters}")
+        logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}")
         
         # Normalize filters before searching
         if self._filters_present(filters):
@@ -74,7 +75,7 @@ class GraphSearchTool:
             # STRATEGY 1: HYBRID (Most common and desired)
             if text and self._filters_present(filters):
                 logger.info(f"[GST] Strategy: HYBRID (text + filters)")
-                return self._execute_hybrid_search(text, filters, limit)
+                return self._execute_hybrid_search(text, filters, raw_filters, limit)
             
             # STRATEGY 2: VECTOR ONLY (No specific filters)
             if text and not self._filters_present(filters):
@@ -84,7 +85,7 @@ class GraphSearchTool:
             # STRATEGY 3: FILTER ONLY (Parametric query)
             if self._filters_present(filters) and not text:
                 logger.info(f"[GST] Strategy: FILTER_ONLY (filters only)")
-                return self._execute_cypher_search(filters, limit)
+                return self._execute_cypher_search(filters, raw_filters, limit)
             
             return {"status": "error", "message": "No search criteria provided.", "items": []}
 
@@ -92,79 +93,130 @@ class GraphSearchTool:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "items": []}
 
-    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
-        # 1. Embed query
+    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Hybrid] Embedded query (dim={len(query_vector)})")
 
-        # 2. Build WHERE clauses
-        where_clauses, params = self._build_filters(filters)
+        where_clauses, params = self._build_filters(filters, raw_filters)
         params["vector"] = query_vector
+        params["k"] = limit * 30
         
-        where_str = " AND ".join(where_clauses) if where_clauses else ""
-        logger.info(f"[GST:Hybrid] WHERE clauses: {where_str or '(none)'}")
-        logger.info(f"[GST:Hybrid] Params (excl. vector): { {k:v for k,v in params.items() if k != 'vector'} }")
+        where_str = " AND ".join(where_clauses) if where_clauses else "1=1"
+        logger.info(f"[GST:Hybrid] WHERE clauses: {where_str}")
 
-        # 3. Hybrid Query: vector search first, then apply filters
-        return_clause = """
+        # GAP-003 Compliance: Use central helper to generate the vector search fragments
+        prod_vector = build_vector_search_query(
+            "product_embedding_index", 
+            "$k", 
+            yield_alias="node", 
+            score_alias="score", 
+            return_clause="RETURN node AS p, score, 'Product Title Match' AS match_reason"
+        )
+        
+        attr_vector = build_vector_search_query(
+            "attribute_embedding_index", 
+            "$k", 
+            yield_alias="node", 
+            score_alias="score", 
+            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
+        )
+        
+        rev_vector = build_vector_search_query(
+            "review_embedding_index", 
+            "$k", 
+            yield_alias="node", 
+            score_alias="score", 
+            return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
+        )
+
+        cypher = f"""
+        CALL {{
+            WITH $vector AS vector
+            {prod_vector.replace('$vector', 'vector')}
+            
+            UNION
+            
+            WITH $vector AS vector
+            {attr_vector.replace('$vector', 'vector')}
+            
+            UNION
+            
+            WITH $vector AS vector
+            {rev_vector.replace('$vector', 'vector')}
+        }}
+        WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
+        WHERE {where_str}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, score, elementId(node) as id, node.parent_asin as asin
+               collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
+               match_reasons
+        ORDER BY score DESC
+        LIMIT $limit
         """
-        cypher = build_vector_search_query(
-            index_name='product_embedding_index',
-            k=limit * 30,
-            where_clause=where_str,
-            return_clause=return_clause,
-            order_by="score DESC",
-            limit=limit
-        )
+        params["limit"] = limit
         
-        logger.info(f"[GST:Hybrid] Cypher:\n{cypher}")
+        logger.info("[GST:Hybrid] Cypher:\n" + cypher)
 
         with self.db.session() as session:
             result = session.run(cypher, params)
             items = [dict(record) for record in result]
         
         logger.info(f"[GST:Hybrid] Results: {len(items)} items found")
-        for i, item in enumerate(items):
-            logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | price={item.get('price')} | brand={item.get('brand')} | cat={item.get('category')} | title={str(item.get('title', ''))[:70]}")
-        if not items:
-            logger.warning(f"[GST:Hybrid] 0 results! Vector index queried {limit*30} candidates but all were filtered out.")
-            
-        return {"status": "success", "items": items, "count": len(items), "strategy": "hybrid"}
+        return {"status": "success", "items": items, "count": len(items), "strategy": "hybrid_multi_index"}
 
     def _execute_vector_search(self, text: str, limit: int) -> Dict[str, Any]:
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
         
-        return_clause = """
+        prod_vector = build_vector_search_query(
+            "product_embedding_index", "$k", yield_alias="node", score_alias="score", 
+            return_clause="RETURN node AS p, score, 'Product Title Match' AS match_reason"
+        )
+        attr_vector = build_vector_search_query(
+            "attribute_embedding_index", "$k", yield_alias="node", score_alias="score", 
+            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
+        )
+        rev_vector = build_vector_search_query(
+            "review_embedding_index", "$k", yield_alias="node", score_alias="score", 
+            return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
+        )
+
+        cypher = f"""
+        CALL {{
+            WITH $vector AS vector
+            {prod_vector.replace('$vector', 'vector')}
+            UNION
+            WITH $vector AS vector
+            {attr_vector.replace('$vector', 'vector')}
+            UNION
+            WITH $vector AS vector
+            {rev_vector.replace('$vector', 'vector')}
+        }}
+        WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, score, elementId(node) as id, node.parent_asin as asin
+               collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
+               match_reasons
+        ORDER BY score DESC
+        LIMIT $limit
         """
-        cypher = build_vector_search_query(
-            index_name='product_embedding_index',
-            k=limit,
-            return_clause=return_clause,
-            order_by="score DESC",
-            limit=limit
-        )
+        
+        params = {"vector": query_vector, "k": limit * 30, "limit": limit}
 
         with self.db.session() as session:
-            result = session.run(cypher, vector=query_vector)
+            result = session.run(cypher, params)
             items = [dict(record) for record in result]
         
         logger.info(f"[GST:Vector] Results: {len(items)} items found")
         for i, item in enumerate(items):
-            logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | price={item.get('price')} | brand={item.get('brand')} | cat={item.get('category')} | title={str(item.get('title', ''))[:70]}")
+            logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | reasons={item.get('match_reasons', [])} | title={str(item.get('title', ''))[:50]}")
             
         return {"status": "success", "items": items, "count": len(items), "strategy": "vector_only"}
 
-    def _execute_cypher_search(self, filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
-        where_clauses, params = self._build_filters(filters)
+    def _execute_cypher_search(self, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
+        where_clauses, params = self._build_filters(filters, raw_filters)
         where_str = " AND ".join(where_clauses) if where_clauses else "1=1"
         
         cypher = f"""
@@ -248,13 +300,16 @@ class GraphSearchTool:
             logger.error(f"[GST:Attributes] Error fetching attributes/reviews: {e}", exc_info=True)
             return {}
 
-    def _build_filters(self, filters: Dict[str, Any]):
+    def _build_filters(self, filters: Dict[str, Any], raw_filters: Dict[str, Any] = None):
         """Build WHERE clauses for filters. Uses EXISTS subqueries for relationship-based filters."""
+        logger.debug(f"[GST] Building filters for payload: {filters}")
         where_clauses = []
         params = {}
+        raw_filters = raw_filters or {}
         
         for key, value in filters.items():
             if value is None or value == "":
+                logger.debug(f"[GST] Skipping empty filter key: {key}")
                 continue
             
             if key == "price_max":
@@ -263,21 +318,46 @@ class GraphSearchTool:
             elif key == "price_min":
                 where_clauses.append("node.price >= $price_min")
                 params["price_min"] = float(value)
+            elif key == "excluded_asins" and isinstance(value, list) and value:
+                where_clauses.append("NOT node.parent_asin IN $excluded_asins")
+                params["excluded_asins"] = value
             elif key == "brand":
+                raw_brand = raw_filters.get("brand", value)
                 where_clauses.append(
-                    "EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) WHERE b.name = $brand_filter }"
+                    "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) WHERE b.name = $brand_filter } "
+                    "OR toLower(node.title) CONTAINS toLower($raw_brand_filter))"
                 )
                 params["brand_filter"] = value
+                params["raw_brand_filter"] = raw_brand
             elif key == "exclude_brand":
+                raw_ex_brand = raw_filters.get("exclude_brand", value)
                 where_clauses.append(
-                    "NOT EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) WHERE eb.name = $exclude_brand }"
+                    "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) WHERE eb.name = $exclude_brand } "
+                    "OR toLower(node.title) CONTAINS toLower($raw_ex_brand_filter))"
                 )
                 params["exclude_brand"] = value
+                params["raw_ex_brand_filter"] = raw_ex_brand
             elif key == "category":
+                raw_cat = raw_filters.get("category", value)
                 where_clauses.append(
-                    "EXISTS { MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category) WHERE toLower(c.name) CONTAINS toLower($category_filter) }"
+                    "(EXISTS { MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category) WHERE toLower(c.name) CONTAINS toLower($category_filter) } "
+                    "OR toLower(node.title) CONTAINS toLower($raw_category_filter))"
                 )
                 params["category_filter"] = value
+                params["raw_category_filter"] = raw_cat
+            # EAV Numeric filters dynamically intercepted with toFloat fallback for string attribute values
+            elif key.endswith("_min") and key != "price_min":
+                attr_name = key.replace("_min", "")
+                where_clauses.append(f"EXISTS {{ MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = '{attr_name}' AND COALESCE(toFloat(a.attribute_value), toFloat(a.normalized_value)) >= ${key} }}")
+                params[key] = float(value)
+            elif key.endswith("_max") and key != "price_max":
+                attr_name = key.replace("_max", "")
+                where_clauses.append(f"EXISTS {{ MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = '{attr_name}' AND COALESCE(toFloat(a.attribute_value), toFloat(a.normalized_value)) <= ${key} }}")
+                params[key] = float(value)
+            elif key.endswith("_exact"):
+                attr_name = key.replace("_exact", "")
+                where_clauses.append(f"EXISTS {{ MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = '{attr_name}' AND COALESCE(toFloat(a.attribute_value), toFloat(a.normalized_value)) = ${key} }}")
+                params[key] = float(value)
             else:
                 logger.debug(f"Ignoring unhandled filter key: '{key}' = {value}")
             
@@ -287,12 +367,15 @@ class GraphSearchTool:
         """Normalize filter values to canonical graph node names using ResolverService.
         
         Confidence thresholds:
-        - Brand: 0.6 (brand names are precise, easier to match)
-        - Category: 0.75 (higher threshold; low-confidence categories are dropped
-          to avoid filtering out relevant vector search results)
+        - Brand: 0.85 (brand names are precise nouns, require high similarity to avoid Sennheiser -> Senso false positives)
+        - Category: 0.80 (higher threshold to avoid bad mappings)
+        
+        NOTE: If normalization fails or confidence is low, the filter is NO LONGER dropped.
+        Instead, it remains as the raw string so that the Cypher title fallback logic 
+        (e.g., `OR toLower(node.title) CONTAINS $raw`) can still attempt a textual match.
         """
-        BRAND_CONFIDENCE = 0.6
-        CATEGORY_CONFIDENCE = 0.75
+        BRAND_CONFIDENCE = 0.85
+        CATEGORY_CONFIDENCE = 0.80
         
         if not self.resolver:
             logger.warning("[GST] ResolverService not available. Skipping normalization.")
@@ -308,11 +391,9 @@ class GraphSearchTool:
                     logger.info(f"[GST] ✓ Normalized brand '{normalized['brand']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
                     normalized["brand"] = matches[0]["name"]
                 elif matches:
-                    logger.warning(f"[GST] ✗ Brand '{normalized['brand']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {BRAND_CONFIDENCE}. Dropping filter.")
-                    normalized["brand"] = None
+                    logger.warning(f"[GST] ✗ Brand '{normalized['brand']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {BRAND_CONFIDENCE}. Keeping raw value for title fallback.")
                 else:
-                    logger.warning(f"[GST] ✗ No brand match for '{normalized['brand']}'. Dropping filter.")
-                    normalized["brand"] = None
+                    logger.warning(f"[GST] ✗ No brand match for '{normalized['brand']}'. Keeping raw value for title fallback.")
             except Exception as e:
                 logger.warning(f"[GST] Brand normalization failed: {e}")
 
@@ -324,8 +405,7 @@ class GraphSearchTool:
                     logger.info(f"[GST] ✓ Normalized exclude_brand '{normalized['exclude_brand']}' → '{matches[0]['name']}'")
                     normalized["exclude_brand"] = matches[0]["name"]
                 else:
-                    logger.warning(f"[GST] ✗ Low confidence for exclude_brand. Dropping filter.")
-                    normalized["exclude_brand"] = None
+                    logger.warning(f"[GST] ✗ Low confidence for exclude_brand. Keeping raw value for title fallback.")
             except Exception as e:
                 logger.warning(f"[GST] Exclude brand normalization failed: {e}")
 
@@ -337,13 +417,11 @@ class GraphSearchTool:
                     logger.info(f"[GST] ✓ Normalized category '{normalized['category']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
                     normalized["category"] = matches[0]["name"]
                 elif matches:
-                    logger.warning(f"[GST] ✗ Category '{normalized['category']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Dropping filter (vector search will handle semantics).")
+                    logger.warning(f"[GST] ✗ Category '{normalized['category']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Keeping raw value for title fallback.")
                     candidates = [(m['name'], round(m['score'], 3)) for m in matches]
                     logger.info(f"[GST]   Top candidates: {candidates}")
-                    normalized["category"] = None
                 else:
-                    logger.warning(f"[GST] ✗ No category match for '{normalized['category']}'. Dropping filter.")
-                    normalized["category"] = None
+                    logger.warning(f"[GST] ✗ No category match for '{normalized['category']}'. Keeping raw value for title fallback.")
             except Exception as e:
                 logger.warning(f"[GST] Category normalization failed: {e}")
 

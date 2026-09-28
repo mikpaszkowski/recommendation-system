@@ -925,6 +925,36 @@ def merge_relationships(
             session.run(query, batch=batch)
 
 
+def _backfill_sparsity(connector: Neo4jConnector) -> None:
+    """
+    Plan C: Execute generic sparsity backfills across the entire database to fix missing relationships.
+    Infers missing HAS_BRAND and BELONGS_TO_CATEGORY relationships by evaluating product titles against
+    known Brand and Category nodes.
+    """
+    with connector.session() as session:
+        # 1. Backfill Brands
+        brand_res = session.run("""
+        MATCH (b:Brand), (p:ParentProduct)
+        WHERE NOT EXISTS { MATCH (p)-[:HAS_BRAND]->(:Brand) }
+          AND p.title STARTS WITH b.name
+        MERGE (p)-[:HAS_BRAND]->(b)
+        RETURN count(p) as updated
+        """)
+        updated_brands = brand_res.single()["updated"] if brand_res else 0
+        LOGGER.info(f"Backfilled HAS_BRAND relationships for {updated_brands} products.")
+
+        # 2. Backfill Categories
+        cat_res = session.run("""
+        MATCH (c:Category), (p:ParentProduct)
+        WHERE NOT EXISTS { MATCH (p)-[:BELONGS_TO_CATEGORY]->(:Category) }
+          AND toLower(p.title) CONTAINS toLower(c.name)
+        MERGE (p)-[:BELONGS_TO_CATEGORY]->(c)
+        RETURN count(p) as updated
+        """)
+        updated_cats = cat_res.single()["updated"] if cat_res else 0
+        LOGGER.info(f"Backfilled BELONGS_TO_CATEGORY relationships for {updated_cats} products.")
+
+
 def main() -> None:
     args = parse_args()
     setup_logging(args.log_level)
@@ -1271,6 +1301,9 @@ def main() -> None:
                 start_field="child_asin",
                 end_field="parent_asin",
             )
+
+        LOGGER.info("Executing generic graph sparsity backfill (Plan C)...")
+        _backfill_sparsity(connector)
 
     LOGGER.info("Ingestion complete.")
 

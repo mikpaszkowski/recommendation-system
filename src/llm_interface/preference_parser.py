@@ -76,15 +76,23 @@ class LLMPreferenceParser(PreferenceParserInterface):
         Run LLM extraction and return structured dictionary strictly wrapped in 'current_session_context'.
         Guarantees that the returned dictionary conforms to CurrentSessionContextWrapper.
         """
+        self.logger.debug(f"Starting extraction for input text: '{text}'")
         user_msg = self._build_prompt(text)
         messages = [
             ("system", self.system_instruction),
             ("human", user_msg),
         ]
         try:
+            self.logger.debug(f"Invoking LLM with {len(messages)} messages.")
             result = self.llm_with_tools.invoke(messages)
+            
+            self.logger.debug("LLM invocation completed. Extracting content.")
             raw = self._extract_content(result)
-            return self._parse_response(raw)
+            self.logger.debug(f"Raw extracted content: {raw}")
+            
+            parsed = self._parse_response(raw)
+            self.logger.debug("Successfully parsed response into dict.")
+            return parsed
         except Exception as e:
             self.logger.warning(
                 f"Preference extraction invocation failed: {e}. Falling back to empty session context.",

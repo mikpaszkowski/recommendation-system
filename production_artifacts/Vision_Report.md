@@ -94,3 +94,14 @@ We will use an advanced LLM model to evaluate the generated responses according 
 3. Schedule Meta-Phase C to occur *after* Meta-Phase A and B are fully implemented and validated, ensuring the custom Hybrid GraphRAG solution is completely finished before comparative evaluation begins.
 **Rationale**: Comparing a modern LLM-driven Knowledge Graph system against classic recommendation algorithms on the exact same dataset provides a bulletproof evaluation section for the thesis. Moving this to a post-implementation phase protects the core development timeline.
 **Status**: ✅ Accepted
+
+### Decision 2026-09-28-006: Robust GraphRAG Retrieval Architecture
+**Date**: 2026-09-28
+**Trigger**: /implement pipeline execution for Meta-Phase A1
+**Decision**: 
+1. Implement a **Multi-Index Semantic Search** traversing Products, Attributes, and Reviews concurrently (Lexical Review Proxy).
+2. Implement **Single-Pass Structured Query Generation** (HyDE and Query Expansion generated in one JSON payload) to solve asymmetric search without 3x latency.
+3. Introduce the **ResolverService (Waterfall Resolution Strategy)** to execute exact-match strings first, Lucene full-text second, and Vector Semantic search third, solving exact-match brittleness.
+4. Introduce **Schema Injection** and an **EAV Numeric Schema** to handle complex mathematical constraints without sparse node bloat.
+**Rationale**: Relying on zero-shot LLM translation directly to Cypher creates fatal "vocabulary impedance" leading to empty retrieval sets. This architecture deterministically bridges conversational intent to exact graph operations while preserving latency bounds and preventing hallucination.
+**Status**: ✅ Accepted

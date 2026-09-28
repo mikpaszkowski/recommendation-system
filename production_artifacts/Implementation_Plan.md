@@ -198,6 +198,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] **F3.2 — Adapt / Reuse Ingestion Script**: Evaluate `sample_ingest.py` for reuse:
   - **Reuse**: Core graph-building logic (node creation, relationship wiring, price bucket derivation, attribute extraction) is sound and well-structured.
   - **Adapt**: Update file path arguments to accept the curated CSVs (currently expects raw JSONL). Add `--database` argument to target `kg_curated`. Ensure schema creates `:User` nodes (already in `constraints.cypher`) for future REDIAL compatibility.
+  - **EAV Numeric Enhancement**: Update attribute extraction (`decompose_attributes.py`) to cast known numeric strings (e.g., "120Hz" -> `120.0`) to a new `numeric_value: float` property on `Attribute` nodes, fully enabling EAV numerical reasoning (`>= 120.0`) in Cypher.
   - **New script**: If adaptation is too invasive, write `scripts/ingest_curated.py` wrapping the same logic but reading from `datasets/curated/`.
 
 * [x] **F3.3 — Run Constraints & Ingestion**: Against `kg_curated` database:
@@ -206,7 +207,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   3. Verify with `MATCH (n) RETURN labels(n)[0], count(n)` — expect ~25 `:User`, ~25 `:ParentProduct`, N `:Brand`, M `:Category`, K `:Attribute`, L `:Review` nodes
 
 * [x] **F3.4 — Embedding Generation** *(Skipped: 100% embeddings present)*: Run `backfill_embeddings.py` against `kg_curated`.
-  - Embeds: `Attribute` (name + normalized value), `Brand` (name + domain), `Category` (name + parent hierarchy), `ParentProduct` (title + category + top-5 features + description)
+  - Embeds: `Attribute` (name + normalized value), `Brand` (name + domain), `Category` (name + parent hierarchy), `ParentProduct` (title + category + top-5 features + description), and `Review` (review title + body).
   - Model: `sentence-transformers/all-MiniLM-L6-v2` → 384-dim vectors
   - **⚠️ GAP-003 prerequisite**: Must migrate deprecated index API before this step
 
@@ -223,6 +224,9 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
     OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
   CREATE VECTOR INDEX attribute_embedding_index IF NOT EXISTS
     FOR (n:Attribute) ON (n.embedding)
+    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+  CREATE VECTOR INDEX review_embedding_index IF NOT EXISTS
+    FOR (n:Review) ON (n.embedding)
     OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
   ```
 
@@ -245,11 +249,23 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 
 **Boundary**: Components in this phase live in `src/tools/`, `src/knowledge_graph/`, `src/llm_interface/`, `src/agents/critic_agent.py`. No dependency on `src/agents/orchestrator.py`, `src/conversation/`, `src/user/`, or `src/ui/`.
 
-### A1 — Hybrid Search Tool Verification & Hardening
+### A1 — Hybrid Search Tool Verification & Hardening (Multi-Index Semantic Search)
 * [ ] Verify all 3 search strategies work against `kg_curated` after F0 API migration
 * [ ] Verify `ResolverService` brand/category normalization against new graph
 * [ ] Write integration tests: `tests/test_graph_search_tool.py`
 * [ ] Add `excluded_asins` filter support to `_build_filters()` (prerequisite for B4 Recoverability)
+* [ ] **Implement Multi-Index Semantic Search**: Refactor `GraphSearchTool` Cypher queries to execute parallel vector queries across three surfaces using a `CALL { ... } UNION` structure:
+  - `product_embedding_index`: Matches semantic requests to manufacturer descriptions and features.
+  - `attribute_embedding_index`: Matches specific technical requests to detailed specs (`(ParentProduct)-[:HAS_ATTRIBUTE]->(Attribute)`).
+  - `review_embedding_index` (Lexical Review Proxy): Matches functional requests ("good for gaming") to crowdsourced peer opinions (`(Review)-[:ABOUT_PRODUCT]->(ParentProduct)`).
+  - Aggregate scores (`SUM(vector_score)`) and apply hard Cypher constraints to the unified candidate pool.
+
+### A1.5 — Query Formulation & Safe Constraint Parsing
+* [ ] **Domain Schema Definitions**: Create `src/knowledge_graph/domain_schemas.json` (or similar) defining strictly typed attributes per product category (e.g., Monitor: `refresh_rate`, `screen_size`).
+* [ ] **Safe Constraint Parsing (Schema Injection)**: Update `preference_parser.py` (or the LangGraph extraction prompt) to dynamically inject the relevant domain schema into the system prompt, restricting `HardConstraint.attribute` generation to valid canonical keys.
+* [ ] **Single-Pass Structured Generation**: Refactor the LLM extraction layer to output a single JSON object containing both the safe hard constraints and the embedding formulations (`hypothetical_product`, `hypothetical_review`, `expanded_attributes`).
+* [ ] Implement strict anti-hallucination prompt boundaries to prevent fictitious brand/model generation in the HyDE strings.
+* [ ] Feed the 3 distinct text formulations into the embedding model concurrently, passing the resulting vectors (along with the safe hard constraints) to `GraphSearchTool`.
 
 ### A2 — CriticAgent Verification & Testing
 * [ ] Verify async evaluation end-to-end after GAP-001 asyncio fix

@@ -25,11 +25,12 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 |---|---|---|---|---|---|
 | 1 | [`1-doc-dialogue-state.md`](./1-doc-dialogue-state.md) | `dialogue-state` | $\mathbf{RQ_1}$: Impact of canonical dialogue state representation and constraint reconciliation on attribute hallucination and constraint adherence | Chapter 3: System Architecture & Dialogue State Modeling | ✅ Documented |
 | 2 | [`2-doc-preference-benchmark.md`](./2-doc-preference-benchmark.md) | `preference-benchmark` | $\mathbf{RQ_2}$: Impact of Few-Shot and guided CoT vs Zero-Shot prompting on constraint schema compliance and intent accuracy | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
+| 3 | [`3-doc-robust-retrieval.md`](./3-doc-robust-retrieval.md) | `robust-retrieval` | $\mathbf{RQ_3}$: Improvement in retrieval yield and precision via Waterfall Entity Resolution, Schema Injection, and EAV numeric modeling compared to zero-shot LLM-to-Cypher generation | Chapter 4: Hybrid GraphRAG Retrieval & Multi-Agent Verification | ✅ Documented |
 
 ## Evaluation Summary
-- **Total Thesis Documents**: 2
-- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$
-- **Latest Evaluated Scope**: Benchmark suite in `tests/benchmarks/`
+- **Total Thesis Documents**: 3
+- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$, $\mathbf{RQ_3}$
+- **Latest Evaluated Scope**: Meta-Phase A Implementation Plan (A1.5 & F3.2 updates)
 
 ---
 

@@ -26,11 +26,30 @@ class BackfillService:
         self.embed_svc = EmbeddingService()
         self.connector.connect()
 
+    def backfill_reviews(self):
+        query_fetch = """
+        MATCH (r:Review)
+        WHERE elementId(r) IN $ids
+        RETURN elementId(r) as id, r.review_title as title, r.review_body as body
+        """
+
+        def generator(row):
+            title = row['title'] or ""
+            body = row['body'] or ""
+            text = f"{title}. {body}"
+            # Trim to ~500 chars to save tokens/embedding time for giant reviews
+            if len(text) > 800:
+                return text[:800]
+            return text
+
+        self._process_batch("Review", query_fetch, generator)
+
     def backfill_all(self):
         self.backfill_attributes()
         self.backfill_brands()
         self.backfill_categories()
         self.backfill_products()
+        self.backfill_reviews()
 
     def _process_batch(self, label, fetch_query, text_generator):
         logger.info(f"Processing {label}...")

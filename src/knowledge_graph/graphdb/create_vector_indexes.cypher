@@ -17,3 +17,8 @@ CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
 CREATE VECTOR INDEX attribute_embedding_index IF NOT EXISTS
   FOR (n:Attribute) ON (n.embedding)
   OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+
+// 5. Index for Reviews
+CREATE VECTOR INDEX review_embedding_index IF NOT EXISTS
+  FOR (n:Review) ON (n.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
