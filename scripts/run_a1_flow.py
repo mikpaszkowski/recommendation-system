@@ -64,6 +64,20 @@ def main():
     print(f"📝 Semantic Query (Vector): '{semantic_query}'")
     print(f"🎯 Structured Filters (Cypher): {json.dumps(structured_filters, indent=2)}")
 
+    # Extract soft preferences for Additive Scoring
+    soft_preferences = []
+    try:
+        if hasattr(session_context, 'soft_preferences'):
+            soft_preferences = session_context.soft_preferences
+        else:
+            extracted = session_context.get("current_session_context", {}).get("extracted_parameters", {})
+            soft_preferences = extracted.get("soft_preferences", [])
+            # Convert to dicts if they are objects
+            if soft_preferences and hasattr(soft_preferences[0], 'model_dump'):
+                soft_preferences = [sp.model_dump() for sp in soft_preferences]
+    except Exception as e:
+        logger.warning(f"Could not extract soft preferences: {e}")
+
     # 3. Execute Search
     print(f"\n==============================================")
     print("--- 3. Executing Multi-Index Hybrid Search ---")
@@ -71,7 +85,7 @@ def main():
     try:
         gst = GraphSearchTool()
         logger.debug(f"Calling GraphSearchTool.search() with semantic_query='{semantic_query}' and filters={structured_filters}")
-        result = gst.search(semantic_query, structured_filters, limit=5)
+        result = gst.search(semantic_query, structured_filters, limit=5, soft_preferences=soft_preferences)
         
         count = result.get('count', 0)
         print(f"\n✅ Search successful! Found {count} items.")

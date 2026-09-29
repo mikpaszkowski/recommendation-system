@@ -12,7 +12,7 @@ This guide explains how to run Neo4j using Docker Compose for the recommendation
 
 ### 1. Start Neo4j
 
-From the `src/knowledge-graph` directory:
+From the `src/knowledge_graph` directory:
 
 ```bash
 docker-compose up -d
@@ -67,7 +67,7 @@ Run the test script from the project root:
 
 ```bash
 cd /Users/mikolajpaszkowski/recommendation-system
-python -m src.knowledge-graph.graphdb.test_connector
+python -m src.knowledge_graph.graphdb.test_connector
 ```
 
 ## Configuration
@@ -76,7 +76,7 @@ python -m src.knowledge-graph.graphdb.test_connector
 
 The docker-compose.yml file uses environment variables for configuration. You can customize these by:
 
-1. Creating a `.env` file in the `src/knowledge-graph` directory:
+1. Creating a `.env` file in the `src/knowledge_graph` directory:
 
 ```bash
 # Neo4j Authentication
@@ -178,7 +178,7 @@ The docker-compose setup mounts a volume at `/var/lib/neo4j/import` for bulk dat
 
 ```bash
 # Find the volume location
-docker volume inspect knowledge-graph_neo4j_import
+docker volume inspect knowledge_graph_neo4j_import
 
 # Copy files (example)
 docker cp your_data.csv neo4j-recommendation:/var/lib/neo4j/import/
@@ -322,11 +322,11 @@ The setup creates four persistent volumes:
 docker volume ls | grep neo4j
 
 # Backup data volume
-docker run --rm -v knowledge-graph_neo4j_data:/data -v $(pwd):/backup \
+docker run --rm -v knowledge_graph_neo4j_data:/data -v $(pwd):/backup \
   alpine tar czf /backup/neo4j-backup.tar.gz -C /data .
 
 # Restore data volume
-docker run --rm -v knowledge-graph_neo4j_data:/data -v $(pwd):/backup \
+docker run --rm -v knowledge_graph_neo4j_data:/data -v $(pwd):/backup \
   alpine tar xzf /backup/neo4j-backup.tar.gz -C /data
 ```
 
@@ -347,7 +347,7 @@ networks:
 networks:
   recommendation-network:
     external: true
-    name: knowledge-graph_recommendation-network
+    name: knowledge_graph_recommendation-network
 ```
 
 ## Security Considerations

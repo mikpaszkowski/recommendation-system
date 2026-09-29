@@ -1,51 +1,67 @@
-# Research Report: Vision Staleness Assessment
+# Research Report: Dynamic Schema Extraction vs Hardcoded domain_schemas.json
 
-**Date**: 2026-09-27
-**Requested by**: /audit-state pipeline — Phase 1 Vision Staleness Check
+**Date**: 2026-09-29
+**Requested by**: User investigation request via /teamwork-preview
 **Status**: Pending Approval
 
 ## Executive Summary
 
-The project's vision and implementation plan remain structurally sound and aligned with the recent strategic shifts documented in the Vision Report. The core technological foundation—specifically LangGraph (updated to >=1.0.0), Neo4j vector indexes (migrated to Cypher 25 VECTOR SEARCH), and OpenAI embeddings—is up to date. The most significant evolution is the definitive abandonment of the LLM-REDIAL dataset in favor of a Unified Baseline Strategy (Amazon Only, Meta-Phase C), which fundamentally simplifies the data pipeline. The stated "current phase" in the Vision Report matches the reality documented in the changelog: Foundation is mostly complete, and the project is poised to transition into Meta-Phase A.
+The current `domain_schemas.json` is hardcoded with only three domains ("monitor", "laptop", "headphones"), severely limiting the system's ability to support the full breadth of the Amazon Reviews 2023 dataset (which spans fashion, cosmetics, and thousands of other categories). Relying on this static file creates a scaling bottleneck and brittleness when product domains change. The recommended approach is to dynamically extract domain schemas directly from the Neo4j Knowledge Graph via an offline synchronization script (caching to `dynamic_domain_schemas.json`) and selectively injecting only relevant attributes during prompt construction.
 
 ## Problem Statement
 
-To verify whether the current project vision and implementation plan are still valid. Specifically, to assess if core technologies (LangGraph, Neo4j vector indexes, LLM-REDIAL dataset, OpenAI embeddings) have evolved in a way that invalidates the approach, and to confirm that the Vision Report's stated current phase aligns with the actual implementation state documented in the changelog.
+During the implementation of "Robust GraphRAG Retrieval Architecture" (Decision 2026-09-28-006), Schema Injection was introduced using a static `domain_schemas.json` file to constrain LLM property hallucination. However:
+1. **Domain Limitation**: It restricts the conversational agent to only 3 hardcoded product categories. If a user asks for "cosmetics" or "fashion", the LLM lacks attribute guidance, leading to potential hallucinations or zero-yield Cypher queries.
+2. **Context Window Bloat**: Injecting all domains into the prompt simultaneously will exceed token limits when scaling to the hundreds of categories present in the Amazon dataset.
+3. **Data Drift**: If the underlying graph database is updated with new datasets or features, the static JSON becomes immediately out-of-sync, requiring manual developer intervention.
 
 ## Research Findings
 
 ### Literature & Documentation Review
 
-- **LangGraph**: The project updated requirements to `langgraph>=1.0.0` (GAP-011), aligning with the stable LTS branch.
-- **Neo4j Vector Indexes**: Deprecated API (`CALL db.index.vector.queryNodes`) has been successfully migrated to the Cypher 25 `VECTOR SEARCH` syntax (GAP-003), effectively future-proofing the retrieval mechanism against upcoming Neo4j upgrades.
-- **LLM-REDIAL Dataset**: Per Vision Report Decision 2026-09-23-005, this dependency has been completely abandoned. The project now exclusively relies on the Amazon Reviews dataset to enable strict 1:1 baseline comparisons.
-- **OpenAI Embeddings**: The project leverages modern OpenAI models (`gpt-6-sol`, `gpt-4o`, `o4-mini`) for inference and benchmarking, maintaining state-of-the-art LLM reasoning capabilities.
+- **Source**: Knowledge Graph Schema Extraction Strategies
+- **Key Takeaways**: Modern GraphRAG implementations do not hardcode ontologies. They utilize graph traversal queries to periodically summarize the active ontology (e.g., node labels and their most frequent outgoing edge properties) and cache this schema.
+- **Applicability**: We can run a Cypher query aggregating the most common `Feature` nodes linked to each `Category` in our Amazon-curated Neo4j database, exporting this to a cache file.
+
+### Technology / Approach Comparison
+
+| Criterion | Option A: Hardcoded JSON (Current) | Option B: Dynamic Offline Extraction (Recommended) | Option C: Real-time Neo4j Schema Querying |
+|-----------|------------------------------------|----------------------------------------------------|-------------------------------------------|
+| Alignment with project vision | Low (fails on full Amazon dataset) | High (Data Provenance maintained) | High |
+| Integration with existing stack | Already exists | Native Neo4j aggregation query + cron/script | High Latency risk |
+| Implementation complexity | Zero | Low (Single Python extraction script) | Medium (Requires async db calls during chat) |
+| Performance characteristics | O(1) latency, but limits context | O(1) latency at chat-time, scalable | High latency per turn |
 
 ### Codebase Impact Assessment
 
-The shift to a Unified Baseline Strategy (Amazon Only) removes the need for complex LLM-REDIAL ETL pipelines. The existing Neo4j database (`kg_curated`) containing 30 users, 30 products, and 4847 reviews (as per the 2026-09-23 changelog entry) already serves as a sufficient curated subset, effectively unblocking Meta-Phase A.
+- **Affected Files**: `src/llm_interface/preference_parser.py` (needs to read the new dynamic cache and preferably inject only relevant category schemas rather than all of them).
+- **New Components**: A new script `scripts/extract_domain_schemas.py` that queries Neo4j to build the JSON dynamically.
+- **Scope of Change**: Small. Replaces a static file with an automatically generated one, plus a minor update to the prompt logic.
 
 ## Guardian Assessment
 
 ### ✅ Vision Alignment
-**YES.** The Vision Report's strategic pivot to an Amazon-only dataset (Decision 2026-09-23-005) is perfectly aligned with the need for robust academic baselines (Meta-Phase C). The two-axis build strategy (Foundation → Meta-Phase A/B) remains the authoritative roadmap.
+This approach perfectly aligns with the project's strategy to utilize the **Amazon Reviews 2023 dataset exclusively**. By reading the schema directly from the populated graph, the LLM is accurately grounded in the exact data available, supporting Explainability and Data Provenance.
 
 ### ⚖️ Complexity Analysis
-**REDUCED COMPLEXITY.** Abandoning the LLM-REDIAL dependency significantly reduces ETL complexity and integration overhead, allowing the team to focus directly on the core recommendation engine (Meta-Phase A).
+Extracting the schema offline and caching it as JSON introduces minimal complexity. It avoids the latency overhead of querying Neo4j for the schema on every user message, preserving the `preference_parser.py`'s fast execution time.
 
 ### 🔗 Integration Assessment
-The recent migration to Cypher 25 `VECTOR SEARCH` and the introduction of `langgraph>=1.0.0` ensure that the foundational infrastructure integrates smoothly with modern library standards.
+This integrates seamlessly with the existing `preference_parser.py` (which already reads a JSON file). The only addition is a utility script to query the `neo4j_connector.py` for categories and features.
 
 ### ⚠️ Risks & Trade-offs
-While the Amazon-only approach simplifies development, the project must ensure that the synthesized conversational scenarios for evaluation (Meta-Phase A6) remain robust without the dialogue-rich LLM-REDIAL dataset.
+- The offline cache might be slightly stale if the DB is updated in real-time, but for the scope of the Master's thesis (a static Amazon dataset), data drift post-ingestion is virtually non-existent.
+- Prompt length could still be an issue if we inject *all* categories. The `preference_parser.py` should be updated to only inject a flat list of categories, and then only inject detailed attributes if the user's intent is narrowed down to a specific domain.
 
 ## Recommendation
 
 ### Recommended Approach
-Proceed immediately with the codebase inspection (Phase 2 of `/audit-state`). The vision is validated and NOT stale. The Foundation phase is effectively complete, and the focus should now strictly move to identifying gaps in Meta-Phase A (Recommendation Engine).
+1. **Create an extraction script** (`scripts/extract_domain_schemas.py`) that queries Neo4j to generate the schema mapping automatically (e.g., matching Categories to their most common Features/Attributes).
+2. **Modify `preference_parser.py`** to read this generated file, but implement **Selective Injection**: inject the global attributes and a flat list of available categories first. If a category is already known in the session context, only inject the specific attributes for that domain to save prompt tokens.
+3. Delete the hardcoded `domain_schemas.json` and replace it with this automated workflow.
 
 ### Why This Approach
-The strategic decisions documented on 2026-09-23 have successfully resolved prior data bottlenecks. The infrastructure (Neo4j APIs, dependencies) is modernized. The path to implementing the core academic contribution (Meta-Phase A) is clear.
+It solves the domain limitation for fashion/cosmetics (or any category in the Amazon dataset) without adding real-time database latency. It respects the Knowledge Graph as the ultimate source of truth, removing manual hardcoding.
 
 ### What NOT to Do
-Do NOT revisit LLM-REDIAL integration. Do NOT attempt to build custom GNNs. Stick to the Hybrid GraphRAG approach on the Amazon dataset.
+Do not implement real-time schema querying inside the dialogue turns (Option C). Adding a Neo4j round-trip purely to fetch schema during the semantic parsing phase will unacceptably increase conversational latency.

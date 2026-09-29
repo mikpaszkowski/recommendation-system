@@ -41,32 +41,34 @@ Analyze the full multi-turn conversation history carefully and extract the curre
 
    A. HARD CONSTRAINTS (`hard_constraints`):
       - Strict, non-negotiable filters that MUST be obeyed. If an item violates any hard constraint, it cannot be recommended.
+      - CRITICAL TAXONOMY RULE: The ONLY allowed attributes for `hard_constraints` are:
+        1. `price` (budget constraints, e.g., less_than 1000)
+        2. `category` (the domain/type of product, e.g., include "laptop")
+        3. `brand` (ONLY when the operator is "exclude")
+      - Do NOT put technical specifications (e.g., RAM, refresh rate, screen size) or included brands (e.g., "I want a Sony") in `hard_constraints`. These must go to `soft_preferences`.
       - Each hard constraint object MUST contain:
-        * "attribute" (String): Canonical lowercase property name being constrained (e.g., "price", "brand", "category", "operating_system", "ram", "screen_size", "storage", "refresh_rate", "model").
+        * "attribute" (String): Restricted to "price", "category", or "brand" (when excluded).
         * "operator" (String): EXACTLY ONE of the 5 allowed enums:
-          - "include": The attribute must match or include the target value (e.g., brand include "Sony", category include "laptop").
-          - "exclude": The attribute must NOT match or include the target value (e.g., operating_system exclude "ChromeOS", brand exclude "Acer").
-          - "greater_than": Numeric attribute must be strictly greater than the target value (e.g., ram greater_than 16, price greater_than 200).
-          - "less_than": Numeric attribute must be strictly less than the target value (e.g., price less_than 1000, weight less_than 3).
-          - "equal": Attribute must match the exact value.
+          - "include": For category only.
+          - "exclude": For brand only.
+          - "greater_than": For price minimums.
+          - "less_than": For price maximums/ceilings.
+          - "equal": For strict exact matches.
         * "value" (Number, String, or Boolean):
           - For "greater_than" and "less_than", "value" MUST be a numeric float or integer (e.g., 1000, 16, 2.5), NEVER a string with currency symbols.
-          - For "include", "exclude", and "equal", "value" is typically a string or canonical name (e.g., "Dell", "ChromeOS").
 
    B. SOFT PREFERENCES (`soft_preferences`):
-      - Flexible desires, aesthetic leanings, brand affinities, or subjective qualities used to rank and score candidates, but not strictly required.
+      - Flexible desires, technical specifications, included brands, aesthetic leanings, or subjective qualities used to rank and score candidates additively.
+      - ALL technical specifications (e.g., "16GB RAM", "144Hz refresh rate", "OLED display") and ALL included brands (e.g., "I want an Apple or Sony") MUST be placed here, NEVER in `hard_constraints`.
       - Each soft preference object MUST contain:
-        * "category" (String): Domain/dimension of preference (e.g., "weight", "battery", "display", "design", "performance", "noise_cancellation", "brand", "use_case").
-        * "value" (String): The specific quality or feature desired/disliked (e.g., "lightweight", "OLED", "long battery life", "sleek aluminum body", "mechanical keys").
+        * "category" (String): Domain/dimension of preference (e.g., "brand", "ram", "refresh_rate", "battery", "display", "use_case").
+        * "value" (String): The specific quality, spec, or feature desired (e.g., "Sony", "16GB", "144Hz", "long battery life").
         * "polarity" (Float): Sentiment score between -1.0 and 1.0:
-          - +1.0: Strongly desires, loves, or insists as high priority.
+          - +1.0: Strongly desires, loves, or insists as high priority (use for explicit spec requests like "must have 16GB RAM").
           - +0.5 to +0.8: Positively interested, prefers, or likes.
           - -0.5 to -0.8: Dislikes, prefers to avoid if possible.
           - -1.0: Strongly dislikes or hates.
-        * "confidence" (Float): Extraction certainty between 0.0 and 1.0:
-          - 1.0: Explicitly declared by the user.
-          - 0.7 to 0.9: Strongly implied by user description or context.
-          - 0.4 to 0.6: Inferred or deduced with moderate certainty.
+        * "confidence" (Float): Extraction certainty between 0.0 and 1.0.
         * "evidence" (String): Exact quote or clear logical deduction from the conversation justifying this preference.
 
 5. DIALOGUE STATE TRACKING (`dialogue_state`):
@@ -261,22 +263,26 @@ OUTPUT:
           "value": 400
         },
         {
-          "attribute": "refresh_rate",
-          "operator": "greater_than",
-          "value": 144
-        },
-        {
-          "attribute": "panel_type",
-          "operator": "exclude",
-          "value": "TN"
-        },
-        {
           "attribute": "brand",
           "operator": "exclude",
           "value": "Acer"
         }
       ],
       "soft_preferences": [
+        {
+          "category": "refresh_rate",
+          "value": "higher than 144Hz",
+          "polarity": 1.0,
+          "confidence": 1.0,
+          "evidence": "Refresh rate must be higher than 144Hz"
+        },
+        {
+          "category": "panel_type",
+          "value": "TN",
+          "polarity": -1.0,
+          "confidence": 1.0,
+          "evidence": "I hate washed-out TN colors"
+        },
         {
           "category": "panel_type",
           "value": "IPS",
@@ -330,24 +336,31 @@ OUTPUT:
           "attribute": "category",
           "operator": "include",
           "value": "laptop"
-        },
-        {
-          "attribute": "brand",
-          "operator": "include",
-          "value": "Dell"
-        },
-        {
-          "attribute": "model",
-          "operator": "equal",
-          "value": "XPS 15"
-        },
-        {
-          "attribute": "ram",
-          "operator": "equal",
-          "value": "32GB"
         }
       ],
-      "soft_preferences": []
+      "soft_preferences": [
+        {
+          "category": "brand",
+          "value": "Dell",
+          "polarity": 1.0,
+          "confidence": 1.0,
+          "evidence": "I have decided on the Dell XPS 15"
+        },
+        {
+          "category": "model",
+          "value": "XPS 15",
+          "polarity": 1.0,
+          "confidence": 1.0,
+          "evidence": "I have decided on the Dell XPS 15"
+        },
+        {
+          "category": "ram",
+          "value": "32GB",
+          "polarity": 1.0,
+          "confidence": 1.0,
+          "evidence": "with 32GB RAM"
+        }
+      ]
     },
     "dialogue_state": {
       "ready_for_recommendation": true,

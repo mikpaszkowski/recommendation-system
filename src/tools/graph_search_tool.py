@@ -36,12 +36,13 @@ class GraphSearchTool:
             self.resolver = None
 
     def search(self, 
-               semantic_query: Optional[str] = None, 
+               semantic_query: Optional[str] = "", 
                structured_filters: Optional[Dict[str, Any]] = None, 
                limit: int = 5,
                # Legacy/Fallback arguments to avoid breaking existing calls if any
                query: Optional[str] = None,
-               preferences: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+               preferences: Optional[Dict[str, Any]] = None,
+               soft_preferences: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         Executes a search using one of three strategies:
         1. Hybrid (Semantic + Filters) - PREFERRED
@@ -54,11 +55,13 @@ class GraphSearchTool:
             limit: Number of results to return.
             query: Alias for semantic_query (legacy support).
             preferences: Alias for structured_filters (legacy support).
+            soft_preferences: List of flexible desires for additive scoring.
         """
         # Handle aliases/legacy args
         text = semantic_query or query
         raw_filters = structured_filters or preferences or {}
         filters = dict(raw_filters)
+        soft_preferences = soft_preferences or []
         
         logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}")
         
@@ -72,22 +75,78 @@ class GraphSearchTool:
              return {"status": "error", "message": "Database or Embedder not initialized.", "items": []}
 
         try:
+            result = {"status": "error", "items": []}
             # STRATEGY 1: HYBRID (Most common and desired)
             if text and self._filters_present(filters):
                 logger.info(f"[GST] Strategy: HYBRID (text + filters)")
-                return self._execute_hybrid_search(text, filters, raw_filters, limit)
-            
+                result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                
+                # MACS Progressive Relaxation
+                relaxed_constraints = []
+                if result.get("count", 0) < 3:
+                    logger.warning(f"[GST] MACS Triggered: Candidate yield {result.get('count', 0)} < 3. Initiating relaxation cascade.")
+                    
+                    # Pass 1: Widen Budget
+                    relaxed = False
+                    if "price_max" in filters:
+                        filters["price_max"] = filters["price_max"] * 1.15
+                        relaxed_constraints.append("Widened budget ceiling by 15%")
+                        relaxed = True
+                    if "price_min" in filters:
+                        filters["price_min"] = filters["price_min"] * 0.85
+                        relaxed_constraints.append("Lowered budget floor by 15%")
+                        relaxed = True
+                        
+                    if relaxed:
+                        result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                    
+                    # Pass 2: Drop Category constraint if still failing
+                    if result.get("count", 0) < 3 and "category" in filters:
+                        logger.warning(f"[GST] MACS Triggered: Yield still < 3. Dropping category constraint.")
+                        del filters["category"]
+                        relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
+                        result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                
+                if relaxed_constraints:
+                    result["relaxed_constraints"] = relaxed_constraints
+                    
             # STRATEGY 2: VECTOR ONLY (No specific filters)
-            if text and not self._filters_present(filters):
+            elif text and not self._filters_present(filters):
                 logger.info(f"[GST] Strategy: VECTOR_ONLY (text only, no meaningful filters)")
-                return self._execute_vector_search(text, limit)
+                result = self._execute_vector_search(text, limit)
 
             # STRATEGY 3: FILTER ONLY (Parametric query)
-            if self._filters_present(filters) and not text:
+            elif self._filters_present(filters) and not text:
                 logger.info(f"[GST] Strategy: FILTER_ONLY (filters only)")
-                return self._execute_cypher_search(filters, raw_filters, limit)
-            
-            return {"status": "error", "message": "No search criteria provided.", "items": []}
+                result = self._execute_cypher_search(filters, raw_filters, limit)
+            else:
+                return {"status": "error", "message": "No search criteria provided.", "items": []}
+                
+            # ADDITIVE SCORING (Pillar 1/2)
+            if soft_preferences and result.get("items"):
+                logger.info(f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences.")
+                for item in result["items"]:
+                    title_lower = (item.get("title") or "").lower()
+                    brand_lower = (item.get("brand") or "").lower()
+                    reasons_str = " ".join(item.get("match_reasons") or []).lower()
+                    
+                    base_score = item.get("score", 0.0)
+                    bonus = 0.0
+                    for sp in soft_preferences:
+                        val = str(sp.get("value", "")).lower()
+                        cat = str(sp.get("category", "")).lower()
+                        polarity = float(sp.get("polarity", 0.5))
+                        
+                        # Add heuristic bonus if value appears in title, brand or match reasons
+                        if val and (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
+                            bonus += (polarity * 0.2)
+                            
+                    item["score"] = base_score + bonus
+                
+                # Re-sort after additive scoring
+                result["items"] = sorted(result["items"], key=lambda x: x.get("score", 0), reverse=True)
+                
+            return result
 
         except Exception as e:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
@@ -313,10 +372,10 @@ class GraphSearchTool:
                 continue
             
             if key == "price_max":
-                where_clauses.append("node.price <= $price_max")
+                where_clauses.append("(node.price IS NULL OR node.price <= $price_max)")
                 params["price_max"] = float(value)
             elif key == "price_min":
-                where_clauses.append("node.price >= $price_min")
+                where_clauses.append("(node.price IS NULL OR node.price >= $price_min)")
                 params["price_min"] = float(value)
             elif key == "excluded_asins" and isinstance(value, list) and value:
                 where_clauses.append("NOT node.parent_asin IN $excluded_asins")

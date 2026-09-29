@@ -28,7 +28,7 @@ This will install:
 We provide a Docker Compose configuration that includes APOC and Graph Data Science plugins:
 
 ```bash
-cd src/knowledge-graph
+cd src/knowledge_graph
 docker-compose up -d
 ```
 

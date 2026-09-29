@@ -47,6 +47,13 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-09-29-007: Dynamic Domain Schema Extraction
+**Context**: Investigation via /teamwork-preview revealed that hardcoded `domain_schemas.json` (3 categories) severely limits the system's ability to serve the full Amazon Reviews dataset.
+**Decision**: Replace static JSON with an offline extraction script (`scripts/extract_domain_schemas.py`) that queries Neo4j to generate `dynamic_domain_schemas.json`. Modify `preference_parser.py` to selectively inject this schema based on user intent. Real-time chat querying of the schema was explicitly rejected.
+**Rationale**: Scales to thousands of Amazon categories, prevents property hallucination, maintains Data Provenance, and avoids introducing chat-time database latency.
+**Impact on vision**: Solidifies the Knowledge Graph as the dynamic source of truth for the LLM schema.
+**Approved by**: User
+
 ### Decision 2026-07-08-001: Strategic Data Foundation Reset
 **Date**: 2026-07-08
 **Trigger**: /audit-state pipeline — codebase inspection revealed Amazon-only graph

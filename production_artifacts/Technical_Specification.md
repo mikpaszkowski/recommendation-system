@@ -1,175 +1,137 @@
-# Technical Specification: Foundation F0 — Infrastructure Prerequisites
+# Technical Specification: Dynamic Domain Schema Extraction
 
-**Date**: 2026-07-11
-**Author**: Product Manager Agent
+**Date**: 2026-09-29
+**Author**: Product Manager Agent (@pm-specs)
 **Status**: Draft — Pending Approval
-**Related Research**: `/audit-state` pipeline findings (GAP-001, GAP-003, GAP-011)
+**Related Research**: [Research_Report.md](file:///Users/mikolajpaszkowski/recommendation-system/production_artifacts/Research_Report.md)
 
 ## 1. Executive Summary
 
-This specification covers the three infrastructure fixes that must be completed before any Meta-Phase A or B work can begin. These are non-functional fixes that do not add features but make the existing codebase production-ready:
-
-1. **GAP-001** — asyncio event loop fix in `orchestrator.py` (production-breaking)
-2. **GAP-003** — Neo4j deprecated `db.index.vector.*` API migration to Cypher 25 syntax (12 call sites across 5 files)
-3. **GAP-011** — `requirements.txt` cleanup + `.env.example` creation
-
-All three fixes are independent and can be implemented in parallel. None require Neo4j data or a running database to implement (though GAP-003 tests will need Neo4j).
+This specification outlines the technical approach to replace the hardcoded `domain_schemas.json` (which limits the conversational agent to only 3 categories) with a dynamic, graph-derived schema cache. A new offline script will traverse the Neo4j Knowledge Graph to extract the actual product categories and their corresponding features, saving them to `dynamic_domain_schemas.json`. The `preference_parser.py` will be updated to selectively inject these schemas during prompt construction, ensuring the LLM is accurately grounded in the specific Amazon dataset without overwhelming the context window or introducing chat-time database latency.
 
 ## 2. Requirements
 
 ### 2.1 Functional Requirements
 
 | ID | Requirement | Priority | Description |
-|----|------------|----------|-------------|
-| FR-001 | Async orchestrator | Must | `AgentOrchestrator` must be fully async — all public and private methods that call LLM or Neo4j must be `async def` |
-| FR-002 | Chainlit compatibility | Must | `orchestrator.run()` must be callable with `await` directly from Chainlit's async handler — no `cl.make_async` wrapper |
-| FR-003 | Cypher 25 vector search | Must | All vector search queries must use `CALL db.index.vector.queryNodes()` → replaced with centralized helper to enable future migration |
-| FR-004 | Cypher 25 index creation | Must | All index creation must use `CREATE VECTOR INDEX ... IF NOT EXISTS` DDL instead of `CALL db.index.vector.createNodeIndex()` |
-| FR-005 | Clean dependencies | Must | `requirements.txt` must list only packages actually imported in `src/` |
-| FR-006 | Environment documentation | Must | `.env.example` must document all required environment variables |
+|----|-------------|----------|-------------|
+| FR-001 | Offline Schema Extraction | Must | A standalone Python script must query the Neo4j Knowledge Graph to extract all unique `Category` nodes and their associated `Feature` attributes. |
+| FR-002 | Schema Caching | Must | The extracted schema must be serialized to a JSON file (`src/knowledge_graph/dynamic_domain_schemas.json`). |
+| FR-003 | Selective Prompt Injection | Must | `preference_parser.py` must load the dynamic JSON and inject a flat list of categories into the prompt. Detailed attributes should only be injected if a specific category is already present in the session context. |
+| FR-004 | Removal of Hardcoded JSON | Must | The existing `src/llm_interface/domain_schemas.json` must be deleted. |
 
 ### 2.2 Non-Functional Requirements
 
 | ID | Requirement | Target | Description |
-|----|------------|--------|-------------|
-| NFR-001 | Backward compatibility | 100% | All existing interfaces (`GraphSearchTool.search()`, `ResolverService.resolve_*()`, `AgentOrchestrator.run()`) must maintain their signatures and return types |
-| NFR-002 | No data dependency | Yes | All changes must be implementable without a running Neo4j instance or dataset |
-| NFR-003 | Config validation | Must | Re-enable the disabled `_validate_config()` in `Neo4jConnector` |
+|----|-------------|--------|-------------|
+| NFR-001 | Performance | <50ms | Reading the cached JSON and injecting the schema into the prompt must not add perceptible latency to the dialogue turn. |
+| NFR-002 | Scalability | Hundreds of Categories | The selective injection strategy must ensure that context limits are not exceeded even if the graph contains 500+ categories. |
+| NFR-003 | Data Provenance | Strict Alignment | The injected schema must perfectly match the actual data in the Neo4j graph, preventing LLM property hallucination. |
 
 ## 3. Architecture & Tech Stack
 
 ### 3.1 Technology Choices
 
-No new technologies introduced. These are fixes to existing code.
-
-| Change | Before | After |
-|--------|--------|-------|
-| Orchestrator | Sync methods + `asyncio.get_event_loop().run_until_complete()` | Fully async methods with `await` |
-| Vector queries | Inline `CALL db.index.vector.queryNodes(...)` calls | Centralized via `build_vector_search_query()` helper for single-point future migration |
-| Index creation | `CALL db.index.vector.createNodeIndex(name, label, prop, dims, metric)` | `CREATE VECTOR INDEX name IF NOT EXISTS FOR (n:Label) ON (n.prop) OPTIONS {...}` |
-| requirements.txt | 30 packages, many unused (lightfm, streamlit, etc.) | Split into `requirements.txt` (active) + `requirements-legacy.txt` (archived) |
+| Layer | Technology | Justification |
+|-------|-----------|---------------|
+| Extraction Script | Python + Neo4j driver | Reuses existing `Neo4jConnector` for graph traversal. |
+| Schema Storage | JSON (File System) | O(1) read latency, easily inspectable, integrates natively with existing `preference_parser.py` logic. |
+| Prompt Construction | String Interpolation | Reuses the existing logic in `preference_parser.py` with modifications for selective injection. |
 
 ### 3.2 Integration with Existing System
 
-No architectural changes. All modifications are within existing files, maintaining existing interfaces and return types.
+- **Knowledge Graph**: The extraction script (`scripts/extract_domain_schemas.py`) will import and instantiate `Neo4jConnector` from `src/knowledge_graph/graphdb/neo4j_connector.py`.
+- **LLM Interface**: `src/llm_interface/preference_parser.py` will be modified to point to the new `dynamic_domain_schemas.json` file. It will receive the current `SessionContext` (or at least the identified category) to determine which detailed attributes to inject.
 
-## 4. Detailed Changes
+## 4. API / Interface Design
 
-### 4.1 GAP-001 — Async Orchestrator Refactor
+### 4.1 New Interfaces
 
-#### [MODIFY] `src/agents/orchestrator.py`
+**`scripts/extract_domain_schemas.py`**
+- Connects to Neo4j.
+- Executes Cypher query:
+  ```cypher
+  MATCH (p:Product)-[:HAS_CATEGORY]->(c:Category)
+  MATCH (p)-[:HAS_FEATURE]->(f:Feature)
+  RETURN c.name AS category, collect(DISTINCT f.name) AS features
+  ```
+- Formats the output matching the old JSON structure (global attributes + domains) and writes to `src/knowledge_graph/dynamic_domain_schemas.json`.
 
-**Current problem**: `run()` is synchronous. At line 220, `asyncio.get_event_loop()` + `loop.run_until_complete()` crashes with `RuntimeError: This event loop is already running` when called from Chainlit's async context.
+### 4.2 Modified Interfaces
 
-**Changes**:
-1. Convert `run()` → `async def run()`
-2. Convert `_initialize_state()` → `async def _initialize_state()`
-3. Convert `_decide_next_step()` → `async def _decide_next_step()`
-4. Convert `_execute_step()` → `async def _execute_step()`
-5. Convert `_generate_search_params()` → `async def _generate_search_params()`
-6. Replace lines 216–228 (the asyncio block) with: `reranked_top = await self.critic_agent.evaluate_candidates(profile, candidates, attributes_map)`
-7. Replace all `self.llm_handler.query(messages)` calls with `await self.llm_handler.aquery(messages)`
+**`src/llm_interface/preference_parser.py`**
+- `extract_preferences(user_input: str, session_context: Optional[SessionContext] = None)`
+  - Currently loads `domain_schemas.json`.
+  - **Change**: Load `src/knowledge_graph/dynamic_domain_schemas.json`.
+  - **Change**: Implement logic to extract the `category` from `session_context.extracted_parameters.hard_constraints` (if available).
+  - **Change**: Modify prompt construction:
+    - ALWAYS inject global attributes.
+    - ALWAYS inject a flat list of available categories.
+    - ONLY inject domain-specific attributes for the category identified in the context (if any). If no category is identified, do not inject detailed attributes to save tokens.
 
-**Key constraint**: `CriticAgent.evaluate_candidates()` is already `async def` — so once orchestrator is async, we just `await` it directly. `SimpleLLMHandler` already has `aquery()` method.
+## 5. Data Model / State Management
 
-#### [MODIFY] `src/ui/app.py`
+### 5.1 New Data Structures
 
-**Current problem**: Line 44 uses `cl.make_async(orchestrator.run)` to wrap the sync `run()` in an async wrapper.
-
-**Change**: Replace `result = await cl.make_async(orchestrator.run)(...)` with `result = await orchestrator.run(...)` (direct async call).
-
-### 4.2 GAP-003 — Neo4j Deprecated API Migration
-
-#### Strategy: Vector Search Query Helper
-
-Create a centralized helper function for vector search queries. This encapsulates the deprecated API in one place, making future migration to Cypher 25 `VECTOR SEARCH` a single-file change.
-
-#### [NEW] `src/knowledge_graph/graphdb/vector_search_helper.py`
-
-Centralized Cypher query builder for vector search. All callers use this instead of inline Cypher strings. When Neo4j 2025.x+ is confirmed, only this file needs to change.
-
-#### [MODIFY] `src/tools/graph_search_tool.py`
-
-Replace inline Cypher string construction at lines 108–118 and 138–147 with calls to `build_vector_search_query()`. The existing 2 `CALL db.index.vector.queryNodes()` calls (lines 109, 139) will use the helper.
-
-#### [MODIFY] `src/knowledge_graph/graphdb/resolver_service.py`
-
-Replace inline Cypher at lines 33–38 (`resolve_brand`), 66–71 (`resolve_attribute`), 100–105 (`resolve_category`) with calls to `build_vector_search_query()`. The existing 3 `CALL db.index.vector.queryNodes()` calls will use the helper.
-
-#### [MODIFY] `src/knowledge_graph/graphdb/create_vector_indexes.cypher`
-
-Replace all 3 `CALL db.index.vector.createNodeIndex(...)` lines with Cypher 25 DDL + add attribute index:
-
-```cypher
-CREATE VECTOR INDEX product_embedding_index IF NOT EXISTS
-  FOR (n:ParentProduct) ON (n.embedding)
-  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
-
-CREATE VECTOR INDEX brand_embedding_index IF NOT EXISTS
-  FOR (n:Brand) ON (n.embedding)
-  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
-
-CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
-  FOR (n:Category) ON (n.embedding)
-  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
-
-CREATE VECTOR INDEX attribute_embedding_index IF NOT EXISTS
-  FOR (n:Attribute) ON (n.embedding)
-  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+The output JSON structure will remain similar to the existing one for backward compatibility:
+```json
+{
+  "global_attributes": [
+    "price",
+    "brand",
+    "category",
+    "model"
+  ],
+  "domains": {
+    "monitors": ["refresh_rate", "resolution", ...],
+    "fashion": ["size", "color", "material", ...],
+    ...
+  }
+}
 ```
 
-#### [MODIFY] `src/knowledge_graph/graphdb/setup_indexes.py`
+### 5.2 Data Flow
 
-Simplify: since `CREATE VECTOR INDEX ... IF NOT EXISTS` is idempotent, remove the `SHOW INDEXES` pre-check logic (lines 51–58). Just execute each statement directly.
+1. **Offline**: Developer/Pipeline runs `python scripts/extract_domain_schemas.py`.
+2. Script queries Neo4j -> Builds JSON -> Saves to disk.
+3. **Runtime**: User says "I want a blue dress".
+4. `preference_parser.py` reads JSON.
+5. If context category is "fashion", it injects fashion features ("size", "color", "material") into the prompt.
+6. LLM parses constraints cleanly.
 
-#### [MODIFY] `src/knowledge_graph/graphdb/create_indexes.py`
+## 6. Implementation Phases
 
-Replace 2 `CALL db.index.vector.createNodeIndex()` calls (lines 20, 29) with `CREATE VECTOR INDEX` DDL.
+| Phase | Scope | Dependencies | Estimated Effort |
+|-------|-------|-------------|-----------------|
+| 1 | Create `extract_domain_schemas.py` and generate the JSON file. | Neo4j Connection | Low |
+| 2 | Update `preference_parser.py` for selective injection. | Phase 1 | Low |
+| 3 | Delete `domain_schemas.json` and run tests. | Phase 2 | Low |
 
-#### [MODIFY] `src/knowledge_graph/graphdb/backfill_category_embeddings.py`
+## 7. File Structure
 
-Replace 1 `CALL db.index.vector.createNodeIndex()` call (line 134) with `CREATE VECTOR INDEX` DDL.
+### New Files
+- `scripts/extract_domain_schemas.py` — Script to query Neo4j and generate the schema JSON.
 
-### 4.3 GAP-011 — Requirements & Environment
+### Modified Files
+- `src/llm_interface/preference_parser.py` — Update schema loading path and implement selective injection logic.
+- `src/llm_interface/domain_schemas.json` — **DELETE** (superseded by dynamic version).
 
-#### [MODIFY] `requirements.txt`
+## 8. Acceptance Criteria
 
-Keep only packages actually imported in `src/`. Pin `openai>=1.0.0` (not `>=0.27.0`). Add `pytest-asyncio`. Add `pydantic>=2.0.0`.
+| ID | Criterion | Verification Method |
+|----|-----------|-------------------|
+| AC-001 | Schema extraction script successfully generates JSON containing all categories from the KG. | Manual execution & JSON inspection |
+| AC-002 | `preference_parser.py` successfully loads the dynamic JSON without errors. | Unit test execution |
+| AC-003 | Prompt correctly contains detailed attributes ONLY for the active category in the context. | Unit test / Print prompt |
+| AC-004 | Existing dialogue parsing tests (e.g. `test_preference_parser.py`) pass without modification to their assertions. | Unit test execution (`pytest tests/test_preference_parser.py`) |
 
-#### [NEW] `requirements-legacy.txt`
-
-Archive removed packages: `lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`, `openpyxl`, `joblib`, `requests`, `pyabsa`.
-
-#### [NEW] `.env.example`
-
-Document all required env vars: `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
-
-### 4.4 Bonus — Neo4j Connector Validation Fix
-
-#### [MODIFY] `src/knowledge_graph/graphdb/neo4j_connector.py`
-
-Re-enable the disabled `_validate_config()` call at line 62–63. Remove `#TODO TEMPORARY DISABLED` comment and uncomment the call.
-
-## 5. Acceptance Criteria
-
-| ID | Criterion | Verification |
-|----|-----------|-------------|
-| AC-001 | `orchestrator.run()` is `async def` and can be awaited | Code inspection |
-| AC-002 | No `asyncio.get_event_loop()` or `run_until_complete()` anywhere in `src/` | `grep` search |
-| AC-003 | No `cl.make_async` in `app.py` | Code inspection |
-| AC-004 | No `CALL db.index.vector.createNodeIndex` anywhere in `src/` | `grep` search |
-| AC-005 | All vector search queries centralized via helper | Code inspection |
-| AC-006 | `requirements.txt` contains only packages imported in `src/` | Cross-reference |
-| AC-007 | `.env.example` exists with all required variables documented | File exists |
-| AC-008 | `openai>=1.0.0` in requirements (not `>=0.27.0`) | Version check |
-| AC-009 | `pytest-asyncio>=0.21.0` in requirements | Present |
-| AC-010 | `Neo4jConnector._validate_config()` is called (not commented out) | Code inspection |
-| AC-011 | `requirements-legacy.txt` exists with archived packages | File exists |
-
-## 6. Risks & Mitigations
+## 9. Risks & Mitigations
 
 | Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| Neo4j version doesn't support `CREATE VECTOR INDEX` DDL | High | Low | DDL is supported since Neo4j 5.11; our requirement is `>=5.14.0` |
-| Existing tests rely on sync orchestrator | Medium | Medium | Update test calls to use `pytest-asyncio` |
-| `vector_search_helper.py` query format differs from handwritten queries | Low | Low | Unit test each query format against expected Cypher string |
+|------|--------|-------------|-----------|
+| Broken Tests | Medium | Medium | The previous static JSON only had 3 domains. Some tests might assume specific attributes are always present in the prompt. We will need to run the full test suite and ensure test fixtures are updated if necessary. |
+| Cypher Query Performance | Low | Low | The extraction runs offline. It will not impact runtime latency. |
+
+## 10. Open Questions
+
+- Should we run this script automatically as part of the Neo4j ingestion pipeline (e.g. in `backfill_embeddings.py` or similar), or just document it as a manual prerequisite step for now?

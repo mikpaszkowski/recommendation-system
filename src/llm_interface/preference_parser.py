@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from langchain_core.tools import tool
@@ -131,9 +132,43 @@ class LLMPreferenceParser(PreferenceParserInterface):
         return session_context_to_legacy_preferences(preferences)
 
     def _default_system_prompt(self) -> str:
+        base_prompt = ""
         if hasattr(preference_extract_prompt, "get_system_prompt"):
-            return preference_extract_prompt.get_system_prompt()
-        return preference_extract_prompt.prompt()
+            base_prompt = preference_extract_prompt.get_system_prompt()
+        else:
+            base_prompt = preference_extract_prompt.prompt()
+            
+        # SCHEMA INJECTION: Load domain schemas and append to the prompt
+        try:
+            schema_path = Path(__file__).parent / "domain_schemas.json"
+            if schema_path.exists():
+                with open(schema_path, "r", encoding="utf-8") as f:
+                    schemas = json.load(f)
+                
+                schema_injection = "\n\n<schema_injection>\n"
+                schema_injection += "CRITICAL STRICT SCHEMA CONSTRAINTS:\n"
+                schema_injection += "You MUST adhere to the EXPLICIT CONSTRAINT TAXONOMY. Only 'price', 'category', and excluded 'brand' are allowed as hard_constraints.\n"
+                schema_injection += "ALL other specifications MUST be classified as soft_preferences (e.g. 'ram', 'refresh_rate', 'model', included brands).\n\n"
+                
+                schema_injection += "Global Attributes (for reference, but only price/category/excluded brand can be hard_constraints):\n"
+                for attr in schemas.get("global_attributes", []):
+                    schema_injection += f"- {attr}\n"
+                    
+                schema_injection += "\nDomain-Specific Attributes (MUST ALL GO TO soft_preferences):\n"
+                for domain, attributes in schemas.get("domains", {}).items():
+                    schema_injection += f"- {domain.capitalize()}: {', '.join(attributes)}\n"
+                    
+                schema_injection += "</schema_injection>"
+                
+                # Insert the schema injection before the rules/examples
+                if "<rules>" in base_prompt:
+                    base_prompt = base_prompt.replace("<rules>", schema_injection + "\n\n<rules>")
+                else:
+                    base_prompt += schema_injection
+        except Exception as e:
+            self.logger.warning(f"Failed to inject domain schema: {e}")
+            
+        return base_prompt
 
     def _build_prompt(self, conversation_text: str) -> str:
         """

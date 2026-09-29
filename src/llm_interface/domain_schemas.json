@@ -1,0 +1,32 @@
+{
+  "global_attributes": [
+    "category",
+    "brand",
+    "price",
+    "model"
+  ],
+  "domains": {
+    "monitor": [
+      "refresh_rate",
+      "resolution",
+      "screen_size",
+      "panel_type",
+      "aspect_ratio"
+    ],
+    "laptop": [
+      "ram",
+      "storage",
+      "cpu",
+      "gpu",
+      "operating_system",
+      "weight",
+      "battery_life"
+    ],
+    "headphones": [
+      "form_factor",
+      "connectivity",
+      "noise_cancellation",
+      "microphone"
+    ]
+  }
+}

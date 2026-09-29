@@ -34,7 +34,7 @@ NEO4J_DATABASE=neo4j
 We provide a complete Docker Compose setup with APOC and Graph Data Science plugins:
 
 ```bash
-cd src/knowledge-graph
+cd src/knowledge_graph
 docker-compose up -d
 ```
 
