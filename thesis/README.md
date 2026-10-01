@@ -28,11 +28,12 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 | 3 | [`3-doc-robust-retrieval.md`](./3-doc-robust-retrieval.md) | `robust-retrieval` | $\mathbf{RQ_3}$: Improvement in retrieval yield and precision via Waterfall Entity Resolution, Schema Injection, and EAV numeric modeling compared to zero-shot LLM-to-Cypher generation | Chapter 4: Hybrid GraphRAG Retrieval & Multi-Agent Verification | ✅ Documented |
 | 4 | [`4-doc-hybrid-scoring.md`](./4-doc-hybrid-scoring.md) | `hybrid-scoring` | $\mathbf{RQ_4}$: Decoupling boundaries vs preferences via additive scoring and MACS progressive relaxation to improve Recall@K and eliminate the Boolean 'Recall Cliff' | Chapter 4: Hybrid Semantic-Structural Retrieval & Knowledge Representation | ✅ Documented |
 | 5 | [`5-doc-synthesized-grounding.md`](./5-doc-synthesized-grounding.md) | `synthesized-grounding` | $\mathbf{RQ_5}$: Impact of a multi-agent verification loop (CriticAgent) coupled with Synthesized Grounding prompt logic on explanation coherence and semantic violations | Chapter 4: Explainable Hybrid GraphRAG Generation | ✅ Documented |
+| 6 | [`6-doc-orthogonal-gating.md`](./6-doc-orthogonal-gating.md) | `orthogonal-gating` | $\mathbf{RQ_6}$: To what extent does Orthogonal Gating of exponentially-decayed historical graph paths and immediate conversational evidence improve recommendation explainability and ranking metrics (NDCG@K) compared to single-context retrieval methods? | Chapter 4: Hybrid GraphRAG Retrieval & Multi-Agent Verification | ✅ Documented |
 
 ## Evaluation Summary
-- **Total Thesis Documents**: 4
-- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$
-- **Latest Evaluated Scope**: Phase A Critique Plan (4-Pillar Remediation Blueprint)
+- **Total Thesis Documents**: 6
+- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$, $\mathbf{RQ_5}$, $\mathbf{RQ_6}$
+- **Latest Evaluated Scope**: Phase A4 (Knowledge-Enhanced Reasoning Path Extraction / KECR)
 
 ---
 

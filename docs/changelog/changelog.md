@@ -5,6 +5,58 @@
 
 ---
 
+## 📅 2026-10-01
+
+### Changelog (względem stanu z 2026-09-29)
+
+> **Kontekst**: Wdrożenie Fazy A4 (KECR Path Extraction), dostarczającej zaawansowany mechanizm wyciągania wieloskokowych ścieżek wnioskowania z Knowledge Graph. Integruje on dane z historii użytkownika z bieżącymi intencjami konwersacyjnymi (Dual-Context).
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Ekstraktor Ścieżek Wiedzy (`KnowledgePathExtractor` w `src/tools/kecr_tool.py`):**
+    *   Implementuje złożone zapytanie Cypher (Unified Dual-Context Cypher Query) do ekstrahowania ścieżek wnioskowania: historycznych (współzakupy, lojalność wobec marki, zbieżne atrybuty/kategorie ważone funkcją zaniku w czasie) oraz konwersacyjnych (bieżące filtry użytkownika).
+    *   Wprowadza dynamiczną wagę bazową (Gating Alpha), balansując wyniki historyczne względem bieżących intencji konwersacyjnych. Zwraca ustandaryzowaną strukturę `PathExtractionResult`.
+    *   *Umożliwia pełną przejrzystość rekomendacji (Explainable GraphRAG) poprzez łączenie twardych faktów historycznych z miękkimi preferencjami.*
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`AgentOrchestrator` (`src/agents/orchestrator.py`)** — Zintegrowano nową warstwę KECR na etapie `3d.5`, bezpośrednio po działaniu CriticAgent. Zwrócone ścieżki (evidence) są bezpośrednio przekazywane do `PromptConstructor`, kończąc pipeline Explainable GraphRAG zdefiniowany w Meta-Fazie A.
+2.  **Testy Jednostkowe Orkiestratora (`tests/test_agent_orchestrator.py`)** — Zaktualizowano asercje i mockowanie z uwzględnieniem nowo wstrzykniętej zależności `kecr_tool`.
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   `CriticAgent` — nadal rygorystycznie przeprowadzający weryfikację z modelem LLM.
+*   `GraphSearchTool` — hybrydowe wyszukiwanie wraz z progresywną relaksacją (MACS).
+*   `DialogueManager` i `SessionAdapter` — stabilne zarządzanie cyklem życia sesji i ekstrahowaniem preferencji.
+*   `PromptConstructor` — struktura promptów jest niezmienna, przetwarza dostarczone `graph_reasoning_paths`.
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   Pełna integracja środowiska LangGraph dla persystencji MemoCRS bazującego na `SqliteSaver` (Meta-Faza B).
+*   Potok ewaluacyjny Meta-Fazy C (Classic Baseline Comparison - scikit-surprise, lightfm).
+
+### Zaktualizowana Architektura (jeśli zmieniła się)
+
+```mermaid
+flowchart TD
+    UserInput[User Input] --> StateInit["State Init<br/>(History + Profile)"]
+    StateInit --> Router["Router LLM<br/>(Intent Classification)"]
+
+    Router -->|SEARCH| SearchParams["LLM Search Params"]
+    
+    SearchParams --> Normalize["ResolverService<br/>(Waterfall Resolution)"]
+    Normalize --> GST["GraphSearchTool<br/>(Hybrid + MACS)"]
+    GST --> Neo4j[(Neo4j Knowledge Graph)]
+    Neo4j --> Candidates[Candidates]
+    Candidates --> Critic["CriticAgent<br/>(Pydantic Reranking)"]
+    Critic --> KECR["KnowledgePathExtractor<br/>(KECR Dual-Context Paths)"]
+    KECR --> Neo4j
+    KECR --> PromptBuild["PromptConstructor<br/>(Graph Evidence Injection)"]
+    PromptBuild --> LLMFinal[LLM Synthesized Grounding]
+
+    LLMFinal --> UserOutput[Final Answer]
+```
+
 ## 📅 2026-09-27
 
 ### Changelog (względem stanu z 2026-09-23)

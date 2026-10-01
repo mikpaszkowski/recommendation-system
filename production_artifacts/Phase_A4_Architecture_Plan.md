@@ -1,5 +1,3 @@
-Status: Approved
-
 # Phase A4 Architecture Plan: Knowledge-Enhanced Reasoning Path Extraction (KECR)
 ## Dual-Context Graph Reasoning Bridging Historical User Choices and Conversational Preferences
 

@@ -23,6 +23,7 @@ from src.dialog_manager.session_adapter import (
 )
 from src.dialog_manager.session_schema import SessionContext, CurrentSessionContextWrapper
 from src.llm_interface.preference_parser import LLMPreferenceParser
+from src.tools.kecr_tool import KnowledgePathExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,8 @@ class AgentOrchestrator:
                  history_manager: Optional[InMemoryHistoryManager] = None,
                  critic_agent: Optional[CriticAgent] = None,
                  dialogue_manager: Optional[DialogueManager] = None,
-                 preference_parser: Optional[LLMPreferenceParser] = None):
+                 preference_parser: Optional[LLMPreferenceParser] = None,
+                 kecr_tool: Optional[KnowledgePathExtractor] = None):
         
         self.graph_tool = graph_tool or GraphSearchTool()
         self.profile_tool = profile_tool or ProfileTool()
@@ -77,6 +79,7 @@ class AgentOrchestrator:
         self.critic_agent = critic_agent or CriticAgent(llm_handler=self.llm_handler)
         self.dialogue_manager = dialogue_manager or DialogueManager()
         self.preference_parser = preference_parser or LLMPreferenceParser(llm_handler=self.llm_handler)
+        self.kecr_tool = kecr_tool or KnowledgePathExtractor()
         
     async def run(self, user_id: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -295,13 +298,26 @@ class AgentOrchestrator:
             search_result["items"] = reranked_top[:3]
             logger.info(f"[STEP 3d] Critic recommendation finished. Top items: {len(search_result['items'])}")
 
+            # =========================================================================
+            # STEP 3d.5: Phase A4 Knowledge-Enhanced Reasoning Path Extraction (KECR)
+            # =========================================================================
+            logger.info(f"[STEP 3d.5] Extracting Knowledge-Enhanced Reasoning Paths (KECR)...")
+            extraction_result = self.kecr_tool.extract_paths(
+                user_id=user_id,
+                candidate_items=search_result["items"],
+                session_context=session_context
+            )
+            graph_reasoning_paths = extraction_result.serialized_evidence_dict
+            logger.info(f"[STEP 3d.5] Extracted {len(graph_reasoning_paths)} reasoning paths for {len(search_result['items'])} items.")
+
             # 3e. Generate final response
             logger.info(f"[STEP 3e] Constructing recommendation prompt...")
             prompt_messages = self.prompt_constructor.construct_recommendation_prompt(
                 user_query=user_message,
                 user_profile=profile,
                 retrieved_items=search_result["items"],
-                preferences=active_filters
+                preferences=active_filters,
+                graph_reasoning_paths=graph_reasoning_paths
             )
             
             logger.info(f"[STEP 3e] Querying LLM for final answer...")

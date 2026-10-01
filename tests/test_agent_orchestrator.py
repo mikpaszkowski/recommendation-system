@@ -16,7 +16,10 @@ Verifies:
 9. Convenience accessors: get_session_context() and reset_session().
 """
 
+
 from __future__ import annotations
+from unittest.mock import MagicMock
+
 
 import asyncio
 import json
@@ -246,7 +249,8 @@ class TestAgentOrchestratorMultiTurnExecution:
                 llm_handler=mock_llm,
                 critic_agent=mock_critic,
                 dialogue_manager=dm,
-                preference_parser=mock_parser
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
             )
 
             user_id = "test_user_multi_turn"
@@ -313,7 +317,8 @@ class TestAgentOrchestratorMultiTurnExecution:
             orchestrator = AgentOrchestrator(
                 llm_handler=mock_llm,
                 dialogue_manager=dm,
-                preference_parser=mock_parser
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
             )
 
             res = await orchestrator.run(user_id="user_guardrail", user_message="I want something cheap")
@@ -357,7 +362,8 @@ class TestAgentOrchestratorMultiTurnExecution:
             orchestrator = AgentOrchestrator(
                 llm_handler=mock_llm,
                 dialogue_manager=dm,
-                preference_parser=mock_parser
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
             )
 
             # Since suggested_system_action is present_results -> fallback should be SEARCH
@@ -403,7 +409,8 @@ class TestAgentOrchestratorMultiTurnExecution:
                 llm_handler=mock_llm,
                 critic_agent=mock_critic,
                 dialogue_manager=DialogueManager(),
-                preference_parser=mock_parser
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
             )
 
             await orchestrator.run(user_id="user_critic_persona", user_message="I want a lightweight Apple laptop for college")
@@ -442,7 +449,8 @@ class TestAgentOrchestratorMultiTurnExecution:
             orchestrator = AgentOrchestrator(
                 llm_handler=MockLLMHandler(),
                 dialogue_manager=DialogueManager(),
-                preference_parser=mock_parser
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
             )
 
             user_id = "user_common"
