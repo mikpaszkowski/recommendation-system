@@ -257,15 +257,15 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] Write integration tests: `tests/test_graph_search_tool.py` verifying MACS triggers on 0-result edge cases.
 
 ### A2 — Contextual Selection-then-Rerank via CriticAgent
-* [ ] **CriticAgent Reranking**: Refactor `CriticAgent.evaluate_candidates` to accept top $N$ pre-ranked candidates from `GraphSearchTool`.
-* [ ] **Semantic Arbitration**: Evaluate trade-offs based on conversational context (e.g., verifying wired vs wireless) to catch semantic betrayal.
-* [ ] **Transparency Injection**: Inject explicit disclosure warnings in the output if MACS `relaxed_constraints` is non-empty.
-* [ ] Write unit tests: `tests/test_critic_agent.py` asserting accurate reranking and penalization of non-compliant items.
+* [x] **CriticAgent Reranking**: Refactor `CriticAgent.evaluate_candidates` to accept top $N$ pre-ranked candidates from `GraphSearchTool`.
+* [x] **Semantic Arbitration**: Evaluate trade-offs based on conversational context (e.g., verifying wired vs wireless) to catch semantic betrayal.
+* [x] **Transparency Injection**: Inject explicit disclosure warnings in the output if MACS `relaxed_constraints` is non-empty.
+* [x] Write unit tests: `tests/test_critic_agent.py` asserting accurate reranking and penalization of non-compliant items.
 
 ### A3 — PromptConstructor — Graph Path Injection Slots
-* [ ] Add `graph_reasoning_paths` parameter to `construct_recommendation_prompt()`
-* [ ] Add `[GRAPH EVIDENCE]` section to prompt with graph-grounding constraint
-* [ ] Write tests asserting path injection when paths provided
+* [x] Add `graph_reasoning_paths` parameter to `construct_recommendation_prompt()`
+* [x] Add `[GRAPH EVIDENCE]` section to prompt with graph-grounding constraint
+* [x] Write tests asserting path injection when paths provided
 
 ### A4 — KECR — Knowledge-Enhanced Reasoning Path Extraction
 * [ ] Implement `src/tools/kecr_tool.py` — `KnowledgePathExtractor` class

@@ -555,3 +555,34 @@ Zgodnie z decyzją 2026-07-11-004 z Raportu Wizji (odłożenie integracji LLM-RE
 
 ### Stan w stosunku do Raportu Wizji
 Krok ten zamyka sekcję F0 (Infrastructure Prerequisites) z dokumentu Implementation Plan. Kolejnym etapem będzie przygotowanie wyselekcjonowanego podzbioru danych Amazon (Faza F2) oraz zasilenie nowej bazy grafowej `kg_curated` (Faza F3).
+
+## 📅 2026-09-29
+
+### Realizacja Fazy A1 i A2: Soft-Scored Hybrid Retrieval & Critic Reranking
+W pełni zrealizowano kluczowe postulaty badawcze z Fazy A (zgodnie z `Implementation_Plan.md`), wdrażając hybrydowy silnik rekomendacyjny odporny na błędy parsowania (Zero-Result Dead Ends) i dbający o transparentność.
+
+#### ✅ Zrealizowane w tej aktualizacji (Faza A1)
+*   **MACS (Progressive Relaxation)**: Wbudowano w `GraphSearchTool` mechanizm kaskadowego łagodzenia wymogów. Gdy zapytanie zwraca mniej niż 3 kandydatów, system automatycznie (1) zwiększa budżet o 15%, a w ostateczności (2) całkowicie odrzuca twardy filtr kategorii, bazując wyłącznie na podobieństwie wektorowym.
+*   **Explicit Constraint Taxonomy**: Przebudowano `preference_extract_prompt.py`, co zmusza LLM do sztywnego oddzielania twardych granic (np. maksymalna cena) od miękkich preferencji (np. specyfikacje techniczne, takie jak 144Hz czy typ matrycy).
+*   **Soft Additive Scoring**: Zaimplementowano skryptowe, addytywne punktowanie miękkich preferencji na poziomie Pythona, które dynamicznie podbija trafność (score) wektorowych kandydatów w oparciu o obecność pożądanych cech.
+*   **Poprawka błędu `NaN Price Liquidation`**: Zapytania Cypher wykorzystują teraz warunek `IS NULL OR`, przez co asortyment z brakującymi cenami nie jest bezwzględnie wyrzucany z wyników filtrowania.
+*   **Oczyszczenie infrastruktury**: Przeniesiono skrypty ładujące graf z nieprawidłowego katalogu `graph-builder` do `scripts/graph_ingestion/`. 
+
+#### ✅ Zrealizowane w tej aktualizacji (Faza A2)
+*   **Selection-then-Rerank (CriticAgent)**: Przebudowano agenta `CriticAgent`, wprowadzając metodę `evaluate_candidate_tradeoffs` opartą o Pydantic, wymuszając zwracanie ścisłej struktury JSON.
+*   **Obrona przed "Zdradą Semantyczną"**: Zaimplementowano weryfikację techniczną (atrybuty) i funkcjonalną (recenzje). CriticAgent wczytuje fragmenty rzeczywistych recenzji, by np. ukarać produkt o opinii "szybko się psuje", jeśli użytkownik szukał czegoś "trwałego".
+*   **Human-in-the-Loop przy kompromisach**: System nie podejmuje już arbitralnych decyzji finansowych. Jeśli MACS musiał nagiąć budżet, CriticAgent generuje bezpośrednie, zrozumiałe pytanie do użytkownika z prośbą o akceptację kompromisu.
+
+#### Testy i Walidacja
+*   Utworzono integracyjne i jednostkowe skrypty testowe: `tests/test_graph_search_tool_macs.py` i `tests/test_critic_agent.py`, przywrócono poprawne działanie pętli `asyncio.run`. W pełni zweryfikowano rygorystyczne filtrowanie i generowanie odpowiedniego powiadomienia kompromisowego.
+
+### Realizacja Fazy A3: Explainable GraphRAG Injection Slots (PromptConstructor)
+Wdrożono architekturę przygotowującą system do generowania rekomendacji silnie opartych na strukturze grafu (Explainable GraphRAG), zgodnie z wytycznymi pracy magisterskiej.
+
+#### ✅ Zrealizowane w tej aktualizacji (Faza A3)
+*   **Modyfikacja PromptConstructor**: Rozszerzono główną metodę `construct_recommendation_prompt` o nowy parametr `graph_reasoning_paths`, który przyjmuje surowe ścieżki (evidence) wyciągnięte z bazy Neo4j.
+*   **Dynamiczna Iniekcja Kontekstu**: Stworzono dedykowaną logikę odpowiedzialną za wstrzykiwanie bloku `[GRAPH EVIDENCE]` do kontekstu modelu językowego, zachowując przy tym pełną kompatybilność wsteczną (fallback), jeśli ścieżki grafowe są niedostępne.
+*   **Synthesized Grounding (Ochrona przed amnezją)**: System Instruction dla LLM został zmodyfikowany tak, aby zmuszał model do syntetyzowania argumentacji. Zamiast ograniczać LLM wyłącznie do faktów z grafu, zmusza go do argumentowania poprzez łączenie **Jordana (Kontekst Rozmowy / Preferencje)** z **Faktami z Grafu**. To zapobiega robotycznym odpowiedziom ignorującym prośby użytkownika.
+
+#### Testy i Walidacja
+*   Napisano testy jednostkowe `tests/test_prompt_constructor.py` weryfikujące poprawność generowania promptów w zależności od obecności parametrów grafowych.

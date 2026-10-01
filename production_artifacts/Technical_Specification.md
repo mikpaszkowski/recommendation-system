@@ -1,13 +1,13 @@
-# Technical Specification: Dynamic Domain Schema Extraction
+# Technical Specification: Phase A3 — PromptConstructor & Explainable GraphRAG Injection
 
-**Date**: 2026-09-29
+**Date**: 2026-10-01
 **Author**: Product Manager Agent (@pm-specs)
 **Status**: Draft — Pending Approval
-**Related Research**: [Research_Report.md](file:///Users/mikolajpaszkowski/recommendation-system/production_artifacts/Research_Report.md)
+**Related Docs**: `Implementation_Plan.md` (Phase A3)
 
 ## 1. Executive Summary
 
-This specification outlines the technical approach to replace the hardcoded `domain_schemas.json` (which limits the conversational agent to only 3 categories) with a dynamic, graph-derived schema cache. A new offline script will traverse the Neo4j Knowledge Graph to extract the actual product categories and their corresponding features, saving them to `dynamic_domain_schemas.json`. The `preference_parser.py` will be updated to selectively inject these schemas during prompt construction, ensuring the LLM is accurately grounded in the specific Amazon dataset without overwhelming the context window or introducing chat-time database latency.
+This specification defines the implementation of **Phase A3: PromptConstructor — Graph Path Injection Slots**. The goal is to prepare the final LLM response generator to accept explicit, structured graph evidence (reasoning paths) and synthesize this evidence with the user's conversational preferences. Rather than letting the LLM hallucinate reasons for a recommendation, the prompt will strictly mandate that all justifications be grounded in the provided `[GRAPH EVIDENCE]` block, cross-referenced with the user's explicit needs.
 
 ## 2. Requirements
 
@@ -15,18 +15,16 @@ This specification outlines the technical approach to replace the hardcoded `dom
 
 | ID | Requirement | Priority | Description |
 |----|-------------|----------|-------------|
-| FR-001 | Offline Schema Extraction | Must | A standalone Python script must query the Neo4j Knowledge Graph to extract all unique `Category` nodes and their associated `Feature` attributes. |
-| FR-002 | Schema Caching | Must | The extracted schema must be serialized to a JSON file (`src/knowledge_graph/dynamic_domain_schemas.json`). |
-| FR-003 | Selective Prompt Injection | Must | `preference_parser.py` must load the dynamic JSON and inject a flat list of categories into the prompt. Detailed attributes should only be injected if a specific category is already present in the session context. |
-| FR-004 | Removal of Hardcoded JSON | Must | The existing `src/llm_interface/domain_schemas.json` must be deleted. |
+| FR-001 | Modify Constructor Signature | High | Update `construct_recommendation_prompt` in `src/llm_interface/prompt_constructor.py` to accept an optional `graph_reasoning_paths: List[Dict[str, Any]]` parameter. |
+| FR-002 | Graph Evidence Injection | High | Implement a `_format_graph_evidence()` helper to parse `graph_reasoning_paths` into a human-readable `[GRAPH EVIDENCE]` section within the prompt. |
+| FR-003 | Enforce Grounded Synthesis | High | Update the System Message and `_get_reasoning_process()` to explicitly instruct the LLM to synthesize the **User Preferences** with the **Graph Evidence**. |
+| FR-004 | Backwards Compatibility | Medium | If `graph_reasoning_paths` is empty or None, the prompt should gracefully fallback to standard conversational recommendation rules without breaking. |
 
 ### 2.2 Non-Functional Requirements
 
 | ID | Requirement | Target | Description |
 |----|-------------|--------|-------------|
-| NFR-001 | Performance | <50ms | Reading the cached JSON and injecting the schema into the prompt must not add perceptible latency to the dialogue turn. |
-| NFR-002 | Scalability | Hundreds of Categories | The selective injection strategy must ensure that context limits are not exceeded even if the graph contains 500+ categories. |
-| NFR-003 | Data Provenance | Strict Alignment | The injected schema must perfectly match the actual data in the Neo4j graph, preventing LLM property hallucination. |
+| NFR-001 | Prompt Token Efficiency | Strict | The injected graph paths must be concisely formatted (e.g., `(User)-[BOUGHT]->(Item)`) to avoid exhausting context windows. |
 
 ## 3. Architecture & Tech Stack
 
@@ -34,104 +32,63 @@ This specification outlines the technical approach to replace the hardcoded `dom
 
 | Layer | Technology | Justification |
 |-------|-----------|---------------|
-| Extraction Script | Python + Neo4j driver | Reuses existing `Neo4jConnector` for graph traversal. |
-| Schema Storage | JSON (File System) | O(1) read latency, easily inspectable, integrates natively with existing `preference_parser.py` logic. |
-| Prompt Construction | String Interpolation | Reuses the existing logic in `preference_parser.py` with modifications for selective injection. |
+| Prompt Formatting | Python (String interpolation) | Inherits from `AbstractPromptConstructor` using LangChain `SystemMessage` and `HumanMessage`. |
 
 ### 3.2 Integration with Existing System
 
-- **Knowledge Graph**: The extraction script (`scripts/extract_domain_schemas.py`) will import and instantiate `Neo4jConnector` from `src/knowledge_graph/graphdb/neo4j_connector.py`.
-- **LLM Interface**: `src/llm_interface/preference_parser.py` will be modified to point to the new `dynamic_domain_schemas.json` file. It will receive the current `SessionContext` (or at least the identified category) to determine which detailed attributes to inject.
+- **Input**: The Orchestrator will eventually pass `graph_reasoning_paths` (extracted in Phase A4) down into the `PromptConstructor`.
+- **Target File**: `src/llm_interface/prompt_constructor.py`
 
 ## 4. API / Interface Design
 
-### 4.1 New Interfaces
+### 4.1 Modified Interfaces
 
-**`scripts/extract_domain_schemas.py`**
-- Connects to Neo4j.
-- Executes Cypher query:
-  ```cypher
-  MATCH (p:Product)-[:HAS_CATEGORY]->(c:Category)
-  MATCH (p)-[:HAS_FEATURE]->(f:Feature)
-  RETURN c.name AS category, collect(DISTINCT f.name) AS features
+**`src/llm_interface/prompt_constructor.py`**
+- Modify signature:
+  ```python
+  def construct_recommendation_prompt(
+      self,
+      user_input: str,
+      user_profile: Optional[Dict[str, Any]] = None,
+      retrieved_items: Optional[List[Dict[str, Any]]] = None,
+      conversation_history: Optional[List[Dict[str, str]]] = None,
+      preferences: Optional[Dict[str, Any]] = None,
+      graph_reasoning_paths: Optional[List[Dict[str, Any]]] = None
+  ) -> List[BaseMessage]:
   ```
-- Formats the output matching the old JSON structure (global attributes + domains) and writes to `src/knowledge_graph/dynamic_domain_schemas.json`.
 
-### 4.2 Modified Interfaces
+### 4.2 Prompt Engineering (Synthesized Grounding)
 
-**`src/llm_interface/preference_parser.py`**
-- `extract_preferences(user_input: str, session_context: Optional[SessionContext] = None)`
-  - Currently loads `domain_schemas.json`.
-  - **Change**: Load `src/knowledge_graph/dynamic_domain_schemas.json`.
-  - **Change**: Implement logic to extract the `category` from `session_context.extracted_parameters.hard_constraints` (if available).
-  - **Change**: Modify prompt construction:
-    - ALWAYS inject global attributes.
-    - ALWAYS inject a flat list of available categories.
-    - ONLY inject domain-specific attributes for the category identified in the context (if any). If no category is identified, do not inject detailed attributes to save tokens.
+The internal system prompt will be updated to include the following strict directive inside `_get_reasoning_process()`:
 
-## 5. Data Model / State Management
+> **[REASONING PROCESS]**
+> Follow these steps to recommend:
+> 1. **Identify Needs**: Analyze the user's explicit preferences and constraints.
+> 2. **Review Candidates**: Analyze the provided candidate items.
+> 3. **Synthesize Evidence (CRITICAL)**: You MUST justify your recommendation by connecting the **User's Explicit Preferences** directly to the **[GRAPH EVIDENCE]**. 
+>    - Example: "Since you specifically asked for a durable cable [Preference], I recommend this Anker model because our data shows it is frequently reviewed as 'lasting for years' [Graph Evidence]."
+> 4. **Do Not Hallucinate**: Do not invent features or reasons that are not explicitly stated in the graph evidence or item details.
 
-### 5.1 New Data Structures
+## 5. Data Flow
 
-The output JSON structure will remain similar to the existing one for backward compatibility:
-```json
-{
-  "global_attributes": [
-    "price",
-    "brand",
-    "category",
-    "model"
-  ],
-  "domains": {
-    "monitors": ["refresh_rate", "resolution", ...],
-    "fashion": ["size", "color", "material", ...],
-    ...
-  }
-}
-```
-
-### 5.2 Data Flow
-
-1. **Offline**: Developer/Pipeline runs `python scripts/extract_domain_schemas.py`.
-2. Script queries Neo4j -> Builds JSON -> Saves to disk.
-3. **Runtime**: User says "I want a blue dress".
-4. `preference_parser.py` reads JSON.
-5. If context category is "fashion", it injects fashion features ("size", "color", "material") into the prompt.
-6. LLM parses constraints cleanly.
+1. Orchestrator calls `construct_recommendation_prompt` with the final list of items and their associated `graph_reasoning_paths`.
+2. `PromptConstructor` formats standard blocks (`[USER PROFILE]`, `[ITEMS]`, etc.).
+3. `PromptConstructor` checks if `graph_reasoning_paths` exists. If so, it invokes `_format_graph_evidence()` and appends the `[GRAPH EVIDENCE]` block to the `HumanMessage`.
+4. The LLM reads the strict system directives, cross-references the user's chat input with the graph evidence, and generates the final explainable response.
 
 ## 6. Implementation Phases
 
-| Phase | Scope | Dependencies | Estimated Effort |
-|-------|-------|-------------|-----------------|
-| 1 | Create `extract_domain_schemas.py` and generate the JSON file. | Neo4j Connection | Low |
-| 2 | Update `preference_parser.py` for selective injection. | Phase 1 | Low |
-| 3 | Delete `domain_schemas.json` and run tests. | Phase 2 | Low |
+| Phase | Scope | Target File |
+|-------|-------|-------------|
+| 1 | Add `graph_reasoning_paths` to the method signature and implement the `_format_graph_evidence` helper. | `src/llm_interface/prompt_constructor.py` |
+| 2 | Rewrite `_get_reasoning_process()` to enforce the Synthesized Grounding rule. | `src/llm_interface/prompt_constructor.py` |
+| 3 | Write unit tests verifying the exact injection of the `[GRAPH EVIDENCE]` block and prompt string. | `tests/test_prompt_constructor.py` |
 
-## 7. File Structure
+## 7. Acceptance Criteria
 
-### New Files
-- `scripts/extract_domain_schemas.py` — Script to query Neo4j and generate the schema JSON.
-
-### Modified Files
-- `src/llm_interface/preference_parser.py` — Update schema loading path and implement selective injection logic.
-- `src/llm_interface/domain_schemas.json` — **DELETE** (superseded by dynamic version).
-
-## 8. Acceptance Criteria
-
-| ID | Criterion | Verification Method |
-|----|-----------|-------------------|
-| AC-001 | Schema extraction script successfully generates JSON containing all categories from the KG. | Manual execution & JSON inspection |
-| AC-002 | `preference_parser.py` successfully loads the dynamic JSON without errors. | Unit test execution |
-| AC-003 | Prompt correctly contains detailed attributes ONLY for the active category in the context. | Unit test / Print prompt |
-| AC-004 | Existing dialogue parsing tests (e.g. `test_preference_parser.py`) pass without modification to their assertions. | Unit test execution (`pytest tests/test_preference_parser.py`) |
-
-## 9. Risks & Mitigations
-
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|-----------|
-| Broken Tests | Medium | Medium | The previous static JSON only had 3 domains. Some tests might assume specific attributes are always present in the prompt. We will need to run the full test suite and ensure test fixtures are updated if necessary. |
-| Cypher Query Performance | Low | Low | The extraction runs offline. It will not impact runtime latency. |
-
-## 10. Open Questions
-
-- Should we run this script automatically as part of the Neo4j ingestion pipeline (e.g. in `backfill_embeddings.py` or similar), or just document it as a manual prerequisite step for now?
+| ID | Criterion | Verification |
+|----|-----------|--------------|
+| AC-001 | Method signature accepts `graph_reasoning_paths` without breaking existing calls that omit it. | Unit Test |
+| AC-002 | Output prompt explicitly contains the `[GRAPH EVIDENCE]` block when paths are provided. | Unit Test / String Assertion |
+| AC-003 | Output prompt omits the `[GRAPH EVIDENCE]` block entirely when paths are None/Empty. | Unit Test / String Assertion |
+| AC-004 | System instructions clearly mandate synthesized reasoning (preferences + graph). | Unit Test / String Assertion |

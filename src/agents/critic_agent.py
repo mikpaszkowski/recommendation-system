@@ -1,7 +1,8 @@
 import json
 import logging
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel
 
 from langchain_core.messages import SystemMessage
 
@@ -36,6 +37,42 @@ Zwróć TYLKO i WYŁĄCZNIE poprawny, parsowalny JSON o poniższej strukturze, b
 }}
 """
 
+PHASE_A2_CRITIC_PROMPT = """
+You are the final Arbitration and Quality Assurance Agent for a Recommendation System.
+Your job is to evaluate a list of candidate products against a user's strict constraints and functional preferences.
+
+## DIRECTIVES
+1. Attribute Verification (Technical Fit): Cross-reference the candidate's exact technical attributes against the user's preferences to ruthlessly eliminate or demote "semantic betrayals". If the user explicitly requested "wireless" and the attributes say "wired", it MUST be demoted/rejected (is_recommended = false).
+2. Review Verification (Functional Fit): Evaluate the provided user review snippets. If a user wants a "durable" item and reviews indicate it breaks easily, penalize it.
+3. User-Decides Trade-off Formatting: If `relaxed_constraints` is present, it means the system couldn't find an exact match under their original hard constraints and had to compromise (e.g. widen budget). You MUST NOT silently approve this. You must formulate a clear `disclosure_statement` for the user to make the final financial/trade-off decision.
+
+## CONTEXT
+User Session Context (Preferences & Constraints):
+{session_context}
+
+MACS Relaxed Constraints (Compromises made to find these items):
+{relaxed_constraints}
+
+## CANDIDATES TO EVALUATE
+{candidates_json}
+
+## OUTPUT INSTRUCTIONS
+Return ONLY a valid JSON object strictly matching this schema:
+{{
+  "ranked_candidates": [
+    {{
+      "id": "item_id_here",
+      "title": "Item Title",
+      "fit_score": 95, 
+      "reasoning": "Reason for this score (technical/functional fit).",
+      "is_recommended": true
+    }}
+  ],
+  "disclosure_statement": "Your human-readable question asking the user to approve the trade-offs mentioned in Relaxed Constraints (leave null if no relaxed constraints).",
+  "rationale": "Internal reasoning for the overall ranking and disclosure."
+}}
+"""
+
 class CriticAgent:
     """
     Agent that performs Context-Aware Reranking using LLM Reasoning
@@ -46,7 +83,7 @@ class CriticAgent:
 
     async def evaluate_candidates(self, user_profile: Dict[str, Any], candidates: List[Dict[str, Any]], attributes_map: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """
-        Asynchronously evaluates a list of product candidates.
+        Legacy evaluation method (Phase 1).
         """
         if not candidates:
             return []
@@ -60,33 +97,18 @@ class CriticAgent:
             
         evaluated_products = await asyncio.gather(*tasks)
         
-        # Filter and sort
         recommended = [p for p in evaluated_products if p.get("is_recommended")]
         recommended.sort(key=lambda x: x.get("semantic_score", 0), reverse=True)
-        
-        logger.info(f"[CriticAgent] Evaluation complete. {len(recommended)} out of {len(candidates)} products recommended.")
         return recommended
 
     async def _evaluate_single_product(self, user_persona: str, product: Dict[str, Any], attributes_map: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
-        """
-        Evaluates a single product asynchronously.
-        """
+        """Legacy evaluation method."""
         import copy
         evaluated_product = copy.deepcopy(product)
-        
-        # Prepare context data
-        # Note: product variable is coming from GraphSearchTool and might have 'id' instead of 'asin' for Neo4j Element ID. 
-        # But we need ASIN to match attributes. Let's extract ASIN from ElementID or use it if available.
-        # However, GraphSearchTool doesn't default to returning ASIN unless we added it. Wait, the cypher for Vector search returns `elementId(node) as id` and doesn't return `parent_asin`. 
-        # We need to make sure 'asin' is available, but for now we'll do our best.
-        
-        # To be safe, look for 'id' which might be the ASIN if we modified GT, or we'll need to modify GT to return parent_asin
         asin = product.get("asin")
-        
         attributes = attributes_map.get(asin, []) if asin else []
         
-        # Convert attributes to string representation mapped nicely
-        unstructured_text = "\\n".join([f"- {a['name']}: {a['value']} (Source: {a['source']})" for a in attributes])
+        unstructured_text = "\n".join([f"- {a['name']}: {a['value']} (Source: {a['source']})" for a in attributes])
         if not unstructured_text:
             unstructured_text = "Brak dodatkowych opinii i wad/zalet w bazie."
 
@@ -101,22 +123,91 @@ class CriticAgent:
 
         try:
             response_text = await self.llm_handler.aquery([SystemMessage(content=prompt)])
-            
-            # Clean and parse JSON
             cleaned_json = response_text.replace("```json", "").replace("```", "").strip()
             result = json.loads(cleaned_json)
-            
-            logger.info(f"[CriticAgent] LLM Result for '{product.get('asin', 'N/A')}': {result}")
-            
             evaluated_product["semantic_score"] = result.get("fit_score", 0)
             evaluated_product["reasoning"] = result.get("reasoning", "")
             evaluated_product["is_recommended"] = result.get("is_recommended", False)
             
         except Exception as e:
             logger.error(f"[CriticAgent] Failed to evaluate product {product.get('title')}: {e}")
-            # Fallback values if LLM fails
-            evaluated_product["semantic_score"] = product.get("score", 0) * 100 # Fallback to vector score scale roughly
-            evaluated_product["reasoning"] = "Błąd ewaluacji kontekstowej."
-            evaluated_product["is_recommended"] = True # Keep it if we can't decide
+            evaluated_product["semantic_score"] = product.get("score", 0) * 100
+            evaluated_product["reasoning"] = "Błąd ewaluacji."
+            evaluated_product["is_recommended"] = True
             
         return evaluated_product
+
+    async def evaluate_candidate_tradeoffs(
+        self,
+        candidates: List[Dict[str, Any]],
+        session_context: Any,
+        relaxed_constraints: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Phase A2: Contextual Selection-then-Rerank via CriticAgent.
+        """
+        if not candidates:
+            return {
+                "ranked_candidates": [],
+                "disclosure_statement": None,
+                "rationale": "No candidates to evaluate."
+            }
+            
+        relaxed_constraints = relaxed_constraints or []
+        
+        prompt_candidates = []
+        for c in candidates:
+            prompt_candidates.append({
+                "id": c.get("id") or c.get("asin", "unknown"),
+                "title": c.get("title", "Unknown"),
+                "price": c.get("price"),
+                "attributes": c.get("attributes", []), 
+                "reviews": [r.get("review_text", "") for r in c.get("reviews", [])[:3]]
+            })
+            
+        if hasattr(session_context, "model_dump_json"):
+            context_str = session_context.model_dump_json(indent=2)
+        elif isinstance(session_context, dict):
+            context_str = json.dumps(session_context, indent=2)
+        else:
+            context_str = str(session_context)
+            
+        prompt = PHASE_A2_CRITIC_PROMPT.format(
+            session_context=context_str,
+            relaxed_constraints=json.dumps(relaxed_constraints, indent=2) if relaxed_constraints else "None",
+            candidates_json=json.dumps(prompt_candidates, indent=2)
+        )
+        
+        try:
+            response_text = await self.llm_handler.aquery([SystemMessage(content=prompt)])
+            cleaned_json = response_text.replace("```json", "").replace("```", "").strip()
+            result = json.loads(cleaned_json)
+            
+            ranked_map = {str(rc["id"]): rc for rc in result.get("ranked_candidates", [])}
+            
+            final_candidates = []
+            for c in candidates:
+                cid = str(c.get("id") or c.get("asin", "unknown"))
+                if cid in ranked_map:
+                    rc = ranked_map[cid]
+                    c["semantic_score"] = rc.get("fit_score", 0)
+                    c["critic_reasoning"] = rc.get("reasoning", "")
+                    c["is_recommended"] = rc.get("is_recommended", True)
+                    if c["is_recommended"]:
+                        final_candidates.append(c)
+                        
+            final_candidates.sort(key=lambda x: x.get("semantic_score", 0), reverse=True)
+            
+            return {
+                "ranked_candidates": final_candidates,
+                "disclosure_statement": result.get("disclosure_statement"),
+                "rationale": result.get("rationale", "Parsed successfully.")
+            }
+            
+        except Exception as e:
+            logger.error(f"[CriticAgent] LLM parsing failed in evaluate_candidate_tradeoffs: {e}")
+            return {
+                "ranked_candidates": candidates,
+                "disclosure_statement": "I had to compromise on your constraints to find these options. Please review." if relaxed_constraints else None,
+                "rationale": "LLM evaluation failed, returning original list."
+            }

@@ -27,6 +27,7 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 | 2 | [`2-doc-preference-benchmark.md`](./2-doc-preference-benchmark.md) | `preference-benchmark` | $\mathbf{RQ_2}$: Impact of Few-Shot and guided CoT vs Zero-Shot prompting on constraint schema compliance and intent accuracy | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
 | 3 | [`3-doc-robust-retrieval.md`](./3-doc-robust-retrieval.md) | `robust-retrieval` | $\mathbf{RQ_3}$: Improvement in retrieval yield and precision via Waterfall Entity Resolution, Schema Injection, and EAV numeric modeling compared to zero-shot LLM-to-Cypher generation | Chapter 4: Hybrid GraphRAG Retrieval & Multi-Agent Verification | ✅ Documented |
 | 4 | [`4-doc-hybrid-scoring.md`](./4-doc-hybrid-scoring.md) | `hybrid-scoring` | $\mathbf{RQ_4}$: Decoupling boundaries vs preferences via additive scoring and MACS progressive relaxation to improve Recall@K and eliminate the Boolean 'Recall Cliff' | Chapter 4: Hybrid Semantic-Structural Retrieval & Knowledge Representation | ✅ Documented |
+| 5 | [`5-doc-synthesized-grounding.md`](./5-doc-synthesized-grounding.md) | `synthesized-grounding` | $\mathbf{RQ_5}$: Impact of a multi-agent verification loop (CriticAgent) coupled with Synthesized Grounding prompt logic on explanation coherence and semantic violations | Chapter 4: Explainable Hybrid GraphRAG Generation | ✅ Documented |
 
 ## Evaluation Summary
 - **Total Thesis Documents**: 4

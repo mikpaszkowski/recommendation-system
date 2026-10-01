@@ -1,53 +1,33 @@
-# Audit Report: Meta-Phase A1 (Multi-Index Semantic Search & Waterfall Resolution)
+# Audit Report: Phase A3 — PromptConstructor Graph Path Injection
 
-**Date**: 2026-09-28
-**Spec Audited**: Meta_Phase_A_Execution_Plan.md (Step 1: A1)
-**Status**: PASS
+**Date**: 2026-10-01
+**Agent**: QA Engineer (@qa)
+**Target Phase**: Phase A3
 
-## Executive Summary
+## 1. Compliance Audit
 
-The implementation flawlessly matches the Meta-Phase A1 specification. The exact-match brittleness was removed by successfully transitioning to a Tier 1 (Exact) -> Tier 2 (Substring) -> Tier 3 (Vector) Waterfall architecture inside `ResolverService`. The `GraphSearchTool` was successfully updated to execute a `CALL { UNION }` Cypher strategy that targets all three entity indexes concurrently, enabling True Hybrid Search across products, features, and user reviews. Tests run successfully.
+| Requirement ID | Description | Status | Verification Evidence |
+|----------------|-------------|--------|-----------------------|
+| FR-001 | Modify Constructor Signature | PASS | `construct_recommendation_prompt` successfully accepts `graph_reasoning_paths`. |
+| FR-002 | Graph Evidence Injection | PASS | `_format_graph_evidence` correctly formats paths into a clear list. |
+| FR-003 | Enforce Grounded Synthesis | PASS | Prompt enforces cross-referencing between User Preferences and Graph Evidence. |
+| FR-004 | Backwards Compatibility | PASS | Standard behavior maintained when paths are missing. |
 
-## Spec Compliance
+## 2. Test Execution
 
-| ID | Requirement / Acceptance Criterion | Status | Notes |
-|----|-----------------------------------|--------|-------|
-| A1-1 | Enable negative constraint filtering (`excluded_asins`) | ✅ | Implemented via `NOT node.parent_asin IN $excluded_asins` |
-| A1-2 | Implement Multi-Index Semantic Search (CALL {...} UNION) | ✅ | Implemented across `product`, `attribute`, and `review` embeddings |
-| A1-3 | Implement Waterfall Entity Resolution | ✅ | Tier 1 (exact) and Tier 2 (substring) bypass Vector Search (Tier 3) if confident |
-| A1-4 | Leverage EAV numerical schema capabilities | ✅ | Implemented via checking `_min`, `_max`, `_exact` against `numeric_value` on `Attribute` nodes |
-| AC-001 | All 3 search strategies execute cleanly | ✅ | Validated in test file |
-| AC-002 | 100% test pass rate in tests/test_graph_search_tool.py | ✅ | Passed |
+The QA Engineer executed `pytest tests/test_prompt_constructor.py` to verify the logic.
 
-## Findings
+```
+tests/test_prompt_constructor.py::test_prompt_constructor_without_graph_paths PASSED [ 50%]
+tests/test_prompt_constructor.py::test_prompt_constructor_with_graph_paths PASSED [100%]
+============================== 2 passed in 0.10s ===============================
+```
 
-### 🔴 Critical Issues
-None found.
+- **Graph Block Injection**: Verified. The `[GRAPH EVIDENCE]` block is present when provided and absent when missing.
+- **Synthesized Grounding Rules**: Verified. The critical instruction to connect explicit preferences to evidence is dynamically toggled.
 
-### 🟠 High Issues
-None found.
+## 3. Verdict
 
-### 🟡 Medium Issues
-None found.
+**✅ PASS**
 
-### 🔵 Low Issues / Suggestions
-- `review_embedding_index` is created in DDL scripts, but actual data ingestion for reviews requires ensuring embeddings are generated during the F3.5 pipeline. 
-
-## Test Results
-
-| Test File | Tests Run | Passed | Failed | Errors |
-|-----------|-----------|--------|--------|--------|
-| `tests/test_graph_search_tool.py` | 3 | 3 | 0 | 0 |
-
-**Failed tests detail**:
-- N/A
-
-## Files Modified by Audit
-
-| File | Changes Made | Severity Addressed |
-|------|-------------|-------------------|
-| `tests/test_graph_search_tool.py` | Fixed a syntax bug in test mocking | High |
-
-## Verdict
-
-The code is ready for production and fulfills all Meta-Phase A1 requirements. Proceeding to A1.5 is safe.
+The code fully matches the approved `Technical_Specification.md` for Phase A3 and is ready for Phase A4 (KECR Graph Traversal).
