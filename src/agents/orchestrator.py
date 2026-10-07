@@ -69,7 +69,8 @@ class AgentOrchestrator:
                  critic_agent: Optional[CriticAgent] = None,
                  dialogue_manager: Optional[DialogueManager] = None,
                  preference_parser: Optional[LLMPreferenceParser] = None,
-                 kecr_tool: Optional[KnowledgePathExtractor] = None):
+                 kecr_tool: Optional[KnowledgePathExtractor] = None,
+                 candidate_limit: int = 20):
         
         self.graph_tool = graph_tool or GraphSearchTool()
         self.profile_tool = profile_tool or ProfileTool()
@@ -79,7 +80,8 @@ class AgentOrchestrator:
         self.critic_agent = critic_agent or CriticAgent(llm_handler=self.llm_handler)
         self.dialogue_manager = dialogue_manager or DialogueManager()
         self.preference_parser = preference_parser or LLMPreferenceParser(llm_handler=self.llm_handler)
-        self.kecr_tool = kecr_tool or KnowledgePathExtractor()
+        self.kecr_tool = kecr_tool or KnowledgePathExtractor(db_connector=self.graph_tool.db)
+        self.candidate_limit = candidate_limit
         
     async def run(self, user_id: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -94,6 +96,11 @@ class AgentOrchestrator:
         logger.info(f"[STEP 1a] Extracting preferences via preference_parser...")
         try:
             extraction = self.preference_parser.extract_preferences(user_message)
+            logger.info("✅ Extracted SessionContext payload:")
+            if hasattr(extraction, "model_dump_json"):
+                logger.info(extraction.model_dump_json(indent=2))
+            else:
+                logger.info(json.dumps(extraction, indent=2, default=str))
         except Exception as e:
             logger.warning(f"Preference extraction error: {e}. Falling back to empty extraction.")
             extraction = {}
@@ -268,24 +275,61 @@ class AgentOrchestrator:
                 semantic_query = extract_semantic_query(session_context)
             if not semantic_query:
                 semantic_query = user_message
+
+            logger.info("==============================================")
+            logger.info("--- 2. Building Payload for Search Engine ---")
+            logger.info("==============================================")
+            logger.info(f"📝 Semantic Query (Vector): '{semantic_query}'")
+            logger.info(f"🎯 Structured Filters (Cypher): {json.dumps(active_filters, indent=2, default=str)}")
                 
             # 3c. Search (normalization + Cypher happens inside)
-            logger.info(f"[STEP 3c] Calling GraphSearchTool.search()...")
+            logger.info("==============================================")
+            logger.info("--- 3. Executing Multi-Index Hybrid Search ---")
+            logger.info("==============================================")
             search_result = self.graph_tool.search(
                 semantic_query=semantic_query,
                 structured_filters=active_filters,
-                limit=5
+                limit=self.candidate_limit
             )
-            logger.info(f"[STEP 3c] Search result: strategy={search_result.get('strategy')}, count={search_result.get('count')}")
-            if search_result.get('items'):
-                for i, item in enumerate(search_result['items'][:3]):
-                    logger.info(f"  - Item {i+1}: {item.get('title', '?')[:60]} | price={item.get('price')} | score={item.get('score', 0):.3f}")
+            items_found = search_result.get('items', [])
+            logger.info(f"✅ Search successful! Found {len(items_found)} items.")
+            for i, item in enumerate(items_found):
+                logger.info(f"\n[{i+1}] {item.get('title')}")
+                logger.info(f"    Brand: {item.get('brand')}")
+                logger.info(f"    Price: ${item.get('price')}")
+                logger.info(f"    Category: {item.get('category')}")
+                logger.info(f"    Hybrid Score: {item.get('score', 0):.4f}")
+                reasons = item.get("match_reasons")
+                if reasons:
+                    logger.info("    Match Reasons:")
+                    for r in reasons:
+                        logger.info(f"      - {r}")
             
             # 3d. Critic Agent Reranking (Context-Aware)
-            logger.info(f"[STEP 3d] Fetching attributes and running Critic Agent for Contextual Reranking...")
-            candidates = search_result.get("items", [])
+            logger.info("==============================================")
+            logger.info("--- 4. Fetching Detailed Attributes & Critic Reranking ---")
+            logger.info("==============================================")
+            candidates = list(items_found)
+            search_result["raw_candidates"] = candidates
             asins = [item.get("asin") for item in candidates if item.get("asin")]
             attributes_map = self.graph_tool.fetch_product_attributes(asins)
+
+            for i, item in enumerate(candidates):
+                asin = item.get("asin")
+                item_attrs = attributes_map.get(asin, [])
+                technical = [a for a in item_attrs if a.get('source') != 'user_review']
+                reviews = [a for a in item_attrs if a.get('source') == 'user_review']
+                logger.info(f"\n[{i+1}] {item.get('title')} (ASIN: {asin})")
+                if technical:
+                    logger.info(f"  Technical Specs ({len(technical)}):")
+                    for tech in technical[:5]:
+                        logger.info(f"    - {tech.get('name')}: {tech.get('value')}")
+                    if len(technical) > 5:
+                        logger.info(f"    - ... and {len(technical)-5} more.")
+                if reviews:
+                    logger.info(f"  User Reviews ({len(reviews)}):")
+                    for rev in reviews[:3]:
+                        logger.info(f"    - {rev.get('name')}")
             
             # Enrich profile with session persona for Critic Agent
             critic_profile = dict(profile)
@@ -296,7 +340,9 @@ class AgentOrchestrator:
             
             # Replace candidates with the top 3 recommended items from Critic
             search_result["items"] = reranked_top[:3]
-            logger.info(f"[STEP 3d] Critic recommendation finished. Top items: {len(search_result['items'])}")
+            logger.info(f"[STEP 3d] Critic recommendation finished. Approved {len(reranked_top)} / {len(candidates)} candidates.")
+            if not reranked_top:
+                logger.warning("[STEP 3d] ⚠️ Critic Agent rejected all candidates (failed constraints or missing requested features).")
 
             # =========================================================================
             # STEP 3d.5: Phase A4 Knowledge-Enhanced Reasoning Path Extraction (KECR)
@@ -324,10 +370,24 @@ class AgentOrchestrator:
             final_answer = await self.llm_handler.aquery(prompt_messages)
             logger.info(f"[STEP 3e] Final answer generated ({len(final_answer)} chars)")
             
+            critic_verdict = {
+                "status": "success" if reranked_top else "rejected_all",
+                "pruned_count": len(candidates) - len(reranked_top),
+                "approved_count": len(reranked_top),
+                "total_candidates": len(candidates)
+            }
+
             result = {
                 "answer": final_answer,
                 "data": search_result,
-                "action": "SEARCH"
+                "action": "SEARCH",
+                "eval_trace": {
+                    "raw_candidates": candidates,
+                    "critic_reranked": reranked_top,
+                    "critic_verdict": critic_verdict,
+                    "graph_evidence": graph_reasoning_paths,
+                    "search_metadata": search_result.get("metadata", {})
+                }
             }
 
         elif action == "CLARIFY":

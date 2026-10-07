@@ -124,19 +124,29 @@ def backfill_category_embeddings():
 
     logger.info("Category embeddings generation complete.")
 
-    # 3. Create Index
-    logger.info("Creating Vector Index 'category_embedding_index'...")
-    index_query = """
-    CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
-    FOR (n:Category) ON (n.embedding)
-    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}}
-    """
-    try:
-        with connector.session() as session:
-            session.run(index_query)
-            logger.info("Created category_embedding_index successfully")
-    except Exception as e:
-        logger.error(f"Could not create index (may already exist): {e}")
+    # 3. Create Index (if not already existing)
+    logger.info("Ensuring Vector Index 'category_embedding_index' exists...")
+    check_query = "SHOW INDEXES YIELD name WHERE name = 'category_embedding_index' RETURN count(*) > 0 as exists"
+    with connector.session() as session:
+        try:
+            res = session.run(check_query).single()
+            if res and res["exists"]:
+                logger.info("Vector index 'category_embedding_index' already exists and is active.")
+            else:
+                # In Neo4j 5.14 Community, use db.index.vector.createNodeIndex procedure
+                try:
+                    session.run("CALL db.index.vector.createNodeIndex('category_embedding_index', 'Category', 'embedding', 384, 'cosine')")
+                    logger.info("Created category_embedding_index successfully via procedure.")
+                except Exception:
+                    # Fallback for newer Neo4j versions (>= 5.15)
+                    session.run("""
+                    CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
+                    FOR (n:Category) ON (n.embedding)
+                    OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}}
+                    """)
+                    logger.info("Created category_embedding_index successfully via DDL.")
+        except Exception as e:
+            logger.warning(f"Note on vector index check/creation: {e}")
 
 if __name__ == "__main__":
     backfill_category_embeddings()

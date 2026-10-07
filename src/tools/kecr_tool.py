@@ -68,6 +68,11 @@ class KnowledgePathExtractor:
             # Try to get the default connector if none provided
             from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
             self.db_connector = Neo4jConnector()
+            try:
+                self.db_connector.connect()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to connect Neo4jConnector: {e}")
         else:
             self.db_connector = db_connector
             
@@ -188,17 +193,18 @@ CALL {
   
   WITH cand, p_past, r,
        duration.inDays(datetime(r.timestamp_iso), datetime($now_iso)).days AS days_elapsed
-  ORDER BY (exp(- (ln(2.0) / $half_life_days) * toFloat(days_elapsed)) * (r.rating / 5.0) * ((1.0 + 0.20 * CASE WHEN r.verified THEN 1.0 ELSE 0.0 END) / 1.20)) DESC
+  ORDER BY (exp(- (log(2.0) / $half_life_days) * toFloat(days_elapsed)) * (r.rating / 5.0) * ((1.0 + 0.20 * CASE WHEN r.verified THEN 1.0 ELSE 0.0 END) / 1.20)) DESC
   LIMIT 3
 
   // Isolated Pattern Comprehensions: Decoupled, no Cartesian explosion, undirected co-purchase
   WITH cand, p_past, r, days_elapsed,
-       exp(- (ln(2.0) / $half_life_days) * toFloat(days_elapsed)) * (r.rating / 5.0) * ((1.0 + 0.20 * CASE WHEN r.verified THEN 1.0 ELSE 0.0 END) / 1.20) AS hist_weight,
+       exp(- (log(2.0) / $half_life_days) * toFloat(days_elapsed)) * (r.rating / 5.0) * ((1.0 + 0.20 * CASE WHEN r.verified THEN 1.0 ELSE 0.0 END) / 1.20) AS hist_weight,
        [(p_past)-[bt:BOUGHT_TOGETHER]-(cand) | 
          "User bought together with previously purchased '" + coalesce(p_past.title, p_past.parent_asin) + "' (rated " + toString(r.rating) + "★, " + toString(days_elapsed) + "d ago)"
        ] AS bt_ev,
        [(p_past)-[:HAS_ATTRIBUTE]->(a:Attribute)<-[:HAS_ATTRIBUTE]-(cand) 
         WHERE COUNT { (a)<-[:HAS_ATTRIBUTE]-() } <= $max_attribute_degree | 
+
          "Shares attribute [" + a.attribute_name + ": " + coalesce(a.normalized_value, a.attribute_value, "") + "] with previously purchased '" + coalesce(p_past.title, p_past.parent_asin) + "' (rated " + toString(r.rating) + "★, " + toString(days_elapsed) + "d ago)"
        ] AS attr_ev,
        [(p_past)-[:BELONGS_TO_CATEGORY]->(c:Category)<-[:BELONGS_TO_CATEGORY]-(cand) 

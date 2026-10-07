@@ -116,7 +116,8 @@ Follow these steps when responding to users:
             profile_parts.append("User preferences:")
             for category, values in prefs.items():
                 if isinstance(values, list):
-                    profile_parts.append(f"- {category}: {', '.join(values)}")
+                    str_values = [str(v) for v in values]
+                    profile_parts.append(f"- {category}: {', '.join(str_values)}")
                 else:
                     profile_parts.append(f"- {category}: {values}")
         

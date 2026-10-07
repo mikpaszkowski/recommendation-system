@@ -5,6 +5,147 @@
 
 ---
 
+## 📅 2026-10-04
+
+### Changelog (względem stanu z 2026-10-02)
+
+> **Kontekst**: Wdrożenie kompleksowego, dwupoziomowego frameworka ewaluacyjnego (Two-Tiered Evaluation Framework) na potrzeby pracy magisterskiej (*"Explainable Hybrid GraphRAG for Conversational Recommendation"*), zgodnie z wymaganiami R1–R4 (decyzja architektoniczna `2026-10-03-008` w `production_artifacts/Vision_Report.md`). Framework obejmuje silnik metryk Information Retrieval dla warstwy wyszukiwania (Tier 1), wielokryterialny silnik sędziowski LLM-as-a-Judge (Tier 2), dedykowane benchmarki testowe w domenie Amazon Electronics, wykonywalne skrypty CLI, wersjonowany system persystencji wyników i automatyczną generację publikacyjnych wykresów 300 DPI, a także kompletny zestaw 66 przechodzących testów (45 E2E + 21 adversarial).
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Silnik Metryk Rankingu i Information Retrieval (`src/evaluation/metrics.py`):**
+    *   Implementuje formalne, matematyczne reguły obliczania metryk jakości rankingu i odzyskiwania: $\text{NDCG@K}$ (z obsługą wag binarnych oraz stopniowalnych *graded relevance* i deduplikacją kandydatów z zachowaniem rang *rank-preserving deduplication*), $\text{Hit Rate@K}$ ($\text{HR@K}$), $\text{Mean Reciprocal Rank}$ ($\text{MRR}$), $\text{Precision@K}$, $\text{Recall@K}$ oraz $\text{Mean Average Precision}$ ($\text{MAP@K}$) dla horyzontów odcięcia $K \in \{1, 3, 5, 10, 20\}$.
+    *   Dostarcza funkcję wsadową `evaluate_retrieval_batch()` agregującą wyniki per-query oraz średnie dla całego zbioru testowego, gwarantując ścisłe ograniczenie wyników do przedziału $[0.0, 1.0]$ oraz odporność na puste zbiory kandydatów i brak ground-truth (eliminacja błędów dzielenia przez zero).
+    *   *Stanowi fundament empirycznej weryfikacji pytań badawczych pracy magisterskiej ($\mathbf{RQ_1}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$), umożliwiając rygorystyczne porównanie wyszukiwania hybrydowego GraphRAG z liniami bazowymi (Vector-Only, Cypher-Only).*
+
+2.  **Wielokryterialny Silnik Sędziowski LLM-as-a-Judge (`src/evaluation/judge.py`):**
+    *   Implementuje 4-filarową dekompozycję oceny jakości konwersacyjnej i generatywnej:
+        - **Groundedness** (zakotwiczenie w wiedzy grafowej): weryfikacja zgodności z faktami z Knowledge Graph wraz z bezwzględną regułą *Hard Dilution Cap Rule* (wykrycie sfabrykowanych atrybutów lub halucynacji obniża ocenę do 1.0 w skali Likerta).
+        - **Explainability** (wyjaśnialność i proweniencja): weryfikacja wierności ścieżek wnioskowania topologicznego KECR (*path fidelity*) z karą za fałszywą proweniencję (*fake provenance penalty*).
+        - **Coherence** (spójność wieloturowa): ocena utrzymania kontekstu dialogu, retencji ograniczeń użytkownika i wykrywanie opóźnienia kontekstowego (*context lag*).
+        - **Recoverability** (odzyskiwalność po negatywnym feedbacku): adaptacja do odrzuceń użytkownika i surowa kara za naruszenie zakazu rekomendacji odrzuconej marki/cechy (*constraint betrayal penalty* – democja do oceny 1.0).
+    *   Obsługuje dwa tryby wykonania: deterministyczny tryb offline/mock (natychmiastowa weryfikacja heurystyczna bez wywołań sieciowych, $0.00 kosztu) oraz tryb live z modelami OpenAI (`gpt-4o`, `gpt-4o-mini`) wymuszający ustrukturyzowany format JSON w paradygmacie odwróconego łańcucha myśli (*Inverted Chain-of-Thought*).
+    *   *Umożliwia ilościową i powtarzalną ewaluację wymiarów generatywnych CRS ($\mathbf{RQ_2}$, $\mathbf{RQ_5}$, $\mathbf{RQ_6}$), eliminując ograniczenia metryk n-gramowych (BLEU/ROUGE), które karzą poprawną różnorodność językową.*
+
+3.  **Silnik Wersjonowania i Persystencji Badań (`src/evaluation/tracker.py`):**
+    *   Zapewnia niezmienne (immutable), wersjonowane rejestrowanie każdego przebiegu ewaluacji w strukturze `evaluations/eval_YYYY-MM-DD_HHMM/` (z automatyczną detekcją i obsługą kolizji sekundowych `_HHMMSS` lub sufiksów numerycznych).
+    *   Persystuje kompletny zestaw znormalizowanych artefaktów: `manifest.json` (hash commitu git, znaczniki czasu, hiperparametry, czas wykonania), `retrieval_metrics.json` / `generative_metrics.json` (surowe wyniki JSON), `retrieval_metrics.csv` / `generative_metrics.csv` (spłaszczone tabele dla analiz statystycznych w Pandas/R) oraz syntetyczny plik `summary.json`.
+    *   *Gwarantuje 100% powtarzalność eksperymentów naukowych i pełną proweniencję danych pomiarowych na potrzeby publikacji i rozdziału empirycznego pracy dyplomowej.*
+
+4.  **Publikacyjny Silnik Wizualizacji Danych (`src/evaluation/visualizer.py`):**
+    *   Wymusza bezgłowy backend renderowania (`matplotlib.use("Agg")`) przed jakimkolwiek importem `pyplot`, całkowicie eliminując błędy braku serwera X11/Cocoa w środowiskach CI/CD i na macOS.
+    *   Generuje publikacyjne wykresy o wysokiej rozdzielczości (300 DPI) w formatach PNG i JPG:
+        - `plot_retrieval_metrics`: zgrupowane wykresy słupkowe porównujące metryki IR ($\text{NDCG@K}$, $\text{HR@K}$, $\text{MRR}$) pomiędzy strategiami wyszukiwania (Hybrid, Vector-Only, Cypher-Only, Post-Critic).
+        - `plot_generative_metrics`: wykresy słupkowe i wieloosiowe wykresy radarowe dla wymiarów LLM-as-a-Judge (skala 1.0–5.0).
+        - `plot_comparative_summary`: znormalizowane karty podsumowujące (scorecards).
+    *   *Dostarcza gotowe do wklejenia do pracy magisterskiej, estetyczne i typograficznie spójne ryciny badawcze (Seaborn/Matplotlib).*
+
+5.  **Wykonywalne Skrypty Narzędziowe CLI (`scripts/evaluate_retrieval.py` i `scripts/evaluate_generative.py`):**
+    *   `scripts/evaluate_retrieval.py`: autonomiczny skrypt wiersza poleceń dla Tier 1 z obsługą flag `--mode {live,offline,mock}`, `--benchmark`, `--k-values`, `--strategies`, `--include-critic` oraz `--output-dir`.
+    *   `scripts/evaluate_generative.py`: autonomiczny skrypt wiersza poleceń dla Tier 2 z obsługą flag `--mode {live,offline,mock}`, `--benchmark`, `--judge-model`, `--metrics`, `--sample-size` oraz `--output-dir`.
+    *   *Umożliwiają natychmiastowe uruchomienie pełnego potoku ewaluacyjnego zarówno w lokalnym środowisku deweloperskim, jak i w zautomatyzowanych potokach CI/CD.*
+
+6.  **Ustandaryzowane Zbiory Benchmarkowe (`evaluations/benchmarks/`):**
+    *   `evaluations/benchmarks/retrieval_benchmark.json`: zbiór 25 zróżnicowanych zapytań zakupowych w kategorii Amazon Electronics (myszy, klawiatury, monitory, słuchawki, laptopy, akcesoria), definiujący zapytania semantyczne, twarde filtry Cypher i zbiory ground-truth ASIN.
+    *   `evaluations/benchmarks/generative_benchmark.json`: zbiór 15 scenariuszy dialogowych (w tym zapytania wieloturowe, skrajne oraz testujące reakcję na negatywny feedback) zawierający ground-truth dowody z grafu (`graph_evidence`), ścieżki KECR i historię sesji.
+    *   *Tworzy deterministyczny, powtarzalny punkt odniesienia do benchmarkowania obecnych i przyszłych wariantów systemu.*
+
+7.  **Zestawy Testów E2E i Testów Odpornościowych (`tests/test_evaluation_framework_e2e.py` i `tests/test_evaluation_adversarial.py`):**
+    *   `tests/test_evaluation_framework_e2e.py`: 45 testów End-to-End w 4 poziomach (Tiers 1–4: Feature Coverage, Boundary Cases, Cross-Feature Interactions, Real-World Application Scenarios).
+    *   `tests/test_evaluation_adversarial.py`: 21 testów odpornościowych (Tier 5 Adversarial Hardening) testujących singularności matematyczne (puste zbiory, $k \le 0$, float $k$, duplikaty ASIN, ujemne wagi), parsowanie zniekształconego JSON-a, próby obejścia zakazu rekomendacji odrzuconej marki oraz kolizje współbieżnych folderów ewaluacyjnych.
+    *   Dokumentacja infrastruktury: `TEST_INFRA.md` oraz raport gotowości `TEST_READY.md`. Wszystkie 66 testów kończy się wynikiem 100% PASS.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`production_artifacts/Vision_Report.md`** — Dodano formalny wpis w Decision Log: `📅 2026-10-03-008: Two-Tiered Evaluation Framework for CRS Master's Thesis`, definiujący architekturę ewaluacji, wymiary pomiarowe Tier 1 i Tier 2 oraz decyzję o rezygnacji z metryk BLEU/ROUGE na rzecz LLM-as-a-Judge i metryk IR.
+2.  **`src/tools/kecr_tool.py`** — Znormalizowano format wyjściowy `PathExtractionResult` oraz ścieżki dowodowe wstrzykiwane do promptu, umożliwiając bezpośrednie przechwytywanie grafowych ścieżek wnioskowania przez moduł ewaluacji `judge.py`.
+3.  **`src/agents/orchestrator.py` & `src/llm_interface/prompt_constructor.py`** — Ujednolicono punkty przechwytywania (interception hooks) dla kandydatów przed i po weryfikacji CriticAgent oraz zapewniono transparentne przekazywanie sekcji `[GRAPH EVIDENCE]` do analizy zakotwiczenia odpowiedzi (Groundedness).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   `GraphSearchTool` (`src/tools/graph_search_tool.py`) — hybrydowe wyszukiwanie z algorytmem MACS.
+*   `CriticAgent` (`src/agents/critic_agent.py`) — pydanticowa ewaluacja kandydatów i kompromisów jakościowych.
+*   `DialogueManager` (`src/dialog_manager/dialogue_manager.py`) — zarządzanie stanem dialogu i profilowaniem sesji.
+*   `ResolverService` (`src/tools/resolver_service.py`) — kaskadowe dopasowywanie encji i normalizacja filtrów.
+*   Interfejs Chainlit (`src/ui/app.py`) — interfejs użytkownika bez zmian.
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   Trwała persystencja wieloturowa MemoCRS bazująca na bazie SQLite / `SqliteSaver` (`sqlite_profile_manager.py`, `sqlite_history_manager.py` — GAP-B2).
+*   Jawne śledzenie stanu dojaśniania `pending_clarification` w ramach kontekstu sesji (GAP-B3).
+*   Klasyczne linie bazowe Meta-Fazy C (Collaborative Filtering w `scikit-surprise` oraz Content-Based w `lightfm` trenowane na podzbiorze Amazon Reviews 2023).
+
+### Zaktualizowana Architektura (jeśli zmieniła się)
+
+```mermaid
+flowchart TD
+    subgraph CRS_Runtime ["CRS Runtime Pipeline"]
+        UserInput[User Input] --> StateInit["State Init<br/>(History + Profile)"]
+        StateInit --> Router["Router LLM<br/>(Intent Classification)"]
+        Router -->|SEARCH| SearchParams["LLM Search Params"]
+        SearchParams --> Normalize["ResolverService<br/>(Waterfall Resolution)"]
+        Normalize --> GST["GraphSearchTool<br/>(Hybrid + MACS)"]
+        GST --> Neo4j[(Neo4j Knowledge Graph)]
+        Neo4j --> RawCandidates[Raw Candidates]
+        RawCandidates --> Critic["CriticAgent<br/>(Pydantic Reranking)"]
+        Critic --> RerankedCandidates[Reranked Candidates]
+        RerankedCandidates --> KECR["KnowledgePathExtractor<br/>(KECR Dual-Context Paths)"]
+        KECR --> PromptBuild["PromptConstructor<br/>(Graph Evidence Injection)"]
+        PromptBuild --> LLMFinal["LLM Synthesized Grounding<br/>(AgentOrchestrator)"]
+        LLMFinal --> UserOutput[Final Conversational Response]
+    end
+
+    subgraph Eval_Framework ["Two-Tiered Evaluation Framework"]
+        subgraph Tier1 ["Tier 1: Retrieval & Recommendation Engine"]
+            BenchRet["retrieval_benchmark.json<br/>(25 Amazon Queries)"] --> RunnerRet["scripts/evaluate_retrieval.py"]
+            RawCandidates -.->|Interception Hook| RunnerRet
+            RerankedCandidates -.->|Interception Hook| RunnerRet
+            RunnerRet --> MetricsEngine["src/evaluation/metrics.py<br/>(NDCG@K, HR@K, MRR, P@K, R@K, MAP)"]
+        end
+
+        subgraph Tier2 ["Tier 2: Generative LLM-as-a-Judge Engine"]
+            BenchGen["generative_benchmark.json<br/>(15 Multi-turn Scenarios)"] --> RunnerGen["scripts/evaluate_generative.py"]
+            PromptBuild -.->|Evidence Interception| RunnerGen
+            LLMFinal -.->|Response Interception| RunnerGen
+            RunnerGen --> JudgeEngine["src/evaluation/judge.py<br/>(Groundedness, Explainability,<br/>Coherence, Recoverability)"]
+        end
+
+        subgraph Persistence ["Tracking & Publication Analytics"]
+            MetricsEngine --> Tracker["src/evaluation/tracker.py"]
+            JudgeEngine --> Tracker
+            Tracker --> Disk["evaluations/eval_YYYY-MM-DD_HHMM/<br/>├── manifest.json<br/>├── summary.json<br/>├── {retrieval,generative}_metrics.json<br/>└── {retrieval,generative}_metrics.csv"]
+            Tracker --> Visualizer["src/evaluation/visualizer.py<br/>(Headless Agg, 300 DPI)"]
+            Visualizer --> Plots["evaluations/eval_YYYY-MM-DD_HHMM/plots/<br/>├── retrieval_ranking_comparison.png/.jpg<br/>└── llm_judge_radar.png/.jpg"]
+        end
+    end
+```
+
+---
+
+## 📅 2026-10-02
+
+### Raport z Audytu Stanu Projektu (Pipeline `/audit-state`)
+
+> **Kontekst**: Wpis podsumowujący audyt stanu projektu. Decyzją użytkownika, brakujące testy integracyjne dla KECR oraz ewaluacje (GAP-A6) z Meta-Fazy A zostają odroczone do czasu pełnego zasilenia bazy danych. Zespół przechodzi bezpośrednio do Meta-Fazy B (persystencja MemoCRS).
+
+#### 📊 Pokrycie Faz (stan na dziś)
+* **Foundation (Faza 0 & 1)**: 100%
+* **Meta-Faza A**: 70% (logika wdrożona, wstrzymano testy i ewaluacje)
+* **Meta-Faza B**: 0%
+* **Meta-Faza C & D**: 0%
+
+#### 🔄 Potwierdzone przepływy (End-to-End)
+* **Flow 1: Recommendation (SEARCH)** — ✅ W pełni okablowane. Ścieżki KECR są poprawnie ekstrahowane przez `KnowledgePathExtractor` i wstrzykiwane przez `PromptConstructor`.
+
+#### 📋 Zidentyfikowane Luki i Nowy Priorytet Wdrożeń
+Audyt zidentyfikował brak persystencji jako główną blokadę dla funkcji wieloturowych. Zatwierdzona kolejność (Implementation Order) na najbliższy sprint:
+
+1. **[GAP-B2] MemoCRS Persistent Memory** (🔴 Krytyczny) — implementacja `sqlite_profile_manager.py` oraz `sqlite_history_manager.py`.
+2. **[GAP-B3] CLARIFY Path Structural Deficiency** (🟡 Średni) — dodanie śledzenia `pending_clarification` do stanu sesji.
+3. *[ZAWIESZONE]* GAP-A4-TESTS, GAP-A5-TESTS, GAP-A6 (do czasu pełnego importu danych).
+
+---
+
 ## 📅 2026-10-01
 
 ### Changelog (względem stanu z 2026-09-29)

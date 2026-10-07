@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
 
 from src.llm.abstract_llm_handler import LLMHandlerInterface
 
@@ -32,6 +33,8 @@ class SimpleLLMHandler(LLMHandlerInterface):
         
         if self.provider == "openai":
             # Set up API key
+            if not api_key:
+                load_dotenv(override=True)
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
             if not self.api_key:
                 raise ValueError("OpenAI API key must be provided or set in OPENAI_API_KEY environment variable")

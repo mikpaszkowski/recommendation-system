@@ -47,6 +47,43 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-10-06-002: Academic Target Item Sampling & Contrastive Distinguishing Feature Selection Framework
+**Context**: Following user directive (`ORIGINAL_REQUEST.md` § `2026-10-06T17:26:22Z`), the evaluation benchmark dataset (`live_eval_dataset.json`) is being redesigned. To avoid both the "trivial retrieval" trap (sampling isolated graph targets with zero competitors) and the "label-request contradiction" anomaly (generic or contradictory utterances identified by Suresh, 2026 and Wang et al., 2023), rigorous target selection criteria were investigated across 6 authoritative arXiv papers.
+**Decision**: Adopt a formal 3-pillar target sampling and utterance generation framework grounded in SOTA literature (REGEN/LUMEN, iEvaLM, Suresh 2026, SimpleUserSim, UNICORN, EAR):
+1. **Context Richness & Information Content**: Target items must possess $\ge 3$ verified reviews ($N_{rev} \ge 3$), $\ge 5$ structured technical attributes ($D_{attr} \ge 5$), valid 384-d dense embeddings, positive prices, and Semantic Information Content ($\operatorname{IC}$) in the upper 50th percentile of the category pool.
+2. **Graph Connectivity & Peer Density**: Target items must be sampled from a 50-candidate pool per category and embedded within dense competitor neighborhoods ($\overline{\operatorname{Sim}}_{peer} \ge 0.65$ over $k=5$ nearest peer candidates, $\min \operatorname{Sim} \ge 0.55$), guaranteeing that retrieval is non-trivial and tests multi-turn reasoning and constraint verification.
+3. **Contrastive Distinguishing Feature Selection**: Formulate the Contrastive Specificity Score ($\operatorname{CSS} \ge 0.80$) and Composite Target Suitability Index ($\operatorname{CSI}$) with technical attribute salience filtering, selecting the top 2-3 target products per category (14-21 total items across 7 categories) that possess clear differentiating features against their competitor clusters.
+4. **Contrast-Aware Utterance Generation Mandate**: User utterances must articulate category intent, contextual peer overlap, and the explicit distinguishing feature $a^*(t)$. Generic phrasing (e.g., "high rated keyboard") and target title/brand leakage are strictly prohibited, ensuring 100% catalog-resolved constraint satisfaction.
+**Rationale**: Guarantees benchmark integrity, eliminates synthetic evaluation artifacts, and ensures that recommendation accuracy reflects genuine intent-to-catalog entity resolution and multi-agent constraint verification for the Master's Thesis.
+**Impact on vision**: Establishes the definitive criteria for generating live-data evaluation benchmarks across the 7 core product categories.
+**Approved by**: User
+
+### 📅 2026-10-05-001: Zero-Mock Live-Data Evaluation Architecture & Multi-Stage Metric-to-Flow Mapping
+**Context**: Following authoritative user directive (`ORIGINAL_REQUEST.md` § `2026-10-05T21:40:27Z`), an empirical audit revealed that previous evaluation benchmarks relied on synthetic, disconnected mock fixtures (where only 16% of ASINs existed in Neo4j) and offline mock candidate generators (`ALT_...`, `VERIFIED_...`).
+**Decision**: 
+1. **Strict Zero-Mock Mandate**: Completely eliminate all mock candidate generation, fake scores, and synthetic benchmark fixtures. All evaluation scenarios, user contexts, and ground-truth targets must be sourced directly and exclusively from live Neo4j database nodes (specifically sampling from the 12,909 complete products with dense 384-d embeddings and positive prices, and the 72,538 users with $\ge 3$ reviews).
+2. **Multi-Stage Metric-to-Flow Architecture**: Deconstruct evaluation into five distinct algorithmic stages:
+   - *Stage 1 (Candidate Retrieval)*: `GraphSearchTool` evaluated on Recall@K, Hit Rate@K, MRR@K ($K \in \{20, 50\}$), MACS relaxation trigger rate, and latency.
+   - *Stage 2 (Re-ranking & Selection)*: Additive heuristic scoring evaluated on NDCG@K, Precision@K, MRR@K ($K \in \{3, 5, 10\}$).
+   - *Stage 3 (Semantic Verification)*: `CriticAgent` evaluated on Constraint Violation Elimination Rate (CVER), False Positive Pruning Accuracy (FPPA), Critic Acceptance Rate (CAR), and Critic Ranking Gain ($\Delta\text{NDCG@K}$).
+   - *Stage 4 (Topological Reasoning)*: `KECRTool` evaluated on Path Discovery Yield, Topological Path Density, and Subgraph Faithfulness.
+   - *Stage 5 (End-to-End Dialog)*: `AgentOrchestrator` evaluated on Catalog Validity Rate (100% verified live Neo4j nodes), Attribute Adherence, Inverted CoT Groundedness (with Hard Dilution Cap), Explainability Provenance ($F_1$ / Fake History penalty), Multi-Turn Coherence, and Recoverability.
+3. **Telemetry & `eval_trace` Enhancement**: Extend `AgentOrchestrator._execute_step()` with a non-invasive `eval_trace` payload exposing raw candidates, Critic fit scores, pruned items, and KECR reasoning paths to enable multi-stage evaluation during live conversational execution.
+4. **Real-Time Catalog Verification**: Enforce real-time Cypher validation on 100% of candidate and recommended ASINs (`MATCH (p:ParentProduct {parent_asin: asin}) RETURN count(p)`). Any hallucinated ASIN immediately flags a catalog integrity violation.
+**Rationale**: Eliminates synthetic test inflation, grounds empirical findings strictly in live database hits, isolates the specific contributions of hybrid retrieval, multi-agent critique, and graph reasoning, and ensures 100% publication-grade empirical integrity for the Master's Thesis.
+**Impact on vision**: Solidifies the live Knowledge Graph as the sole arbiter of truth for evaluation, aligning empirical metrics directly with the multi-agent GraphRAG architecture.
+**Approved by**: User
+
+### 📅 2026-10-03-008: Two-Tiered Evaluation Framework for CRS Master's Thesis
+**Context**: Design and formalization of the rigorous academic evaluation framework for the Master's Thesis ("Explainable Hybrid GraphRAG for Conversational Recommendation") covering both traditional recommendation algorithms and generative LLM quality.
+**Decision**: Adopt a publication-ready two-tiered evaluation architecture:
+1. **Tier 1 (Recommendation & Retrieval Engine)**: Offline conversational protocol evaluating NDCG@K, Hit Rate@K, MRR, Precision@K, Recall@K, and MAP@K across cutoff horizons K in {1, 3, 5, 10, 20} with dual binary and graded semantic relevance functions on the Amazon Reviews Knowledge Graph. Evaluates multi-stage candidate interception (raw GraphSearchTool vs. post-CriticAgent reranking vs. KECR orthogonal gating).
+2. **Tier 2 (Generative & Conversational Quality)**: Decomposed Multi-Criteria LLM-as-a-Judge architecture (grounded in Zheng et al., G-Eval, Ragas, and TruLens) measuring Groundedness (KG adherence and hallucination penalty), Explainability (topological path and KECR provenance verification), Coherence (multi-turn context retention), and Recoverability (adaptation to negative feedback and preference corrections) with formal 5-point Likert rubrics and bias mitigations.
+3. **Execution & Versioning**: Versioned directory structure (`evaluations/eval_YYYY-MM-DD_HHMM/`), raw JSON metrics, summary CSVs, and automated publication-grade plotting (matplotlib/seaborn at 300 DPI).
+**Rationale**: Traditional IR metrics cannot evaluate hallucination, dialogue flow, or explanation validity; conversely, n-gram metrics (BLEU/ROUGE) cannot evaluate ranking quality or Knowledge Graph adherence. This two-tiered framework rigorously validates thesis research questions RQ1 through RQ6.
+**Impact on vision**: Establishes the definitive empirical testing standard and versioned visualization framework for validating the thesis claims against classic baselines.
+**Approved by**: User
+
 ### 📅 2026-09-29-007: Dynamic Domain Schema Extraction
 **Context**: Investigation via /teamwork-preview revealed that hardcoded `domain_schemas.json` (3 categories) severely limits the system's ability to serve the full Amazon Reviews dataset.
 **Decision**: Replace static JSON with an offline extraction script (`scripts/extract_domain_schemas.py`) that queries Neo4j to generate `dynamic_domain_schemas.json`. Modify `preference_parser.py` to selectively inject this schema based on user intent. Real-time chat querying of the schema was explicitly rejected.

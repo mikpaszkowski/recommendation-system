@@ -35,6 +35,25 @@ class GraphSearchTool:
             logger.warning(f"Failed to initialize ResolverService: {e}. Filter normalization disabled.")
             self.resolver = None
 
+    @staticmethod
+    def _clean_params_for_metadata(params: Dict[str, Any]) -> Dict[str, Any]:
+        """Summarizes high-dimensional embedding vectors for telemetry metadata."""
+        cleaned = {}
+        for k, v in params.items():
+            is_vector_like = isinstance(v, (list, tuple)) or (
+                hasattr(v, "__len__") and (hasattr(v, "shape") or hasattr(v, "tolist"))
+            )
+            if is_vector_like:
+                try:
+                    dim = len(v)
+                    if dim > 50:
+                        cleaned[k] = f"<vector dim={dim}>"
+                        continue
+                except Exception:
+                    pass
+            cleaned[k] = v
+        return cleaned
+
     def search(self, 
                semantic_query: Optional[str] = "", 
                structured_filters: Optional[Dict[str, Any]] = None, 
@@ -72,7 +91,7 @@ class GraphSearchTool:
             logger.info(f"[GST] Normalized filters: {filters}")
         
         if not self.db or not self.embedder:
-             return {"status": "error", "message": "Database or Embedder not initialized.", "items": []}
+             return {"status": "error", "message": "Database or Embedder not initialized.", "items": [], "metadata": {"cypher": "", "params": {}}}
 
         try:
             result = {"status": "error", "items": []}
@@ -120,7 +139,7 @@ class GraphSearchTool:
                 logger.info(f"[GST] Strategy: FILTER_ONLY (filters only)")
                 result = self._execute_cypher_search(filters, raw_filters, limit)
             else:
-                return {"status": "error", "message": "No search criteria provided.", "items": []}
+                return {"status": "error", "message": "No search criteria provided.", "items": [], "metadata": {"cypher": "", "params": {}}}
                 
             # ADDITIVE SCORING (Pillar 1/2)
             if soft_preferences and result.get("items"):
@@ -150,7 +169,7 @@ class GraphSearchTool:
 
         except Exception as e:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
-            return {"status": "error", "error": str(e), "items": []}
+            return {"status": "error", "error": str(e), "items": [], "metadata": {"cypher": "", "params": {}}}
 
     def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
         query_vector = self.embedder.embed_query(text)
@@ -222,7 +241,14 @@ class GraphSearchTool:
             items = [dict(record) for record in result]
         
         logger.info(f"[GST:Hybrid] Results: {len(items)} items found")
-        return {"status": "success", "items": items, "count": len(items), "strategy": "hybrid_multi_index"}
+        clean_params = self._clean_params_for_metadata(params)
+        return {
+            "status": "success",
+            "items": items,
+            "count": len(items),
+            "strategy": "hybrid_multi_index",
+            "metadata": {"cypher": cypher, "params": clean_params},
+        }
 
     def _execute_vector_search(self, text: str, limit: int) -> Dict[str, Any]:
         query_vector = self.embedder.embed_query(text)
@@ -272,7 +298,14 @@ class GraphSearchTool:
         for i, item in enumerate(items):
             logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | reasons={item.get('match_reasons', [])} | title={str(item.get('title', ''))[:50]}")
             
-        return {"status": "success", "items": items, "count": len(items), "strategy": "vector_only"}
+        clean_params = self._clean_params_for_metadata(params)
+        return {
+            "status": "success",
+            "items": items,
+            "count": len(items),
+            "strategy": "vector_only",
+            "metadata": {"cypher": cypher, "params": clean_params},
+        }
 
     def _execute_cypher_search(self, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
         where_clauses, params = self._build_filters(filters, raw_filters)
@@ -298,7 +331,14 @@ class GraphSearchTool:
         for i, item in enumerate(items):
             logger.info(f"  [{i+1}] price={item.get('price')} | brand={item.get('brand')} | cat={item.get('category')} | title={str(item.get('title', ''))[:70]}")
             
-        return {"status": "success", "items": items, "count": len(items), "strategy": "filter_only"}
+        clean_params = self._clean_params_for_metadata(params)
+        return {
+            "status": "success",
+            "items": items,
+            "count": len(items),
+            "strategy": "filter_only",
+            "metadata": {"cypher": cypher, "params": clean_params},
+        }
 
     def fetch_product_attributes(self, asins: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """

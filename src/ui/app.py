@@ -52,11 +52,30 @@ async def main(message: cl.Message):
             
             step.output = f"Action Taken: {action}\nReasoning/Data: {json.dumps(data, indent=2) if data else 'None'}"
 
-        # If it was a search, we might want to show some details in a separate step or just rely on the answer
+        # If it was a search, show detailed breakdown in Chainlit UI step
         if action == "SEARCH" and data:
-             async with cl.Step(name="Graph Search Results") as search_step:
-                 items = data.get("items", [])
-                 search_step.output = f"Found {len(items)} items."
+            async with cl.Step(name="Graph Search & Critic Evaluation") as search_step:
+                items = data.get("items", [])
+                raw_candidates = data.get("raw_candidates", [])
+                
+                details = []
+                details.append(f"🔍 **Graph Candidates Retrieved**: {len(raw_candidates)}")
+                for i, c in enumerate(raw_candidates):
+                    c_title = c.get("title") or c.get("asin") or "Unknown Product"
+                    details.append(f"- [{i+1}] {c_title} (${c.get('price')})")
+                    reasons = c.get("match_reasons", [])
+                    if reasons:
+                        details.append(f"  *Match Reasons*: {', '.join(reasons[:2])}")
+                
+                details.append(f"\n⚖️ **Critic Agent Approved**: {len(items)}")
+                if items:
+                    for i, it in enumerate(items):
+                        it_title = it.get("title") or it.get("asin") or "Unknown Product"
+                        details.append(f"- [{i+1}] {it_title} (Fit Score: {it.get('semantic_score', 0)}/100)")
+                else:
+                    details.append("*(Critic Agent rejected all initial candidates due to unmet constraints/features)*")
+                    
+                search_step.output = "\n".join(details)
 
         # Send the final response to the user
         await cl.Message(content=answer).send()

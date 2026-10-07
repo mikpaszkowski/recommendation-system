@@ -15,3 +15,4 @@ my_env
 *.bak
 *.tmp
 introspection_results.txt
+.agents/teamwork/*

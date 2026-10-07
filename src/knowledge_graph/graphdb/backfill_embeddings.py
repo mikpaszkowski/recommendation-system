@@ -130,12 +130,12 @@ class BackfillService:
         query_fetch = """
         MATCH (b:Brand)
         WHERE elementId(b) IN $ids
-        RETURN elementId(b) as id, b.name as name, b.domain_description as domain
+        RETURN elementId(b) as id, b.name as name
         """
 
         def generator(row):
             name = row['name']
-            domain = row['domain'] or "consumer electronics" # Default fallback
+            domain = "consumer electronics" # Default fallback since domain_description doesn't exist
             return f"Brand: {name}. Domain: {domain}"
 
         self._process_batch("Brand", query_fetch, generator)
@@ -163,9 +163,9 @@ class BackfillService:
         query_fetch = """
         MATCH (p:ParentProduct)
         WHERE elementId(p) IN $ids
-        OPTIONAL MATCH (p)-[:BELONGS_TO]->(c:Category)
+        OPTIONAL MATCH (p)-[:BELONGS_TO_CATEGORY]->(c:Category)
         OPTIONAL MATCH (p)-[:HAS_ATTRIBUTE]->(a:Attribute)
-        WITH p, c, collect(a.attribute_name + ': ' + a.normalized_value) as features
+        WITH p, c, collect(a.attribute_name + ': ' + coalesce(a.attribute_value, a.normalized_value, '')) as features
         RETURN elementId(p) as id, p.title as title, p.description as description, c.name as category, features
         """
 

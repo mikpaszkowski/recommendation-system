@@ -114,9 +114,10 @@ class CriticAgent:
 
         features = f"Cena: {product.get('price')} | Brand: {product.get('brand')} | Kategoria: {product.get('category')}"
         
+        prod_title = product.get("title") or product.get("asin") or "Unknown Product"
         prompt = CRITIC_SYSTEM_PROMPT.format(
             user_persona_description=user_persona,
-            product_name=product.get("title", "Unknown Product"),
+            product_name=prod_title,
             features=features,
             unstructured_data=unstructured_text
         )
@@ -129,11 +130,23 @@ class CriticAgent:
             evaluated_product["reasoning"] = result.get("reasoning", "")
             evaluated_product["is_recommended"] = result.get("is_recommended", False)
             
+            title_display = str(prod_title)[:70]
+            status_tag = "✅ APPROVED" if evaluated_product["is_recommended"] else "❌ REJECTED"
+            logger.info(
+                f"[CriticAgent] {status_tag}: '{title_display}' | "
+                f"Fit Score: {evaluated_product['semantic_score']}/100 | "
+                f"Reason: {evaluated_product['reasoning']}"
+            )
+            
         except Exception as e:
-            logger.error(f"[CriticAgent] Failed to evaluate product {product.get('title')}: {e}")
+            title_display = str(prod_title)[:70]
+            logger.error(f"[CriticAgent] Failed to evaluate product {title_display}: {e}")
             evaluated_product["semantic_score"] = product.get("score", 0) * 100
             evaluated_product["reasoning"] = "Błąd ewaluacji."
             evaluated_product["is_recommended"] = True
+            logger.info(
+                f"[CriticAgent] ⚠️ FALLBACK APPROVED (Eval Error): '{title_display}'"
+            )
             
         return evaluated_product
 
@@ -193,6 +206,15 @@ class CriticAgent:
                     c["semantic_score"] = rc.get("fit_score", 0)
                     c["critic_reasoning"] = rc.get("reasoning", "")
                     c["is_recommended"] = rc.get("is_recommended", True)
+                    
+                    c_title = str(c.get("title") or c.get("asin") or "Unknown Product")[:70]
+                    status_tag = "✅ APPROVED" if c["is_recommended"] else "❌ REJECTED"
+                    logger.info(
+                        f"[CriticAgent:Tradeoffs] {status_tag}: '{c_title}' | "
+                        f"Fit Score: {c['semantic_score']}/100 | "
+                        f"Reason: {c['critic_reasoning']}"
+                    )
+                    
                     if c["is_recommended"]:
                         final_candidates.append(c)
                         
