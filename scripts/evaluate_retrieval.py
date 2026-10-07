@@ -503,8 +503,9 @@ def run_retrieval_evaluation(
                     c_asin = c_item.get("asin", "UNKNOWN")
                     c_score = c_item.get("score", 0.0)
                     c_title = c_item.get("title", "N/A")
+                    c_title_safe = (c_title[:60] + "...") if c_title else "N/A"
                     is_match = " [MATCH]" if c_asin in target_asins else ""
-                    candidate_lines.append(f"     [{r_idx}] {c_asin} (Score: {c_score:.4f} | Title: {c_title[:60]}...){is_match}")
+                    candidate_lines.append(f"     [{r_idx}] {c_asin} (Score: {c_score:.4f} | Title: {c_title_safe}){is_match}")
                 c_text = "\n".join(candidate_lines) if candidate_lines else "     (No candidates retrieved)"
 
                 critic_lines = []
