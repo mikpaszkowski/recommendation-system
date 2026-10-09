@@ -5,6 +5,60 @@
 
 ---
 
+## 📅 2026-10-09 (AFP-005)
+
+### Changelog (względem stanu po wdrożeniu AFP-004)
+
+> **Kontekst**: Wdrożenie propozycji architektonicznej `AFP-005` (`production_artifacts/Proposed_Fix_Cypher_Ranking_and_Typing.md`): Implementacja deterministycznego rankingu dla czystych zapytań Cypher z wykorzystaniem reguły Bayesa (z ograniczeniem wpływu liczby recenzji) oraz naprawa mechanizmu parsowania atrybutów numerycznych EAV w zapytaniach fallbackowych i w procesie partycjonowania bazy danych.
+
+#### 🔴 Nowe komponenty i testy
+
+1.  **Testy jednostkowe weryfikujące parsowanie i sortowanie (`tests/test_cypher_ranking.py`):**
+    *   `test_cypher_search_deterministic_ranking`: Weryfikacja deterministycznego, malejącego rankingu dla wyników filtrowania.
+    *   `test_numeric_eav_unit_coercion`: Testowanie na żywej bazie parsowania i odrzucania jednostek (np. `"144 Hz"` $\to$ `144.0`, `"65W"` $\to$ `65.0`).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`src/tools/graph_search_tool.py`:**
+    *   **Deterministyczny ranking w filtrach (`_execute_cypher_search`)**: Dodano Bayesian Quality Ranking do sortowania zapytań czysto-grafowych.
+    *   **Fallback atrybutów EAV (`_build_filters`)**: Zmieniono logikę z `COALESCE(toFloat(a.attribute_value))` na zaawansowany wielostopniowy ekstrakcyjny ciąg instrukcji `split` i `replace` wspierający dziesiątki jednostek bez zwracania `NULL`.
+
+2.  **`scripts/graph_ingestion/batch_ingest.py`:**
+    *   **Zaawansowane parsowanie i jednostki (`parse_numeric_attribute`)**: Dodano wstępne parsowanie z użyciem wyrażeń regularnych (`UNIT_ANCHORED_NUMERIC_REGEX`, `STANDALONE_NUMERIC_REGEX`) przed zasileniem bazy do atrybutów.
+    *   **Cypher dla partycjonowania**: Zmodyfikowano węzły `Attribute`, tak aby przechowywały też pre-parsowane wartości `numeric_value`.
+
+
+## 📅 2026-10-07
+
+### Changelog (względem stanu z 2026-10-04)
+
+> **Kontekst**: Wdrożenie propozycji architektonicznej `AFP-003` (`production_artifacts/Proposed_Fix_Category_Resolution.md`): Rozwiązanie taksonomii kategorii, normalizacja semantyczna oraz hierarchiczna filtracja Cypher z tokenizowanym fallbackiem tytułowym. Zmiana usuwa krytyczne wąskie gardło filtracji kategorii, które eliminowało do 81% poprawnych produktów w scenariuszach ewaluacji.
+
+#### 🔴 Nowe komponenty i testy
+
+1.  **Dedykowany Zestaw Testów Normalizacji i Taksonomii Kategorii (`tests/test_category_resolution.py`):**
+    *   Weryfikuje kompletne spektrum wymagań i kryteriów akceptacji `AC-003.1` – `AC-003.5`:
+        - `test_category_constants_and_ac_compliance`: weryfikacja stałych `CATEGORY_CONFIDENCE == 0.70` oraz `CATEGORY_MARGIN == 0.05` w `GraphSearchTool` i `ResolverService`.
+        - `test_category_normalization_plural_resolution`: weryfikacja poprawnej normalizacji form pojedynczych/mnogich (`"mouse"` $\to$ `"Mice"`).
+        - `test_category_normalization_margin_check`: weryfikacja ochrony przed dryfem kategorialnym (`"cord"` pozostaje `"cord"` w obliczu bliskich konkurentów z różnych domen, $\Delta s < 0.05$).
+        - `test_category_word_boundary_isolation`: weryfikacja izolacji granic słów w Cypher (`"phone"` dopasowuje `"Cell Phones & Accessories"` i `"Fire Phone"`, blokując fałszywe dopasowania do `"Headphones, Earbuds & Accessories"`).
+        - `test_category_multi_word_conjunction_title_fallback`: weryfikacja wielowyrazowej koniunkcji tokenów w tytule (`toLower(title) CONTAINS 'mechanical' AND toLower(title) CONTAINS 'keyboard'`).
+        - `test_category_resolver_unit_margin_logic`: testy jednostkowe logiki marginesu z syntetycznymi kandydatami.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`src/tools/graph_search_tool.py`:**
+    *   **Rekalibracja progu pewności i reguła marginesu (`_normalize_filters`)**: Obniżono próg pewności normalizacji kategorii `CATEGORY_CONFIDENCE` z `0.80` na `0.70` oraz zaimplementowano sprawdzanie marginesu `CATEGORY_MARGIN = 0.05`. W przypadku wyszukiwania wektorowego (Tier 3), jeśli konkurent z odrębnej gałęzi taksonomicznej ma wynik zbliżony o mniej niż `0.05`, zapytanie zachowuje oryginalny ciąg tekstowy dla precyzyjnego fallbacku.
+    *   **Hierarchiczna filtracja grafowa i tokenizowany fallback (`_build_filters`)**: Zastąpiono sztywny 1-skokowy warunek Cypher relacją wieloskokową `(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)` oraz dopasowaniem regex na granicach słów `(?i).*(^|[^a-z])<cat>(s)?([^a-z]|$).*`.
+    *   **Koniunkcyjny fallback tytułowy**: Dla kategorii wielowyrazowych (np. `"mechanical keyboard"`, `"external ssd"`) zamiast sztywnego podciągu wprowadzono koniunkcję `AND` tokenów słownych w tytule produktu, zabezpieczając produkty z modyfikatorami w nazwie.
+
+2.  **`src/knowledge_graph/graphdb/resolver_service.py`:**
+    *   **Izolacja wyrażeń regularnych w Tier 2 (`_execute_waterfall`)**: Zastąpiono naiwne `toLower(...) CONTAINS ...` wyrażeniem regularnym z granicami słów dla węzłów typu `Category`, eliminując zanieczyszczenia krzyżowe (np. `phone` nie dopasowuje już leksykalnie `Headphones`).
+    *   **Metoda walidacji kandydatów (`validate_category_candidates`)**: Dodano formalną metodę walidacji kandydata top-1 pod kątem progu 0.70 oraz marginesu 0.05 względem konkurentów spoza linii taksonomicznej.
+    *   **Eksport stałych**: Zdefiniowano stałe modułowe i klasowe `CATEGORY_CONFIDENCE = 0.70` oraz `CATEGORY_MARGIN = 0.05`.
+
+---
+
 ## 📅 2026-10-04
 
 ### Changelog (względem stanu z 2026-10-02)
@@ -779,3 +833,63 @@ Wdrożono architekturę przygotowującą system do generowania rekomendacji siln
 
 #### Testy i Walidacja
 *   Napisano testy jednostkowe `tests/test_prompt_constructor.py` weryfikujące poprawność generowania promptów w zależności od obecności parametrów grafowych.
+
+---
+
+## 📅 2026-10-07
+
+### Realizacja Poprawek Architektonicznych AFP-003 oraz AFP-001 (Ewaluacja i Rozwiązywanie Kategorii)
+
+W odpowiedzi na analizę awarii w sesji ewaluacyjnej `eval_2026-10-07_0222` (zidentyfikowaną w `production_artifacts/Vision_Report.md`), zrealizowano kompleksowy pakiet poprawek architektonicznych usuwających sztuczne zaniżanie trafności rekomendacji (metric collapse) oraz blokady odfiltrowywania produktów w grafie wiedzy.
+
+#### 1. Rozwiązanie Problemu Taksonomii Kategorii i Hierarchii Grafu (AFP-003)
+Zgodnie ze specyfikacją `production_artifacts/Proposed_Fix_Category_Resolution.md`:
+* **Rekalibracja progu semantycznego i kontrola marginesu**: Obniżono stałą `CATEGORY_CONFIDENCE` z 0.80 do 0.70 w `GraphSearchTool` i `ResolverService`. Wprowadzono warunek marginesu kandydata $\ge 0.05$ przy wyszukiwaniu wektorowym, co umożliwia poprawne mapowanie form l. pojedynczej i mnogiej (`mouse` $\to$ `Mice` z podobieństwem ~0.797) bez ryzyka błędnego przypisywania wieloznacznych zapytań międzydomenowych (`cord`, `adapter`).
+* **Dopasowanie leksykalne z granicami słów (Word-Boundary Regex)**: Zastąpiono naiwne dopasowanie podciągów (`CONTAINS`) wyrażeniem regularnym `(?i).*(^|[^a-z])<cat>(s)?([^a-z]|$).*` w Tier 2 `ResolverService` oraz w klauzulach filtrujących Cypher, eliminując fałszywe dopasowania (np. `"phone"` pasujące do `"Headphones"`).
+* **Wielopoziomowa taksonomia podkategorii (Hierarchical Graph Traversal)**: Zastąpiono sztywne 1-skokowe relacje `[:BELONGS_TO_CATEGORY]` zmienno-długościowym przechodzeniem grafu `(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)` w zapytaniach Cypher, co pozwala odnajdywać specyficzne podkategorie należące do wyższych węzłów taksonomicznych.
+* **Tokenizowana koniunkcja tytułu (Token Conjunction Fallback)**: Dla kategorii wielowyrazowych (`"mechanical keyboard"`, `"external ssd"`) wprowadzono sprawdzanie koniunkcji tokenów słownych w tytule produktu zamiast wymogu wystąpienia ścisłego, nieprzerwanego ciągu znaków.
+* **Weryfikacja**: Utworzono dedykowany zestaw testów `tests/test_category_resolution.py` (6/6 testów zakończonych sukcesem).
+
+#### 2. Uziemienie Zbioru Ewaluacyjnego i Zestrojenie Benchmarku (AFP-001)
+Zgodnie ze specyfikacją `production_artifacts/Proposed_Fix_Benchmark_Alignment.md`:
+* **Przepięcie domyślnego zbioru benchmarkowego**: Zmieniono domyślny parametr `--benchmark` w `scripts/evaluate_retrieval.py` z przestarzałego pliku `evaluations/benchmarks/retrieval_benchmark.json` (gdzie 96% ASIN-ów nie istniało lub było uszkodzone w bazie Neo4j) na w pełni uziemiony zbiór `live_eval_dataset.json` (21 zweryfikowanych scenariuszy powiązanych z istniejącymi węzłami `ParentProduct`).
+* **Korekta limitu budżetowego (`live_eval_charger_01`)**: Zaktualizowano `price_max` z `$50.0` do `$60.0` (oraz treść zapytania użytkownika) w `live_eval_dataset.json`, dostosowując filtr do rzeczywistej ceny katalogowej ładowarki UGREEN 65W GaN ($55.99) i usuwając paradoks samowykluczenia ze zbioru trafień.
+* **Przedstartowa bramka weryfikacji uziemienia grafowego (`validate_benchmark_graph_grounding`)**: Wbudowano w `scripts/evaluate_retrieval.py` zautomatyzowaną kontrolę spójności przed uruchomieniem ewaluacji. Skrypt natychmiast przerywa działanie z błędem `ValueError`, jeśli jakikolwiek docelowy ASIN nie istnieje w Neo4j, posiada `title = NULL`, jest węzłem odizolowanym (`degree == 0`) lub narusza twardy filtr cenowy.
+* **Wieloaspektowa ewaluacja i metryki z wagami (Graded & Soft Metrics)**: Zaktualizowano `src/evaluation/metrics.py` oraz moduł raportujący w `scripts/evaluate_retrieval.py` o jednoczesne obliczanie:
+  - `strict_hit@{k}` oraz `soft_hit@{k}` (uwzględniające alternatywne produkty tożsame `peer_asins`),
+  - `strict_ndcg@{k}` oraz `graded_ndcg@{k}` (uwzględniające stopniowalną trafność modeli zastępczych z mapowaniem wag `graded_relevance`),
+  - Agregatów: `mean_strict_hr@{k}`, `mean_soft_hr@{k}`, `mean_graded_ndcg@{k}` i `mean_strict_ndcg@{k}` przy zachowaniu pełnej kompatybilności wstecznej kluczy wynikowych.
+* **Weryfikacja**: Utworzono zestaw testów `tests/test_benchmark_alignment.py` (5/5 testów zakończonych sukcesem) weryfikujący wszystkie kryteria akceptacji AC-001.1 do AC-001.5.
+
+---
+
+## 📅 2026-10-09
+
+### Realizacja Poprawki Architektonicznej AFP-004 (Realineacja Schematu Promptów i Eliminacja Inwersji Marek)
+
+W odpowiedzi na analizę awarii zapytania 16 (`ret_016`) w sesji ewaluacyjnej `eval_2026-10-07_0222` (udokumentowaną w `production_artifacts/Proposed_Fix_Prompt_Constraint_Inversion.md`), zrealizowano kompleksowy pakiet zmian usuwających błąd inwersji intencji użytkownika przy zadawaniu kryteriów marek oraz blokadę routingu dialogowego:
+
+#### 1. Uwolnienie Ograniczeń Taksonomii w Prompcie Ekstrakcji (`preference_extract_prompt.py`)
+* Usunięto restrykcyjną regułę zabraniającą wprowadzania pożądanych marek do `hard_constraints` (która zezwalała na atrybut `brand` wyłącznie z operatorem `exclude`).
+* Wprowadzono pełne wsparcie dla deklaratywnych marek afirmatywnych (`operator: "equal"` lub `"include"` dla zapytań typu *"from LG"*, *"Apple laptop"*) obok wykluczeń (`operator: "exclude"` dla zapytań typu *"no HP"*).
+* Zaktualizowano definicję i przykłady w promptach systemowych oraz `schema_injection` w `preference_parser.py`.
+
+#### 2. Walidacja i Obsługa Schematu w Parserze Preferencji (`preference_parser.py`)
+* Zdefiniowano mapę dopuszczalnych operatorów `VALID_OPERATORS` oraz funkcję walidacji `validate_hard_constraint(constraint: Dict[str, Any]) -> bool`, która dopuszcza operatory `equal`, `include` i `exclude` dla atrybutu `brand`.
+* Zapewniono automatyczne parsowanie i sanitizację twardych ograniczeń marek afirmatywnych bez odrzucania ich do ograniczeń miękkich ani przekształcania w wykluczenia.
+
+#### 3. Czyszczenie Sprzecznych Kluczy Filtrów (`session_adapter.py`)
+* Zaktualizowano adapter `hard_constraints_to_structured_filters`: przy mapowaniu afirmatywnej marki (`brand`) automatycznie usuwane są przestarzałe klucze wykluczeń (`exclude_brand`, `brand_exclude`) i odwrotnie, eliminując sprzeczności logiczne w stanie sesji.
+
+#### 4. Immunizacja Routera Dialogowego (`AgentOrchestrator._decide_next_step`)
+* Zaimplementowano regułę immunizacji routera: w przypadku, gdy użytkownik podał zarówno kategorię produktu, jak i afirmatywną markę, system automatycznie kieruje akcję do `SEARCH`, zamiast wstrzymywać interakcję zbędnym przejściem do akcji `CLARIFY`.
+* Usunięto podatność na błąd typu `AttributeError` przy przetwarzaniu `item_attrs` w logice rerankingu i ewaluacji CriticAgenta.
+
+#### 5. Odporne Dopasowanie Marek w Cypherze (`GraphSearchTool._build_filters`)
+* Rozszerzono warunek filtru marki w Cypherze o niewrażliwe na wielkość liter wzajemne zawieranie ciągów (`toLower(b.name) = toLower($brand) OR toLower(b.name) CONTAINS toLower($brand) OR toLower($brand) CONTAINS toLower(b.name)`), co pozwala bezbłędnie łączyć zapytania ze sformalizowanymi węzłami korporacyjnymi w Neo4j (np. `Samsung Electronics` vs `Samsung`).
+
+#### 6. Weryfikacja i Testy
+* Utworzono dedykowany zestaw testów `tests/test_prompt_constraint_inversion.py` (5/5 testów zakończonych sukcesem), pokrywający kryteria akceptacji AC-004.1 do AC-004.5.
+* Przeprowadzono pełny zestaw testów regresyjnych (78/78 testów zaliczonych).
+
+

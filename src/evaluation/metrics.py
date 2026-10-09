@@ -261,6 +261,11 @@ def evaluate_retrieval_batch(
         if not target_asins and gt.get("target_asin"):
             target_asins = [gt["target_asin"]]
 
+        primary_target = gt.get("target_asin") or (target_asins[0] if target_asins else None)
+        peer_asins = gt.get("peer_asins", [])
+        strict_targets = [primary_target] if primary_target else target_asins
+        soft_targets = list(dict.fromkeys(([primary_target] if primary_target else []) + list(target_asins) + list(peer_asins)))
+
         graded_rel = gt.get("graded_relevance")
         retrieved_asins = pred.get("candidate_asins", [])
         strategy = pred.get("strategy", "hybrid")
@@ -273,6 +278,8 @@ def evaluate_retrieval_batch(
             "strategy": strategy,
             "candidate_asins": retrieved_asins,
             "target_asins": target_asins,
+            "primary_target": primary_target,
+            "peer_asins": peer_asins,
             "latency_ms": latency_ms,
         }
 
@@ -280,20 +287,33 @@ def evaluate_retrieval_batch(
         ndcg_target = graded_rel if graded_rel else target_asins
 
         for k in k_values:
-            res_entry[f"ndcg@{k}"] = compute_ndcg_at_k(retrieved_asins, ndcg_target, k)
-            res_entry[f"hit@{k}"] = int(compute_hit_rate_at_k(retrieved_asins, target_asins, k))
+            strict_hit = int(compute_hit_rate_at_k(retrieved_asins, strict_targets, k))
+            soft_hit = int(compute_hit_rate_at_k(retrieved_asins, soft_targets, k))
+            strict_ndcg = compute_ndcg_at_k(retrieved_asins, strict_targets, k)
+            graded_ndcg = compute_ndcg_at_k(retrieved_asins, ndcg_target, k)
+
+            res_entry[f"hit@{k}"] = strict_hit
+            res_entry[f"strict_hit@{k}"] = strict_hit
+            res_entry[f"soft_hit@{k}"] = soft_hit
+            res_entry[f"ndcg@{k}"] = graded_ndcg
+            res_entry[f"graded_ndcg@{k}"] = graded_ndcg
+            res_entry[f"strict_ndcg@{k}"] = strict_ndcg
             res_entry[f"precision@{k}"] = compute_precision_at_k(retrieved_asins, target_asins, k)
             res_entry[f"recall@{k}"] = compute_recall_at_k(retrieved_asins, target_asins, k)
             res_entry[f"ap@{k}"] = compute_average_precision_at_k(retrieved_asins, target_asins, k)
 
         max_k = max(int(k) for k in k_values) if k_values else 10
-        res_entry["mrr"] = compute_mrr_at_k(retrieved_asins, target_asins, max_k)
+        res_entry["mrr"] = compute_mrr_at_k(retrieved_asins, strict_targets, max_k)
         per_query_results.append(res_entry)
 
     if per_query_results:
         for k in k_values:
             aggregates[f"mean_ndcg@{k}"] = float(np.mean([r[f"ndcg@{k}"] for r in per_query_results]))
+            aggregates[f"mean_graded_ndcg@{k}"] = float(np.mean([r[f"graded_ndcg@{k}"] for r in per_query_results]))
+            aggregates[f"mean_strict_ndcg@{k}"] = float(np.mean([r[f"strict_ndcg@{k}"] for r in per_query_results]))
             aggregates[f"mean_hr@{k}"] = float(np.mean([r[f"hit@{k}"] for r in per_query_results]))
+            aggregates[f"mean_strict_hr@{k}"] = float(np.mean([r[f"strict_hit@{k}"] for r in per_query_results]))
+            aggregates[f"mean_soft_hr@{k}"] = float(np.mean([r[f"soft_hit@{k}"] for r in per_query_results]))
             aggregates[f"mean_precision@{k}"] = float(np.mean([r[f"precision@{k}"] for r in per_query_results]))
             aggregates[f"mean_recall@{k}"] = float(np.mean([r[f"recall@{k}"] for r in per_query_results]))
             aggregates[f"mean_ap@{k}"] = float(np.mean([r[f"ap@{k}"] for r in per_query_results]))

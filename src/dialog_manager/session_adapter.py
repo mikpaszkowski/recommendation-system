@@ -200,11 +200,17 @@ def hard_constraints_to_structured_filters(
             brand_str = str(raw_val).strip()
             if op_str in ("include", "equal", "=="):
                 filters["brand"] = brand_str
+                if filters.get("exclude_brand") == brand_str:
+                    filters.pop("exclude_brand", None)
+                if filters.get("brand_exclude") == brand_str:
+                    filters.pop("brand_exclude", None)
                 if brand_str not in included_brands:
                     included_brands.append(brand_str)
             elif op_str == "exclude":
                 filters["exclude_brand"] = brand_str
                 filters["brand_exclude"] = brand_str
+                if filters.get("brand") == brand_str:
+                    filters.pop("brand", None)
                 if brand_str not in excluded_brands:
                     excluded_brands.append(brand_str)
 

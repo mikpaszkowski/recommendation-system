@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import re
 from typing import List, Dict, Optional
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
@@ -14,7 +15,15 @@ from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search
 
 logger = logging.getLogger(__name__)
 
+BRAND_CONFIDENCE = 0.85
+CATEGORY_CONFIDENCE = 0.70  # Lowered to 0.70 to reliably resolve plurals and inflections
+CATEGORY_MARGIN = 0.05      # Minimum margin between top-1 and runner-up candidate
+
 class ResolverService:
+    BRAND_CONFIDENCE = BRAND_CONFIDENCE
+    CATEGORY_CONFIDENCE = CATEGORY_CONFIDENCE
+    CATEGORY_MARGIN = CATEGORY_MARGIN
+
     def __init__(self, connector=None, embed_svc=None, min_score: float = 0.55):
         self.connector = connector or Neo4jConnector()
         if not connector:
@@ -26,7 +35,7 @@ class ResolverService:
         """
         Executes a 3-tier waterfall resolution strategy.
         Tier 1: Exact Match (case-insensitive)
-        Tier 2: Substring Match (CONTAINS)
+        Tier 2: Substring Match (CONTAINS) or Word-Boundary Regex (for Category)
         Tier 3: Vector Semantic Search
         """
         text = text.strip()
@@ -49,16 +58,27 @@ class ResolverService:
                 logger.info(f"[Resolver] Tier 1 (Exact) match found for '{text}' as {node_label}")
                 return matches
             
-            # Tier 2: Substring Match
-            t2_query = f"""
-            MATCH (node:{node_label})
-            WHERE toLower(node.{property_name}) CONTAINS toLower($text)
-            RETURN {ret_clause}, 0.85 AS score LIMIT {k}
-            """
-            result = session.run(t2_query, {"text": text})
+            # Tier 2: Substring / Word-Boundary Regex Match
+            if node_label == "Category":
+                # Whole-token / word-boundary regex matching to prevent cross-domain contamination
+                # (e.g. 'phone' matching 'Headphones')
+                pattern = f"(?i).*(^|[^a-z]){re.escape(text)}(s)?([^a-z]|$).*"
+                t2_query = f"""
+                MATCH (node:{node_label})
+                WHERE node.{property_name} =~ $pattern
+                RETURN {ret_clause}, 0.85 AS score LIMIT {k}
+                """
+                result = session.run(t2_query, {"pattern": pattern})
+            else:
+                t2_query = f"""
+                MATCH (node:{node_label})
+                WHERE toLower(node.{property_name}) CONTAINS toLower($text)
+                RETURN {ret_clause}, 0.85 AS score LIMIT {k}
+                """
+                result = session.run(t2_query, {"text": text})
             matches = [dict(record) for record in result]
             if matches:
-                logger.info(f"[Resolver] Tier 2 (Substring) match found for '{text}' as {node_label}")
+                logger.info(f"[Resolver] Tier 2 (Substring/Regex) match found for '{text}' as {node_label}")
                 return matches
 
         # Tier 3: Vector Search (Fallback)
@@ -97,6 +117,33 @@ class ResolverService:
 
     def resolve_category(self, text: str, k: int = 3) -> List[Dict]:
         return self._execute_waterfall(text, "Category", "name", "category_embedding_index", k, ["name", "path"])
+
+    def validate_category_candidates(
+        self,
+        matches: List[Dict],
+        min_confidence: float = CATEGORY_CONFIDENCE,
+        min_margin: float = CATEGORY_MARGIN,
+    ) -> Optional[Dict]:
+        """
+        Validates that the top category candidate meets min_confidence (0.70)
+        and min_margin (>= 0.05) against cross-domain runner-ups.
+        Returns the top candidate if valid, None if ambiguous or below confidence.
+        """
+        if not matches or matches[0].get("score", 0.0) < min_confidence:
+            return None
+        if matches[0].get("score", 0.0) < 0.85 and len(matches) > 1:
+            top = matches[0]
+            top_name = top.get("name", "").lower()
+            top_path = [p.lower() for p in (top.get("path") or [])]
+            for runner_up in matches[1:]:
+                ru_name = runner_up.get("name", "").lower()
+                ru_path = [p.lower() for p in (runner_up.get("path") or [])]
+                if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
+                    continue
+                if top.get("score", 0.0) - runner_up.get("score", 0.0) < min_margin:
+                    return None
+                break
+        return matches[0]
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

@@ -3,7 +3,51 @@ import logging
 import os
 import json
 import pandas as pd
+import re
+from typing import Any, Optional
 from pathlib import Path
+
+# Unit-anchored regex preventing hyphens in model numbers from being treated as minus signs
+UNIT_ANCHORED_NUMERIC_REGEX = re.compile(
+    r"(?i)([-+]?(?:\d+\.?\d*|\.\d+))\s*(?:-?inch(?:es)?|hz|fps|gb|tb|w|watt|ms|mm|cm|mah|v|\"|'')"
+)
+STANDALONE_NUMERIC_REGEX = re.compile(r"(?:^|\s)([-+]?(?:\d+\.?\d*|\.\d+))")
+
+RESOLUTION_MAP = {
+    "4k": 2160.0,
+    "1080p": 1080.0,
+    "1440p": 1440.0,
+    "2k": 1440.0,
+    "8k": 4320.0,
+}
+
+def parse_numeric_attribute(raw_val: Any) -> Optional[float]:
+    if raw_val is None:
+        return None
+    val_str = str(raw_val).strip()
+    
+    # Check explicit resolution keywords
+    lower_val = val_str.lower()
+    if lower_val in RESOLUTION_MAP:
+        return RESOLUTION_MAP[lower_val]
+        
+    # Match unit-anchored numbers first (e.g., '144Hz', '65W', '27-inch')
+    unit_match = UNIT_ANCHORED_NUMERIC_REGEX.search(val_str)
+    if unit_match:
+        try:
+            return float(unit_match.group(1))
+        except ValueError:
+            pass
+            
+    # Standalone numbers bounded by whitespace or start of string
+    num_match = STANDALONE_NUMERIC_REGEX.search(val_str)
+    if num_match:
+        try:
+            return float(num_match.group(1))
+        except ValueError:
+            pass
+            
+    return None
 from dotenv import load_dotenv
 
 # Ensure the src module is in path if needed
@@ -69,6 +113,11 @@ def run_ingest(limit, batch_size):
         # Execute UNWIND Cypher query for this metadata chunk
         # Convert chunk to list of dicts, replacing NaNs with None
         records = chunk.where(pd.notnull(chunk), None).to_dict("records")
+        for row in records:
+            row["num_detail_material"] = parse_numeric_attribute(row.get("detail_material"))
+            row["num_detail_color"] = parse_numeric_attribute(row.get("detail_color"))
+            row["num_detail_style"] = parse_numeric_attribute(row.get("detail_style"))
+            row["num_detail_size"] = parse_numeric_attribute(row.get("detail_size"))
         
         meta_query = """
         UNWIND $batch AS row
@@ -100,15 +149,16 @@ def run_ingest(limit, batch_size):
         // Attributes logic
         WITH p, row
         UNWIND [
-            {name: "Material", val: row.detail_material},
-            {name: "Color", val: row.detail_color},
-            {name: "Style", val: row.detail_style},
-            {name: "Size", val: row.detail_size}
+            {name: "Material", val: row.detail_material, num_val: row.num_detail_material},
+            {name: "Color", val: row.detail_color, num_val: row.num_detail_color},
+            {name: "Style", val: row.detail_style, num_val: row.num_detail_style},
+            {name: "Size", val: row.detail_size, num_val: row.num_detail_size}
         ] AS attr
         CALL {
             WITH p, attr
             WITH p, attr WHERE attr.val IS NOT NULL AND attr.val <> ''
             MERGE (a:Attribute {attribute_name: attr.name, attribute_value: attr.val})
+            SET a.numeric_value = attr.num_val
             MERGE (p)-[:HAS_ATTRIBUTE]->(a)
         }
         """

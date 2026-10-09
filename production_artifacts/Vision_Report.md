@@ -149,3 +149,49 @@ We will use an advanced LLM model to evaluate the generated responses according 
 4. Introduce **Schema Injection** and an **EAV Numeric Schema** to handle complex mathematical constraints without sparse node bloat.
 **Rationale**: Relying on zero-shot LLM translation directly to Cypher creates fatal "vocabulary impedance" leading to empty retrieval sets. This architecture deterministically bridges conversational intent to exact graph operations while preserving latency bounds and preventing hallucination.
 **Status**: ✅ Accepted
+
+### Decision 2026-10-07-009: Category Taxonomy Resolution & Hierarchical Graph Traversal (AFP-003)
+**Date**: 2026-10-07
+**Trigger**: Execution of AFP-003 (`production_artifacts/Proposed_Fix_Category_Resolution.md`) following failure analysis `eval_2026-10-07_0222` where 81% of catalog items failed category gatekeeping.
+**Decision**: 
+1. **Semantic Threshold Recalibration & Candidate Margin Check**: Lower `CATEGORY_CONFIDENCE` from 0.80 to 0.70 in `GraphSearchTool` and `ResolverService`. Enforce candidate margin check $\ge 0.05$ against cross-domain candidates on vector search to resolve morphological plurals/synonyms (`mouse` $\to$ `Mice` at 0.79655) while preserving raw strings on ambiguous cross-domain queries (`cord`, `adapter`).
+2. **Whole-Token / Word-Boundary Regex Category Matching**: Upgrade Tier 2 lexical matching in `ResolverService` and Cypher category filtering in `GraphSearchTool` from naive substring `CONTAINS` to whole-token word-boundary regex `(?i).*(^|[^a-z])<cat>(s)?([^a-z]|$).*`, preventing cross-domain pollution (e.g. `"phone"` matching `"Headphones"`).
+3. **Hierarchical Subcategory Traversal**: Upgrade Cypher filtering from strict 1-hop traversal to variable-length taxonomy traversal `(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)`.
+4. **Tokenized Title Conjunction Fallback**: For compound categories (`"mechanical keyboard"`, `"external ssd"`), replace contiguous substring matching with token conjunction `AND` in product titles to safeguard items with intermediate modifiers.
+**Rationale**: Resolves the four-part category gatekeeping impasse identified in failure mapping FM-3, restoring recall on benchmark items while preventing false-positive cross-domain drift.
+**Status**: ✅ Accepted
+
+### Decision 2026-10-07-010: Benchmark Dataset Grounding & Evaluation Alignment (AFP-001)
+**Date**: 2026-10-07
+**Trigger**: Execution of AFP-001 (`production_artifacts/Proposed_Fix_Benchmark_Alignment.md`) addressing evaluation collapse in `eval_2026-10-07_0222` caused by detached legacy benchmark `retrieval_benchmark.json` (96% ungrounded/corrupted target entities).
+**Decision**:
+1. **Default Benchmark Repointing**: Set CLI default in `scripts/evaluate_retrieval.py` to `live_eval_dataset.json`, guaranteeing evaluations run on 21 real, verified Neo4j catalog products.
+2. **Catalog Budget Ceiling Alignment**: In `live_eval_dataset.json`, align `live_eval_charger_01` `price_max` from `$50.0` to `$60.0` (and update user utterance) to accommodate the real catalog price ($55.99) and eliminate artificial filter exclusions.
+3. **Pre-Flight Graph Grounding Gate**: Implement mandatory verification gate `validate_benchmark_graph_grounding()` in `scripts/evaluate_retrieval.py` that fails fast (raising `ValueError`) before evaluation if target ASINs are absent, ghost nodes (`title == NULL`), disconnected (`degree == 0`), or violate price filters.
+4. **Multi-Ground-Truth & Graded Evaluation Metrics**: Upgrade `src/evaluation/metrics.py` and `scripts/evaluate_retrieval.py` to compute strict Hit@K, soft/peer Hit@K, strict NDCG@K, and graded NDCG@K with backward compatibility, accurately rewarding equivalent SKU substitutions without penalizing valid sibling recommendations.
+**Rationale**: Eliminates metric inversion and false evaluation failures by ensuring every benchmark scenario is grounded in the actual graph catalog while formally scoring sibling product equivalence.
+**Status**: ✅ Accepted
+
+### Decision 2026-10-09-011: Prompt Schema Realignment & Intent Inversion Elimination (AFP-004)
+**Date**: 2026-10-09
+**Trigger**: Execution of AFP-004 (`production_artifacts/Proposed_Fix_Prompt_Constraint_Inversion.md`) following failure analysis `eval_2026-10-07_0222` Query 16 (`ret_016`), where explicit affirmative brand constraints ("from LG") were hallucinated as `"exclude"` by LLM due to prompt negative-only restrictions, triggering Dialogue Router contradiction aborts to `CLARIFY` and 0% retrieval hit rates.
+**Decision**:
+1. **Prompt Taxonomy Realignment**: Remove negative-only brand restriction in `preference_extract_prompt.py`. Support both affirmative inclusion (`operator: "equal" | "include"`) and negative exclusion (`operator: "exclude"`).
+2. **Preference Parser & Schema Validation**: Define `VALID_OPERATORS` and `validate_hard_constraint()` in `preference_parser.py` accepting affirmative brand constraints (`equal`, `include`) alongside `exclude`. Update `schema_injection` to explicitly permit affirmative brands in hard constraints.
+3. **Session Adapter Contradictory Key Purging**: In `session_adapter.py`, ensure affirmative brand mappings clear contradictory `exclude_brand`/`brand_exclude` keys and vice versa.
+4. **Dialogue Router Affirmative Brand Immunization**: In `orchestrator.py` `_decide_next_step`, ensure presence of category and affirmative brand immunizes against spurious `CLARIFY` router loops, directing execution directly to `SEARCH`.
+5. **Cypher Brand Filter Robustness**: In `graph_search_tool.py`, expand Cypher brand matching from strict case-sensitive equality to case-insensitive mutual containment (`toLower(b.name) = toLower($brand) OR toLower(b.name) CONTAINS toLower($brand) OR toLower($brand) CONTAINS toLower(b.name)`), matching catalog entities with corporate/trade suffixes (e.g. `Samsung Electronics`).
+**Rationale**: Eliminates Tier 1 conversational intent corruption and dialogue aborts, ensuring explicit user brand allegiances translate into targeted graph retrieval without premature clarification interruptions.
+**Status**: ✅ Accepted
+
+
+
+
+### Decision 2026-10-09-012: Deterministic Cypher Ranking & EAV Typing (AFP-005)
+**Date**: 2026-10-09
+**Trigger**: Execution of AFP-005 (`production_artifacts/Proposed_Fix_Cypher_Ranking_and_Typing.md`).
+**Decision**:
+1. **Determinstic Cypher Search Ranking**: Replaced raw, unranked Cypher search with a Bayesian quality ranking algorithm heavily dampening volume outliers.
+2. **Robust EAV Numeric Parsing**: Introduced regex-based unit extraction during ingestion to populate `numeric_value` in Attribute nodes, and deployed a multi-stage string coercion Cypher fallback in `GraphSearchTool`.
+**Rationale**: Eliminates empty retrieval sets caused by strict Neo4j `toFloat` casting on unit-appended values (e.g. `144 Hz`) and prevents obscure accessories from displacing high-quality items in purely structured filter searches.
+**Status**: ✅ Accepted

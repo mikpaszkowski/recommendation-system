@@ -35,6 +35,32 @@ from src.llm.simple_llm_handler import SimpleLLMHandler
 from src.llm_interface.abstract_preference_parser import PreferenceParserInterface
 from src.llm_interface.prompts import preference_extract_prompt
 
+VALID_OPERATORS = {
+    "price": {"less_than", "greater_than", "equal"},
+    "category": {"include", "equal"},
+    "brand": {"equal", "include", "exclude"},
+}
+
+
+def validate_hard_constraint(constraint: Dict[str, Any]) -> bool:
+    """
+    Validate a hard constraint dictionary against allowed attributes and operators.
+    Accepts attribute 'brand' with operators 'equal', 'include', and 'exclude'.
+    """
+    if not isinstance(constraint, dict):
+        return False
+    attr = str(constraint.get("attribute", "")).strip().lower()
+    op = str(constraint.get("operator", "")).strip().lower()
+    val = constraint.get("value")
+
+    if not attr or attr not in VALID_OPERATORS:
+        return False
+    if not op or op not in VALID_OPERATORS[attr]:
+        return False
+    if val is None or str(val).strip() == "":
+        return False
+    return True
+
 
 class LLMPreferenceParser(PreferenceParserInterface):
     """
@@ -147,10 +173,10 @@ class LLMPreferenceParser(PreferenceParserInterface):
                 
                 schema_injection = "\n\n<schema_injection>\n"
                 schema_injection += "CRITICAL STRICT SCHEMA CONSTRAINTS:\n"
-                schema_injection += "You MUST adhere to the EXPLICIT CONSTRAINT TAXONOMY. Only 'price', 'category', and excluded 'brand' are allowed as hard_constraints.\n"
-                schema_injection += "ALL other specifications MUST be classified as soft_preferences (e.g. 'ram', 'refresh_rate', 'model', included brands).\n\n"
+                schema_injection += "You MUST adhere to the EXPLICIT CONSTRAINT TAXONOMY. Only 'price', 'category', and 'brand' (affirmative or excluded) are allowed as hard_constraints.\n"
+                schema_injection += "ALL other specifications MUST be classified as soft_preferences (e.g. 'ram', 'refresh_rate', 'model').\n\n"
                 
-                schema_injection += "Global Attributes (for reference, but only price/category/excluded brand can be hard_constraints):\n"
+                schema_injection += "Global Attributes (for reference, but only price/category/brand can be hard_constraints):\n"
                 for attr in schemas.get("global_attributes", []):
                     schema_injection += f"- {attr}\n"
                     

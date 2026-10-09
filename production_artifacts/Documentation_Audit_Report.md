@@ -1,56 +1,52 @@
 # Documentation Audit Report
 
-**Date**: 2026-10-07
+**Date**: 2026-10-09
 **Auditor**: Documentation Auditor Agent (@doc-cleaner)
-**Scope**: Full project documentation review & cleanup of evaluation refactoring artifacts
+**Scope**: Full project documentation review
 
 ## Executive Summary
 
-The documentation audit successfully reviewed the repository for unnecessary garbage files, test scripts, and temporary markdown artifacts generated during the recent evaluation pipeline refactoring. These redundant files have been identified and directly removed to maintain a clean project state and prevent documentation rot. The remaining documentation aligns with the Vision Report and the current state of the codebase.
+The documentation audit revealed that several root README files and implementation plans were heavily outdated, describing an abandoned "Phase I Agentic Preference Extraction (LangChain)" and "LightFM recommender" which contrast entirely with the active Neo4j Hybrid GraphRAG Multi-Agent System. I have directly updated the root and `src/` READMEs to match the `Vision_Report.md`, and fixed stale path references in the Knowledge Graph Quickstart guide. Several legacy plan files are flagged for removal or archival.
 
 ## Documentation Inventory
 
 | File | Status | Category | Notes |
 |------|--------|----------|-------|
-| `production_artifacts/Vision_Report.md` | ✅ | valid | Canonical strategic direction |
-| `production_artifacts/Research_Report.md` | ✅ | valid | Current |
-| `production_artifacts/Technical_Specification.md` | ✅ | valid | Current |
-| `production_artifacts/Project_State_Report.md` | ✅ | valid | Current |
-| `production_artifacts/Academic_Investigation_Target_Sampling.md` | ✅ | valid | Preserved as academic research |
-| `src/README.md` | ✅ | valid | Source architecture overview |
-| `README.md` | ✅ | valid | Root project documentation |
+| `README.md` | ⏰ | Outdated | Described legacy LightFM and Langchain Flow. Fixed to describe Hybrid GraphRAG MAS. |
+| `src/README.md` | ⏰ | Outdated | Duplicated the legacy root README. Rewritten to document actual `src/` layout. |
+| `src/knowledge_graph/QUICKSTART.md` | 🔗 | Stale Ref | Referenced non-existent `graphrag/` directories. Updated to `src/`. |
+| `docs/kg_pipeline/schema.md` | ⚠️ | Conflicting | Describes complex schema with PyABSA extraction which is abandoned. Flagged for rewrite/removal. |
+| `docs/kg_pipeline/extensibility.md` | ⚠️ | Conflicting | Overcomplicates actual working implementation. Flagged for rewrite/removal. |
+| `docs/Plan Implementacji Systemu Rekomendacyjnego.md` | ⏰ | Outdated | Polish implementation plan describing legacy Phase 0-3 (LLM+BERT). Flagged for archival. |
+| `production_artifacts/Vision_Report.md` | ✅ | Valid | Canonical and fully up-to-date. |
+| `production_artifacts/Implementation_Plan.md` | ✅ | Valid | Up to date with Meta-Phase structure. |
 
 ## Findings by Severity
 
-### ⏰ Outdated Documentation & Temporary Artifacts
-The following temporary markdown artifacts were generated as scaffolding during the evaluation pipeline refactoring. They have served their purpose and are now considered garbage/clutter:
-- **File**: `production_artifacts/Evaluation_Implementation_Plan.md` (Removed)
-- **File**: `production_artifacts/Evaluation_Pipeline_Alignment_Audit.md` (Removed)
+### ⚠️ Conflicting Documentation
+- **`docs/kg_pipeline/schema.md`** vs **Codebase (`batch_ingest.py`)**: The markdown file defines a highly complex graph schema (`CoPurchaseSet`, `OpinionPhrase`, `CommonsenseEntity`) utilizing PyABSA and spaCy for ASTE extraction. This contradicts the actual `batch_ingest.py` which uses a streamlined, deterministic Amazon Review subset schema without PyABSA.
 
-### 🗑️ Unnecessary Test Scripts & Garbage Files
-Several test scripts and output directories were created solely for validating the evaluation refactoring (alignment, e2e live checks, stress tests). These cluttered the test suite with redundant evaluation-specific edge cases.
-- **Removed**: `tests/test_evaluation_pipeline_alignment.py`
-- **Removed**: `tests/test_live_eval_dataset_grounding.py`
-- **Removed**: `tests/test_live_evaluation_e2e.py`
-- **Removed**: `tests/test_retrieval_eval_stress.py`
-- **Removed**: `tests/test_live_graph_empirical_census.py`
-- **Removed**: `evaluations/eval_*` (Numerous temporary output directories)
+### ⏰ Outdated Documentation
+- **`README.md` & `src/README.md`**: Described a Phase I Langchain system and a LightFM base recommender that were completely abandoned in favor of the Neo4j MAS. Fixed.
+- **`docs/Plan Implementacji Systemu Rekomendacyjnego.md`**: Outdated Polish documentation detailing LLM+BERT extraction that pre-dates the Meta-Phase transition.
+
+### 🔗 Stale References
+- **`src/knowledge_graph/QUICKSTART.md`**: Instructed users to run `python graphrag/knowledge_graph/test_connector.py`. The `graphrag/` directory does not exist in this project (it is `src/`). Fixed.
 
 ## Fixes Applied
 
-| File / Path | Change | Reason |
+| File | Change | Reason |
 |------|--------|--------|
-| `production_artifacts/Evaluation_Implementation_Plan.md` | Deleted | Temporary evaluation refactoring plan |
-| `production_artifacts/Evaluation_Pipeline_Alignment_Audit.md` | Deleted | Temporary evaluation alignment audit report |
-| `tests/test_evaluation_pipeline_alignment.py` | Deleted | Redundant test script |
-| `tests/test_live_eval_dataset_grounding.py` | Deleted | Redundant test script |
-| `tests/test_live_evaluation_e2e.py` | Deleted | Redundant test script |
-| `tests/test_retrieval_eval_stress.py` | Deleted | Redundant test script |
-| `tests/test_live_graph_empirical_census.py` | Deleted | Redundant test script |
-| `evaluations/eval_*` | Deleted | Temporary evaluation test run outputs |
+| `README.md` | Complete rewrite | Outdated architecture (LightFM/Langchain) |
+| `src/README.md` | Complete rewrite | Duplicated outdated root README |
+| `src/knowledge_graph/QUICKSTART.md` | Path correction | Replaced `graphrag/` with `src/` to fix broken commands |
 
 ## Proposed Actions (Require User Approval)
 
 | Action | File | Reason |
 |--------|------|--------|
-| None | N/A | All requested temporary files have been cleaned up directly per instructions. |
+| Delete | `docs/Plan Implementacji Systemu Rekomendacyjnego.md` | Severely outdated; superseded by `Implementation_Plan.md` and `Vision_Report.md`. |
+| Delete | `docs/Dopasowanie Preferencji Użytkownika do Grafu Wiedzy.md` | Outdated Polish legacy document. |
+| Delete | `docs/LLM jako kontekstowy ewaluator doświadczeń (1).md` | Outdated Polish legacy document. |
+| Major rewrite | `docs/kg_pipeline/schema.md` | Does not reflect the actual deterministic Neo4j schema implemented in `batch_ingest.py`. |
+| Major rewrite | `docs/kg_pipeline/extensibility.md` | Refers to abandoned Mutual Information Maximization and PyABSA ASTE workflows. |

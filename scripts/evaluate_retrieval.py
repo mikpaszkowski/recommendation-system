@@ -211,6 +211,89 @@ class ExecutionTraceLogger:
             self.file_handle.close()
 
 
+def validate_benchmark_graph_grounding(benchmark_data: List[Dict[str, Any]], neo4j_driver: Any) -> Dict[str, Any]:
+    """
+    Executes a pre-flight integrity check against Neo4j for all target ASINs.
+    Fails fast if any target ASIN is absent, has a null title, or violates hard price filters.
+    """
+    validation_report = {
+        "total_scenarios": len(benchmark_data),
+        "valid_scenarios": 0,
+        "violations": []
+    }
+    
+    session_ctx = neo4j_driver.session() if hasattr(neo4j_driver, "session") else None
+    if session_ctx is None:
+        raise ValueError("Provided neo4j_driver does not support session management.")
+
+    with session_ctx as session:
+        for item in benchmark_data:
+            query_id = item.get("query_id") or item.get("id")
+            target_asin = item.get("target_asin") or (item.get("ground_truth_asins", [None])[0])
+            price_max = item.get("structured_filters", {}).get("price_max")
+            
+            cypher = """
+            MATCH (p:ParentProduct {parent_asin: $asin})
+            RETURN p.title AS title, 
+                   p.price AS price, 
+                   size([(p)--() | 1]) AS degree,
+                   EXISTS { MATCH (p)-[:BELONGS_TO_CATEGORY]->(:Category) } AS has_category,
+                   EXISTS { MATCH (p)-[:HAS_BRAND]->(:Brand) } AS has_brand
+            """
+            result = session.run(cypher, {"asin": target_asin}).single()
+            
+            if not result:
+                validation_report["violations"].append({
+                    "query_id": query_id,
+                    "target_asin": target_asin,
+                    "error": "ABSENT_FROM_DATABASE",
+                    "details": f"Node with parent_asin '{target_asin}' does not exist in Neo4j."
+                })
+                continue
+                
+            title = result["title"]
+            price = result["price"]
+            degree = result["degree"]
+            
+            if not title or str(title).strip().lower() in ["none", "null", "n/a", ""]:
+                validation_report["violations"].append({
+                    "query_id": query_id,
+                    "target_asin": target_asin,
+                    "error": "GHOST_NODE_NULL_TITLE",
+                    "details": "Node exists but title property is null."
+                })
+                continue
+                
+            if price_max is not None and price is not None and float(price) > float(price_max):
+                validation_report["violations"].append({
+                    "query_id": query_id,
+                    "target_asin": target_asin,
+                    "error": "PRICE_CEILING_VIOLATION",
+                    "details": f"Target price (${price}) exceeds benchmark filter ceiling (${price_max})."
+                })
+                continue
+                
+            if degree == 0:
+                validation_report["violations"].append({
+                    "query_id": query_id,
+                    "target_asin": target_asin,
+                    "error": "ISOLATED_DISCONNECTED_NODE",
+                    "details": "Node has degree = 0 (no categories, brands, or reviews)."
+                })
+                continue
+                
+            validation_report["valid_scenarios"] += 1
+
+    if validation_report["violations"]:
+        logger.error(f"[GroundingGate] ❌ Benchmark failed graph grounding validation with {len(validation_report['violations'])} violations!")
+        for v in validation_report["violations"]:
+            logger.error(f"  - [{v['query_id']}] {v['error']}: {v['details']}")
+        raise ValueError(f"Benchmark contains {len(validation_report['violations'])} ungrounded target entities. Halting execution.")
+        
+    logger.info(f"[GroundingGate] ✓ All {validation_report['valid_scenarios']} scenarios verified against live Neo4j catalog.")
+    return validation_report
+
+
 def run_retrieval_evaluation(
     benchmark_path: Path,
     k_values: List[int],
@@ -255,6 +338,18 @@ def run_retrieval_evaluation(
         ground_truth = ground_truth[:sample_size]
 
     logger.info(f"Loaded {len(ground_truth)} benchmark queries. Running mode: {mode}")
+
+    # Layer 2: Pre-evaluation graph grounding verification gate in live mode
+    if mode == "live":
+        try:
+            from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
+            conn = Neo4jConnector()
+            conn.connect()
+            validate_benchmark_graph_grounding(ground_truth, conn)
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not connect to Neo4j for pre-flight grounding check: {e}")
 
     # Set up output directory at the very start (Requirement R3)
     if output_dir:
@@ -561,7 +656,12 @@ def run_retrieval_evaluation(
         logger.info(f"Evaluation complete. Evaluated {len(per_query_results)} prediction runs across {len(ground_truth)} queries.")
         logger.info(f"Clarification rate: {aggregates['clarification_rate']:.2%} ({clarification_count}/{len(ground_truth)})")
         for k in k_values:
-            logger.info(f"NDCG@{k}: {aggregates.get(f'mean_ndcg@{k}', 0.0):.4f} | HR@{k}: {aggregates.get(f'mean_hr@{k}', 0.0):.4f}")
+            logger.info(
+                f"NDCG@{k}: {aggregates.get(f'mean_ndcg@{k}', 0.0):.4f} "
+                f"(Graded: {aggregates.get(f'mean_graded_ndcg@{k}', 0.0):.4f}, Strict: {aggregates.get(f'mean_strict_ndcg@{k}', 0.0):.4f}) | "
+                f"HR@{k} (Strict): {aggregates.get(f'mean_strict_hr@{k}', aggregates.get(f'mean_hr@{k}', 0.0)):.4f} | "
+                f"HR@{k} (Soft/Peer): {aggregates.get(f'mean_soft_hr@{k}', 0.0):.4f}"
+            )
 
         # Multi-strategy comparison plots
         metrics_by_strategy: Dict[str, Dict[str, float]] = {}
@@ -631,8 +731,8 @@ def main() -> None:
         "--benchmark",
         "--dataset",
         dest="benchmark",
-        default="evaluations/benchmarks/retrieval_benchmark.json",
-        help="Path to retrieval benchmark JSON",
+        default="live_eval_dataset.json",
+        help="Path to retrieval benchmark JSON (default: live_eval_dataset.json)",
     )
     parser.add_argument(
         "--k-values",

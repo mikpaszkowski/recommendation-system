@@ -164,7 +164,7 @@ def test_downstream_graph_search_tool_filter_compatibility(sample_context):
     where_clauses, params = tool._build_filters(filters)
     assert isinstance(where_clauses, list)
     assert isinstance(params, dict)
-    assert "node.price <= $price_max" in where_clauses
+    assert any("node.price <= $price_max" in clause for clause in where_clauses)
     assert params["price_max"] == 1000.0
     assert any("HAS_BRAND" in clause for clause in where_clauses)
     assert params["brand_filter"] == "Apple"

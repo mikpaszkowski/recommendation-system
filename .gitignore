@@ -16,3 +16,4 @@ my_env
 *.tmp
 introspection_results.txt
 .agents/teamwork/*
+/evaluations/*

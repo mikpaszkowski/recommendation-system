@@ -1,5 +1,6 @@
-from typing import Dict, Any, List, Optional
 import logging
+import re
+from typing import Dict, Any, List, Optional
 
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
@@ -8,11 +9,18 @@ from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search
 
 logger = logging.getLogger(__name__)
 
+BRAND_CONFIDENCE = 0.85
+CATEGORY_CONFIDENCE = 0.70
+CATEGORY_MARGIN = 0.05
+
 class GraphSearchTool:
     """
     Tool for searching the Knowledge Graph using Hybrid Semantic Search.
     Combines Vector Search (for semantic understanding) with Cypher Filtering (for hard constraints).
     """
+    BRAND_CONFIDENCE = BRAND_CONFIDENCE
+    CATEGORY_CONFIDENCE = CATEGORY_CONFIDENCE
+    CATEGORY_MARGIN = CATEGORY_MARGIN
     def __init__(self, db_connector: Optional[Neo4jConnector] = None, embedding_service: Optional[EmbeddingService] = None, resolver: Optional[ResolverService] = None):
         try:
             self.db = db_connector or Neo4jConnector()
@@ -316,8 +324,18 @@ class GraphSearchTool:
         WHERE {where_str}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
+        WITH node, b, c,
+             coalesce(node.rating, node.avg_rating, 0.0) AS raw_rating,
+             coalesce(node.rating_count, node.review_count, 0) AS raw_count,
+             coalesce(node.price, 999999.0) AS sort_price
+        WITH node, b, c, sort_price,
+             ((10.0 * 4.0 + (toFloat(raw_count) * raw_rating)) / (10.0 + toFloat(raw_count))) AS bayes_rating,
+             log(1.0 + CASE WHEN toFloat(raw_count) > 500.0 THEN 500.0 ELSE toFloat(raw_count) END) AS volume_factor
+        WITH node, b, c, sort_price,
+             (bayes_rating * volume_factor) AS relevance_score
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, 1.0 as score, elementId(node) as id, node.parent_asin as asin
+               collect(DISTINCT c.name) as category, relevance_score as score, elementId(node) as id, node.parent_asin as asin
+        ORDER BY score DESC, coalesce(price, 999999.0) ASC
         LIMIT {limit}
         """
         
@@ -423,7 +441,10 @@ class GraphSearchTool:
             elif key == "brand":
                 raw_brand = raw_filters.get("brand", value)
                 where_clauses.append(
-                    "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) WHERE b.name = $brand_filter } "
+                    "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) "
+                    "WHERE toLower(b.name) = toLower($brand_filter) "
+                    "   OR toLower(b.name) CONTAINS toLower($brand_filter) "
+                    "   OR toLower($brand_filter) CONTAINS toLower(b.name) } "
                     "OR toLower(node.title) CONTAINS toLower($raw_brand_filter))"
                 )
                 params["brand_filter"] = value
@@ -431,31 +452,87 @@ class GraphSearchTool:
             elif key == "exclude_brand":
                 raw_ex_brand = raw_filters.get("exclude_brand", value)
                 where_clauses.append(
-                    "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) WHERE eb.name = $exclude_brand } "
+                    "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) "
+                    "WHERE toLower(eb.name) = toLower($exclude_brand) "
+                    "   OR toLower(eb.name) CONTAINS toLower($exclude_brand) "
+                    "   OR toLower($exclude_brand) CONTAINS toLower(eb.name) } "
                     "OR toLower(node.title) CONTAINS toLower($raw_ex_brand_filter))"
                 )
                 params["exclude_brand"] = value
                 params["raw_ex_brand_filter"] = raw_ex_brand
             elif key == "category":
                 raw_cat = raw_filters.get("category", value)
-                where_clauses.append(
-                    "(EXISTS { MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category) WHERE toLower(c.name) CONTAINS toLower($category_filter) } "
-                    "OR toLower(node.title) CONTAINS toLower($raw_category_filter))"
+                tokens = [t.strip().lower() for t in raw_cat.split() if len(t.strip()) > 2]
+
+                # Construct conjunction of token matches to handle intervening modifiers in product titles
+                if len(tokens) > 1:
+                    escaped_tokens = [t.replace("'", "\\'") for t in tokens]
+                    token_clauses = " AND ".join([f"toLower(node.title) CONTAINS '{et}'" for et in escaped_tokens])
+                    title_condition = f"({token_clauses})"
+                else:
+                    escaped_raw = re.escape(raw_cat).replace("'", "\\'")
+                    title_condition = f"toLower(node.title) =~ '(?i).*(^|[^a-z]){escaped_raw}(s)?([^a-z]|$).*'"
+
+                where_clauses.append(f"""
+                (
+                    EXISTS {{
+                        MATCH (node)-[:BELONGS_TO_CATEGORY]->(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)
+                        WHERE c.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
+                           OR leaf.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
+                    }}
+                    OR {title_condition}
                 )
+                """)
                 params["category_filter"] = value
                 params["raw_category_filter"] = raw_cat
             # EAV Numeric filters dynamically intercepted with toFloat fallback for string attribute values
             elif key.endswith("_min") and key != "price_min":
                 attr_name = key.replace("_min", "")
-                where_clauses.append(f"EXISTS {{ MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = '{attr_name}' AND COALESCE(toFloat(a.attribute_value), toFloat(a.normalized_value)) >= ${key} }}")
+                where_clauses.append(f"""
+                EXISTS {{
+                    MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute)
+                    WHERE a.attribute_name = '{attr_name}'
+                      AND COALESCE(
+                          a.numeric_value,
+                          toFloat(split(replace(replace(a.attribute_value, '-inch', ' inch'), '65W', '65 W'), ' ')[0]),
+                          toFloat(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
+                              a.attribute_value,
+                              'Hz', ''), 'fps', ''), 'GB', ''), 'TB', ''), 'watt', ''), 'W', ''), '-inch', ''), 'inch', ''), 'Inches', ''), '"', ''))
+                      ) >= ${key}
+                }}
+                """)
                 params[key] = float(value)
             elif key.endswith("_max") and key != "price_max":
                 attr_name = key.replace("_max", "")
-                where_clauses.append(f"EXISTS {{ MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = '{attr_name}' AND COALESCE(toFloat(a.attribute_value), toFloat(a.normalized_value)) <= ${key} }}")
+                where_clauses.append(f"""
+                EXISTS {{
+                    MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute)
+                    WHERE a.attribute_name = '{attr_name}'
+                      AND COALESCE(
+                          a.numeric_value,
+                          toFloat(split(replace(replace(a.attribute_value, '-inch', ' inch'), '65W', '65 W'), ' ')[0]),
+                          toFloat(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
+                              a.attribute_value,
+                              'Hz', ''), 'fps', ''), 'GB', ''), 'TB', ''), 'watt', ''), 'W', ''), '-inch', ''), 'inch', ''), 'Inches', ''), '"', ''))
+                      ) <= ${key}
+                }}
+                """)
                 params[key] = float(value)
             elif key.endswith("_exact"):
                 attr_name = key.replace("_exact", "")
-                where_clauses.append(f"EXISTS {{ MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = '{attr_name}' AND COALESCE(toFloat(a.attribute_value), toFloat(a.normalized_value)) = ${key} }}")
+                where_clauses.append(f"""
+                EXISTS {{
+                    MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute)
+                    WHERE a.attribute_name = '{attr_name}'
+                      AND COALESCE(
+                          a.numeric_value,
+                          toFloat(split(replace(replace(a.attribute_value, '-inch', ' inch'), '65W', '65 W'), ' ')[0]),
+                          toFloat(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(
+                              a.attribute_value,
+                              'Hz', ''), 'fps', ''), 'GB', ''), 'TB', ''), 'watt', ''), 'W', ''), '-inch', ''), 'inch', ''), 'Inches', ''), '"', ''))
+                      ) = ${key}
+                }}
+                """)
                 params[key] = float(value)
             else:
                 logger.debug(f"Ignoring unhandled filter key: '{key}' = {value}")
@@ -467,14 +544,15 @@ class GraphSearchTool:
         
         Confidence thresholds:
         - Brand: 0.85 (brand names are precise nouns, require high similarity to avoid Sennheiser -> Senso false positives)
-        - Category: 0.80 (higher threshold to avoid bad mappings)
+        - Category: 0.70 (recalibrated with candidate margin check >= 0.05 to reliably resolve plurals and inflections while blocking cross-domain drift)
         
         NOTE: If normalization fails or confidence is low, the filter is NO LONGER dropped.
         Instead, it remains as the raw string so that the Cypher title fallback logic 
         (e.g., `OR toLower(node.title) CONTAINS $raw`) can still attempt a textual match.
         """
-        BRAND_CONFIDENCE = 0.85
-        CATEGORY_CONFIDENCE = 0.80
+        BRAND_CONFIDENCE = getattr(self, "BRAND_CONFIDENCE", 0.85)
+        CATEGORY_CONFIDENCE = getattr(self, "CATEGORY_CONFIDENCE", 0.70)
+        CATEGORY_MARGIN = getattr(self, "CATEGORY_MARGIN", 0.05)
         
         if not self.resolver:
             logger.warning("[GST] ResolverService not available. Skipping normalization.")
@@ -513,8 +591,49 @@ class GraphSearchTool:
             try:
                 matches = self.resolver.resolve_category(normalized["category"], k=3)
                 if matches and matches[0]["score"] >= CATEGORY_CONFIDENCE:
-                    logger.info(f"[GST] ✓ Normalized category '{normalized['category']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
-                    normalized["category"] = matches[0]["name"]
+                    # Check candidate margin against runner-up candidates to prevent cross-domain drift
+                    has_margin = True
+                    if matches[0]["score"] < 0.85 and len(matches) > 1:
+                        top = matches[0]
+                        top_name = top.get("name", "").lower()
+                        top_path = [p.lower() for p in (top.get("path") or [])]
+
+                        # Find the first runner-up candidate that is a true cross-domain competitor.
+                        # Candidates that contain the top candidate's name or share taxonomy lineage
+                        # belong to the same taxonomic branch and are not cross-domain competitors.
+                        comp_candidate = None
+                        for runner_up in matches[1:]:
+                            ru_name = runner_up.get("name", "").lower()
+                            ru_path = [p.lower() for p in (runner_up.get("path") or [])]
+                            if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
+                                continue
+                            comp_candidate = runner_up
+                            break
+
+                        if comp_candidate is not None:
+                            margin = top["score"] - comp_candidate["score"]
+                            if margin < CATEGORY_MARGIN:
+                                has_margin = False
+                                logger.warning(
+                                    f"[GST] ✗ Category '{normalized['category']}' failed margin check: "
+                                    f"top match '{top['name']}' ({top['score']:.3f}) vs "
+                                    f"runner-up '{comp_candidate['name']}' ({comp_candidate['score']:.3f}), "
+                                    f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
+                                )
+                        elif len(matches) > 1 and not (top_name in matches[1].get("name", "").lower() or matches[1].get("name", "").lower() in top_name):
+                            margin = top["score"] - matches[1]["score"]
+                            if margin < CATEGORY_MARGIN:
+                                has_margin = False
+                                logger.warning(
+                                    f"[GST] ✗ Category '{normalized['category']}' failed margin check: "
+                                    f"top match '{top['name']}' ({top['score']:.3f}) vs "
+                                    f"runner-up '{matches[1]['name']}' ({matches[1]['score']:.3f}), "
+                                    f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
+                                )
+
+                    if has_margin:
+                        logger.info(f"[GST] ✓ Normalized category '{normalized['category']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
+                        normalized["category"] = matches[0]["name"]
                 elif matches:
                     logger.warning(f"[GST] ✗ Category '{normalized['category']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Keeping raw value for title fallback.")
                     candidates = [(m['name'], round(m['score'], 3)) for m in matches]

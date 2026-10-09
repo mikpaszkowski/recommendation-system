@@ -42,24 +42,26 @@ Analyze the full multi-turn conversation history carefully and extract the curre
    A. HARD CONSTRAINTS (`hard_constraints`):
       - Strict, non-negotiable filters that MUST be obeyed. If an item violates any hard constraint, it cannot be recommended.
       - CRITICAL TAXONOMY RULE: The ONLY allowed attributes for `hard_constraints` are:
-        1. `price` (budget constraints, e.g., less_than 1000)
+        1. `price` (budget constraints, e.g., less_than 1000, greater_than 50)
         2. `category` (the domain/type of product, e.g., include "laptop")
-        3. `brand` (ONLY when the operator is "exclude")
-      - Do NOT put technical specifications (e.g., RAM, refresh rate, screen size) or included brands (e.g., "I want a Sony") in `hard_constraints`. These must go to `soft_preferences`.
+        3. `brand` (EITHER affirmative inclusion OR negative exclusion):
+           - Use operator "equal" or "include" when the user specifies a required brand (e.g., "from LG", "by Sony", "Apple laptop").
+           - Use operator "exclude" when the user explicitly rejects a brand (e.g., "no HP", "except Dell", "anything but Apple").
+      - Do NOT put technical specifications (e.g., RAM, refresh rate, screen size) in `hard_constraints`. These must go to `soft_preferences`.
       - Each hard constraint object MUST contain:
-        * "attribute" (String): Restricted to "price", "category", or "brand" (when excluded).
-        * "operator" (String): EXACTLY ONE of the 5 allowed enums:
-          - "include": For category only.
-          - "exclude": For brand only.
+        * "attribute" (String): Restricted to "price", "category", or "brand".
+        * "operator" (String): EXACTLY ONE of the allowed enums:
+          - "include": For category (e.g. include "laptop") or brand (e.g. include "LG").
+          - "equal": For strict brand or category matching (e.g. brand equal "Sony").
+          - "exclude": For brand exclusion only (e.g. exclude "HP").
           - "greater_than": For price minimums.
           - "less_than": For price maximums/ceilings.
-          - "equal": For strict exact matches.
         * "value" (Number, String, or Boolean):
           - For "greater_than" and "less_than", "value" MUST be a numeric float or integer (e.g., 1000, 16, 2.5), NEVER a string with currency symbols.
 
    B. SOFT PREFERENCES (`soft_preferences`):
-      - Flexible desires, technical specifications, included brands, aesthetic leanings, or subjective qualities used to rank and score candidates additively.
-      - ALL technical specifications (e.g., "16GB RAM", "144Hz refresh rate", "OLED display") and ALL included brands (e.g., "I want an Apple or Sony") MUST be placed here, NEVER in `hard_constraints`.
+      - Flexible desires, technical specifications, aesthetic leanings, or subjective qualities used to rank and score candidates additively.
+      - ALL technical specifications (e.g., "16GB RAM", "144Hz refresh rate", "OLED display") MUST be placed here, NEVER in `hard_constraints`. Flexible or non-exclusive brand mentions without hard constraints (e.g., "prefer ASUS or Dell") may also be scored here.
       - Each soft preference object MUST contain:
         * "category" (String): Domain/dimension of preference (e.g., "brand", "ram", "refresh_rate", "battery", "display", "use_case").
         * "value" (String): The specific quality, spec, or feature desired (e.g., "Sony", "16GB", "144Hz", "long battery life").

@@ -542,9 +542,9 @@
     "id": "live_eval_charger_01",
     "sample_id": "live_eval_charger_01",
     "category": "Charger",
-    "utterance": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together.",
-    "query": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together.",
-    "user_query": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together.",
+    "utterance": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together under $60.",
+    "query": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together under $60.",
+    "user_query": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together under $60.",
     "semantic_query": "65W USB C charger 4 ports GaN technology fast power delivery wall charger adapter",
     "target_asin": "B088FHJLR1",
     "target_title": "UGREEN 65W USB C Charger 4 Ports USB C Power Adapter GaN PD Fast Wall Charger Compatible with MacBook Pro/Air M2, Dell XPS 13, iPad Pro/Air, iPhone 14 Pro Max/13, Galaxy S23, Steam Deck, and More",
@@ -569,7 +569,7 @@
     },
     "structured_filters": {
       "category": "Charger",
-      "price_max": 50.0,
+      "price_max": 60.0,
       "brand": "UGREEN"
     },
     "soft_preferences": [

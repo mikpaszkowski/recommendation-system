@@ -218,16 +218,39 @@ class AgentOrchestrator:
             action = str(raw_action).upper().strip() if isinstance(raw_action, str) else "ANSWER"
             reasoning = data.get("reasoning", "")
             
-            # Guardrail: If router chose SEARCH, but dialogue state indicates critical attributes are missing,
-            # gracefully switch to CLARIFY to ask for missing required attributes
+            # Affirmative Brand Immunization: If user provided both category and brand, proceed directly to SEARCH
             dialogue_state = current_context.get("dialogue_state", {})
             ready = dialogue_state.get("ready_for_recommendation", True)
             missing = dialogue_state.get("missing_critical_attributes", [])
-            if action == "SEARCH" and not ready and missing:
-                logger.info(f"Guardrail: Critical attributes missing {missing}. Switching SEARCH -> CLARIFY.")
-                action = "CLARIFY"
-                reasoning = f"Missing critical attributes ({', '.join(missing)}). Clarification required before searching."
-                
+
+            extracted_hard = current_context.get("extracted_parameters", {}).get("hard_constraints", []) if isinstance(current_context, dict) else []
+            has_category = bool(
+                active_filters.get("category")
+                or current_context.get("category")
+                or any(
+                    isinstance(c, dict) and c.get("attribute") == "category"
+                    for c in extracted_hard
+                )
+            )
+            has_brand = bool(
+                active_filters.get("brand")
+                or any(
+                    isinstance(c, dict) and c.get("attribute") == "brand" and c.get("operator") in ("include", "equal")
+                    for c in extracted_hard
+                )
+            )
+
+            if action == "CLARIFY" and has_category and has_brand:
+                logger.info("Immunization: User has specified category and brand. Overriding CLARIFY -> SEARCH.")
+                action = "SEARCH"
+                reasoning = "Category and preferred brand provided; initiating targeted graph search."
+            elif action == "SEARCH" and not ready and missing:
+                # Only clarify if truly critical attributes (e.g. completely missing category) are absent
+                if "category" in missing:
+                    logger.info(f"Guardrail: Critical category missing. Switching SEARCH -> CLARIFY.")
+                    action = "CLARIFY"
+                    reasoning = f"Missing critical category ({', '.join(missing)}). Clarification required before searching."
+
             return action, reasoning
         except Exception as e:
             logger.error(f"Router JSON parse error: {e}. Falling back to dialogue action '{suggested_action}'.")
@@ -316,7 +339,13 @@ class AgentOrchestrator:
 
             for i, item in enumerate(candidates):
                 asin = item.get("asin")
-                item_attrs = attributes_map.get(asin, [])
+                raw_attrs = attributes_map.get(asin, [])
+                if isinstance(raw_attrs, dict):
+                    item_attrs = [{"name": k, "value": v, "source": "catalog"} for k, v in raw_attrs.items()]
+                elif isinstance(raw_attrs, list):
+                    item_attrs = [a if isinstance(a, dict) else {"name": str(a), "value": "", "source": "catalog"} for a in raw_attrs]
+                else:
+                    item_attrs = []
                 technical = [a for a in item_attrs if a.get('source') != 'user_review']
                 reviews = [a for a in item_attrs if a.get('source') == 'user_review']
                 logger.info(f"\n[{i+1}] {item.get('title')} (ASIN: {asin})")
