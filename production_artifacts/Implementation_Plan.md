@@ -2,6 +2,7 @@
 
 > **Last restructured**: 2026-07-08 — Reorganised from linear Phase 0–3 into **Foundation → Meta-Phase A → Meta-Phase B**.
 > **Foundation revised**: 2026-07-11 — LLM-REDIAL dependency removed from Foundation. Amazon-curated subset strategy adopted for the initial graph build. REDIAL integration deferred to Meta-Phase B.
+> **Status audit**: 2026-10-10 — A4–A6 statuses corrected against the live graph. Open items tagged `AI-xx` reference `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md`.
 
 ---
 
@@ -255,12 +256,18 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] **MACS Progressive Relaxation**: If candidate yield $< 3$, trigger a deterministic relaxation cascade (widen budget by 15%, drop soft specs) and record `relaxed_constraints` for downstream transparency.
 * [x] **Multi-Index Semantic Search**: Parallel vector queries across product, attribute, and review indices (`CALL { ... } UNION`), returning candidates to be soft-scored.
 * [ ] Write integration tests: `tests/test_graph_search_tool.py` verifying MACS triggers on 0-result edge cases.
+* [ ] **AI-01** Implement AFP-002 bounded multi-index score fusion (`action_items/Proposed_Fix_Vector_Aggregation.md`): replace `sum(score)` in `GraphSearchTool._execute_hybrid_search` / `_execute_vector_search`, then re-run the live retrieval eval.
+* [ ] **AI-02** Verify the catalog-safe attribute demotion live: `live_eval_phone_01` returns ≥ 5 candidates including `B08GNRGB67`, and the generated Cypher has no `storage` `EXISTS` clause.
+* [ ] **AI-11** Parameterise the category title filter Cypher in `GraphSearchTool._build_filters` (currently string-interpolated).
 
 ### A2 — Contextual Selection-then-Rerank via CriticAgent
 * [x] **CriticAgent Reranking**: Refactor `CriticAgent.evaluate_candidates` to accept top $N$ pre-ranked candidates from `GraphSearchTool`.
 * [x] **Semantic Arbitration**: Evaluate trade-offs based on conversational context (e.g., verifying wired vs wireless) to catch semantic betrayal.
 * [x] **Transparency Injection**: Inject explicit disclosure warnings in the output if MACS `relaxed_constraints` is non-empty.
 * [x] Write unit tests: `tests/test_critic_agent.py` asserting accurate reranking and penalization of non-compliant items.
+  * _Note (2026-10-10)_: The disclosure logic lives in `CriticAgent.evaluate_candidate_tradeoffs`, which the orchestrator does not call. It uses the legacy per-item `evaluate_candidates`, and `relaxed_constraints` never reaches the Critic.
+* [ ] **AI-08 (decision)** Choose the Critic design: per-item legacy vs batched A2 (≈ 20 → 1 LLM calls per turn, MACS disclosure). Decide fail-open vs fail-closed on LLM error.
+* [ ] **AI-06** Fetch reviews per product in `GraphSearchTool.fetch_product_attributes` (the current `LIMIT 20` is global across all candidates). Order by properties that exist on `Review`.
 
 ### A3 — PromptConstructor — Graph Path Injection Slots
 * [x] Add `graph_reasoning_paths` parameter to `construct_recommendation_prompt()`
@@ -268,18 +275,27 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] Write tests asserting path injection when paths provided
 
 ### A4 — KECR — Knowledge-Enhanced Reasoning Path Extraction
-* [ ] Implement `src/tools/kecr_tool.py` — `KnowledgePathExtractor` class
-* [ ] Neo4j shortest-path queries connecting user preference entities → item
-* [ ] Wire into recommendation pipeline after CriticAgent top-3 selection
-* [ ] Write tests: `tests/test_kecr_tool.py`
+**Status (2026-10-10): ⚠️ Partial.** Implemented and wired, but the historical half is non-functional on the live graph.
+* [x] Implement `src/tools/kecr_tool.py` — `KnowledgePathExtractor` class
+* [x] Neo4j path queries connecting user preference entities → item (implemented as a dual-context pattern-matching query with time decay and α gating, not shortest-path)
+* [x] Wire into recommendation pipeline after CriticAgent top-3 selection (`AgentOrchestrator._execute_step`, STEP 3d.5)
+* [x] Write tests: `tests/unit/test_kecr_tool.py`, `tests/integration/test_kecr_orchestrator.py` (mocked Neo4j only)
+* [ ] **AI-03** Rewrite the historical subquery for the live schema. Use `(:Review)-[:ABOUT_PRODUCT]->`, with `rating` and `verified` on the `Review` node. Backfill `Review` timestamps from `processed_reviews.csv` `sort_timestamp`, or drop decay. Drop or build `BOUGHT_TOGETHER`. Add a live-graph test asserting a historical path for a known reviewer.
+* [ ] **AI-05** Attach real reviewer `user_id`s (≥ 3 reviews) to `live_eval_dataset.json` scenarios. Allow selecting a real reviewer in Chainlit (`src/ui/app.py` hard-codes `test_user_chainlit`).
 
 ### A5 — Explainable Response Generation (End-to-End)
+**Status (2026-10-10): ❌ Not done.** `[GRAPH EVIDENCE]` injection is wired; the verification deliverables below are missing.
 * [ ] End-to-end integration test: `tests/test_recommendation_pipeline.py`
-* [ ] Manual review: 5 diverse test queries against curated graph
+* [ ] Manual review: 5 diverse test queries against the live graph
 
 ### A6 — Quantitative & Qualitative Evaluation
-* [ ] `scripts/evaluate_retrieval.py` — Hit@5, Hit@10, MRR, NDCG@10
-* [ ] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability
+**Status (2026-10-10): ⚠️ Tier 1 done, Tier 2 partial.** Evaluation defaults to `--mode live` since 2026-10-10. Offline mock runs are not valid thesis evidence.
+* [x] `scripts/evaluate_retrieval.py` — Hit@K, MRR, NDCG@K (strict/soft/graded), strategy ablation, staged `eval_trace`. Live baseline: `eval_2026-10-09_1336`.
+* [ ] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability. Rubrics are implemented in `src/evaluation/judge.py`, but the script judges hand-written responses rather than system output.
+* [ ] **AI-04** Make Tier 2 judge real system output: run `AgentOrchestrator` over the live benchmark, capture `answer` and `eval_trace`, then judge. Retire or regenerate `evaluations/benchmarks/generative_benchmark.json` (only 3 of 15 ASINs exist in the graph).
+* [ ] **AI-09 (decision)** Tier 2 judge model (currently `gpt-4o-mini` grading a `gpt-4o` system).
+* [ ] **AI-10 (decision)** After AI-01, evaluate the `ideas.txt` direction as an ablation: LLM-generated target-product description → pure vector retrieval.
+* [ ] **AI-12** Stop `tests/test_challenger_distinguishing_features.py` from writing mock runs into `evaluations/`.
 
 ---
 
@@ -293,6 +309,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] Implement conditional routing edges (including cyclic loops for REJECT/Refine).
 * [ ] Wire Meta-Phase A tools into the LangGraph nodes.
 * [ ] Verify end-to-end execution within the Chainlit async context.
+* [ ] **AI-07** Merge preference extraction (`LLMPreferenceParser`) and `_generate_search_params` into one LLM call with a single source of truth for filters. Fix the "1500 → 150" example in `SEARCH_GENERATION_PROMPT`.
 
 ### B2 — MemoCRS Persistent Memory
 * [ ] `src/user/sqlite_profile_manager.py` — `SQLiteProfileManager`
@@ -316,6 +333,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] Remove `ResponseGenerator` dead code (GAP-013)
 * [ ] Move `PreferenceAgentFlow` to `src/legacy/`
 * [ ] Final dependency audit
+* [ ] **AI-13** Refresh stale docs (`production_artifacts/graph_state_snapshot.md`, `scripts/graph_ingestion/README.md`) and add `seaborn` to the project `.venv`.
 
 ---
 
@@ -397,10 +415,10 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 | GAP-003 | Neo4j Deprecated API | Foundation F0 | ✅ Done |
 | GAP-014 | Classic Baselines | Meta-Phase C | ❌ Not done |
 | GAP-005 | Lexical GraphRAG Layer | Foundation F3 | ❌ Not done |
-| GAP-006 | KECR Reasoning Paths | Meta-Phase A4 | ❌ Not done |
-| GAP-007 | Explainable Generation | Meta-Phase A3+A5 | ❌ Not done |
-| GAP-008 | Quantitative Evaluation | Meta-Phase A6 | ❌ Not done |
-| GAP-009 | LLM-as-Judge Evaluation | Meta-Phase A6 | ❌ Not done |
+| GAP-006 | KECR Reasoning Paths | Meta-Phase A4 | ⚠️ Partial (AI-03, AI-05) |
+| GAP-007 | Explainable Generation | Meta-Phase A3+A5 | ⚠️ Partial (A3 done, A5 not done) |
+| GAP-008 | Quantitative Evaluation | Meta-Phase A6 | ✅ Done (live Tier 1) |
+| GAP-009 | LLM-as-Judge Evaluation | Meta-Phase A6 | ⚠️ Partial (AI-04) |
 | GAP-010 | Recoverability Mechanism | Meta-Phase B4 | ❌ Not done |
 | GAP-011 | requirements.txt Hygiene | Foundation F0 | ✅ Done |
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
