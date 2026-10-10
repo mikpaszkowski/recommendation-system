@@ -165,8 +165,14 @@ class GraphSearchTool:
                         polarity = float(sp.get("polarity", 0.5))
                         
                         # Add heuristic bonus if value appears in title, brand or match reasons
-                        if val and (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
-                            bonus += (polarity * 0.2)
+                        if val:
+                            if val.isdigit() and len(val) <= 2:
+                                # For short bare digits (e.g. 1, 2, 8), require whole word boundary
+                                # to prevent false positives on years (2021) or model numbers (Inspiron 15, S20)
+                                if re.search(r"\b" + re.escape(val) + r"\b", title_lower):
+                                    bonus += (polarity * 0.2)
+                            elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
+                                bonus += (polarity * 0.2)
                             
                     item["score"] = base_score + bonus
                 

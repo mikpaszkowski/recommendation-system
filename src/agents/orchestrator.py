@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+import inspect
 from typing import Dict, Any, List, Optional
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -15,11 +16,15 @@ from src.llm_interface.prompts.router_prompt import router_prompt_template
 from src.llm_interface.prompt_constructor import PromptConstructor
 from src.dialog_manager.dialogue_manager import DialogueManager
 from src.dialog_manager.session_adapter import (
-    hard_constraints_to_structured_filters,
-    session_context_to_structured_filters,
-    session_context_to_dialogue_action,
-    session_context_to_user_persona,
+    CATALOG_SAFE_FILTER_KEYS,
+    _coerce_numeric,
     extract_semantic_query,
+    generate_attribute_unit_variations,
+    hard_constraints_to_structured_filters,
+    session_context_to_dialogue_action,
+    session_context_to_soft_preferences,
+    session_context_to_structured_filters,
+    session_context_to_user_persona,
 )
 from src.dialog_manager.session_schema import SessionContext, CurrentSessionContextWrapper
 from src.llm_interface.preference_parser import LLMPreferenceParser
@@ -289,8 +294,90 @@ class AgentOrchestrator:
                     if k not in active_filters or active_filters[k] is None:
                         active_filters[k] = v
             
-            logger.info(f"[STEP 3b] Merged active filters: {active_filters}")
-            state["active_filters"] = active_filters
+            # Requirement R1 & R2: Partition active_filters into catalog-safe structured filters
+            # and demote arbitrary EAV/spec constraints into soft preferences for additive scoring.
+            catalog_filters: Dict[str, Any] = {}
+            demoted_from_filters: List[Dict[str, Any]] = []
+
+            for k, v in active_filters.items():
+                if v is None or v == "":
+                    continue
+                k_lower = str(k).lower().strip()
+
+                # Normalize catalog fields to canonical GraphSearchTool keys
+                if k_lower in ("price_max", "max_price", "budget", "cost") or (k_lower.startswith("price") and any(k_lower.endswith(s) for s in ("_max", "_less_than", "_lte", "<="))):
+                    num = _coerce_numeric(v)
+                    if num is not None:
+                        catalog_filters["price_max"] = num
+                elif k_lower in ("price_min", "min_price") or (k_lower.startswith("price") and any(k_lower.endswith(s) for s in ("_min", "_greater_than", "_gte", ">="))):
+                    num = _coerce_numeric(v)
+                    if num is not None:
+                        catalog_filters["price_min"] = num
+                elif k_lower == "price":
+                    num = _coerce_numeric(v)
+                    if num is not None:
+                        catalog_filters["price_max"] = num
+                elif k_lower in ("brand", "make", "manufacturer", "store"):
+                    catalog_filters["brand"] = str(v).strip()
+                elif k_lower in ("brands",):
+                    if isinstance(v, list):
+                        catalog_filters["brands"] = [str(x).strip() for x in v]
+                    else:
+                        catalog_filters["brand"] = str(v).strip()
+                elif k_lower in ("exclude_brand", "exclude_brands", "brand_exclude", "excluded_brand"):
+                    catalog_filters["exclude_brand"] = str(v).strip()
+                elif k_lower in ("category", "product_category", "product_type", "type"):
+                    catalog_filters["category"] = str(v).strip()
+                elif k_lower in ("categories",):
+                    if isinstance(v, list):
+                        catalog_filters["categories"] = [str(x).strip() for x in v]
+                    else:
+                        catalog_filters["category"] = str(v).strip()
+                elif k_lower in ("exclude_category", "category_exclude", "excluded_category"):
+                    catalog_filters["exclude_category"] = str(v).strip()
+                elif k_lower in ("excluded_asins", "exclude_asins", "exclude_asin"):
+                    catalog_filters["excluded_asins"] = v if isinstance(v, list) else [str(v).strip()]
+                else:
+                    attr_name = k_lower
+                    for suffix in ("_min", "_max", "_equal", "_less_than", "_greater_than", "_exclude", "_exact"):
+                        if attr_name.endswith(suffix):
+                            attr_name = attr_name[:-len(suffix)]
+                            break
+                    polarity = -1.0 if "exclude" in k_lower else 1.0
+                    val_str = str(int(v)) if isinstance(v, (int, float)) and float(v).is_integer() else str(v).strip()
+                    demoted_from_filters.append({
+                        "category": attr_name,
+                        "value": val_str,
+                        "polarity": polarity,
+                        "confidence": 1.0,
+                        "evidence": f"Demoted from structured filter key '{k}'",
+                    })
+                    unit_variations = generate_attribute_unit_variations(attr_name, val_str)
+                    for u_val in unit_variations:
+                        demoted_from_filters.append({
+                            "category": attr_name,
+                            "value": u_val,
+                            "polarity": polarity,
+                            "confidence": 1.0,
+                            "evidence": f"Demoted unit variation: {attr_name} {u_val}",
+                        })
+
+            # Retrieve soft preferences from session context (including demoted hard constraints)
+            soft_preferences: List[Dict[str, Any]] = []
+            if session_context:
+                soft_preferences.extend(session_context_to_soft_preferences(session_context, include_demoted=True))
+
+            seen_sp = {(sp.get("category", "").lower(), str(sp.get("value", "")).lower(), float(sp.get("polarity", 1.0))) for sp in soft_preferences}
+            for d in demoted_from_filters:
+                d_key = (d["category"].lower(), d["value"].lower(), float(d.get("polarity", 1.0)))
+                if d_key not in seen_sp:
+                    seen_sp.add(d_key)
+                    soft_preferences.append(d)
+
+            logger.info(f"[STEP 3b] Merged active filters (raw): {active_filters}")
+            logger.info(f"[STEP 3b] Catalog-safe filters (Cypher): {catalog_filters}")
+            logger.info(f"[STEP 3b] Soft preferences (Additive scoring): {len(soft_preferences)} entries")
+            state["active_filters"] = catalog_filters
             
             # Semantic query with fallback to extract_semantic_query
             semantic_query = updates.get("semantic_query")
@@ -303,17 +390,32 @@ class AgentOrchestrator:
             logger.info("--- 2. Building Payload for Search Engine ---")
             logger.info("==============================================")
             logger.info(f"📝 Semantic Query (Vector): '{semantic_query}'")
-            logger.info(f"🎯 Structured Filters (Cypher): {json.dumps(active_filters, indent=2, default=str)}")
+            logger.info(f"🎯 Structured Filters (Cypher): {json.dumps(catalog_filters, indent=2, default=str)}")
                 
             # 3c. Search (normalization + Cypher happens inside)
             logger.info("==============================================")
             logger.info("--- 3. Executing Multi-Index Hybrid Search ---")
             logger.info("==============================================")
-            search_result = self.graph_tool.search(
-                semantic_query=semantic_query,
-                structured_filters=active_filters,
-                limit=self.candidate_limit
-            )
+            search_kwargs: Dict[str, Any] = {
+                "semantic_query": semantic_query,
+                "structured_filters": catalog_filters,
+                "limit": self.candidate_limit,
+            }
+            try:
+                sig = inspect.signature(self.graph_tool.search)
+                if "soft_preferences" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+                    search_kwargs["soft_preferences"] = soft_preferences
+            except Exception:
+                search_kwargs["soft_preferences"] = soft_preferences
+
+            try:
+                search_result = self.graph_tool.search(**search_kwargs)
+            except TypeError as te:
+                if "soft_preferences" in str(te) and "soft_preferences" in search_kwargs:
+                    search_kwargs.pop("soft_preferences")
+                    search_result = self.graph_tool.search(**search_kwargs)
+                else:
+                    raise
             items_found = search_result.get('items', [])
             logger.info(f"✅ Search successful! Found {len(items_found)} items.")
             for i, item in enumerate(items_found):
@@ -364,6 +466,33 @@ class AgentOrchestrator:
             critic_profile = dict(profile)
             if session_context:
                 critic_profile["preferences"] = session_context_to_user_persona(session_context)
+            elif soft_preferences:
+                critic_profile.setdefault("preferences", {})
+
+            # Ensure any demoted filters from LLM search updates are represented in Critic persona
+            if isinstance(critic_profile.get("preferences"), dict):
+                prefs_dict = critic_profile["preferences"]
+
+                def _has_quality(qualities: List[Any], val_str: str) -> bool:
+                    v_low = val_str.lower()
+                    for q in qualities:
+                        q_str = str(q).lower()
+                        if q_str == v_low or q_str.startswith(f"{v_low} (") or q_str.startswith(f"{v_low} "):
+                            return True
+                    return False
+
+                for sp in soft_preferences:
+                    val = sp.get("value")
+                    cat = sp.get("category", "")
+                    pol = float(sp.get("polarity", 1.0))
+                    if val and pol > 0:
+                        desc = f"{val} (category: {cat}, polarity: {pol:+.1f})"
+                        if not _has_quality(prefs_dict.get("preferred_qualities", []), str(val)):
+                            prefs_dict.setdefault("preferred_qualities", []).append(desc)
+                    elif val and pol < 0:
+                        desc = f"{val} (category: {cat}, polarity: {pol:+.1f})"
+                        if not _has_quality(prefs_dict.get("disliked_qualities", []), str(val)):
+                            prefs_dict.setdefault("disliked_qualities", []).append(desc)
                 
             reranked_top = await self.critic_agent.evaluate_candidates(critic_profile, candidates, attributes_map)
             

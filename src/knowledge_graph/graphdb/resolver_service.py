@@ -62,7 +62,11 @@ class ResolverService:
             if node_label == "Category":
                 # Whole-token / word-boundary regex matching to prevent cross-domain contamination
                 # (e.g. 'phone' matching 'Headphones')
-                pattern = f"(?i).*(^|[^a-z]){re.escape(text)}(s)?([^a-z]|$).*"
+                text_clean = text.lower().strip()
+                if text_clean in ("smartphone", "smartphones", "smart phone", "smart phones", "cellphone", "cellphones", "cell phone", "cell phones", "mobile phone", "mobile phones"):
+                    pattern = "(?i).*(^|[^a-z])(smart|cell|mobile)?( )?phone(s)?([^a-z]|$).*"
+                else:
+                    pattern = f"(?i).*(^|[^a-z]){re.escape(text)}(s)?([^a-z]|$).*"
                 t2_query = f"""
                 MATCH (node:{node_label})
                 WHERE node.{property_name} =~ $pattern

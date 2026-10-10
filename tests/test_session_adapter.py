@@ -22,11 +22,15 @@ from src.dialog_manager.session_schema import (
     SuggestedSystemAction,
 )
 from src.dialog_manager.session_adapter import (
+    extract_demoted_soft_preferences,
     extract_semantic_query,
+    generate_attribute_unit_variations,
     hard_constraints_to_structured_filters,
     legacy_preferences_to_session_context,
     session_context_to_dialogue_action,
     session_context_to_legacy_preferences,
+    session_context_to_soft_preferences,
+    session_context_to_structured_filters,
     session_context_to_user_persona,
 )
 from src.tools.graph_search_tool import GraphSearchTool
@@ -422,3 +426,300 @@ def test_legacy_preferences_plural_list_unpacking():
 
     assert len(cat_constraints) == 2
     assert {c.value for c in cat_constraints} == {"Laptops", "Ultrabooks"}
+
+
+# ============================================================================
+# Group H: Catalog-Safe Demotion & Retrieval Candidate Recovery
+# ============================================================================
+
+def test_session_context_to_structured_filters_catalog_safe():
+    """R1: session_context_to_structured_filters demotes non-catalog attributes."""
+    ctx = SessionContext(
+        extracted_parameters=ExtractedParameters(
+            hard_constraints=[
+                HardConstraint(attribute="price", operator="less_than", value=800.0),
+                HardConstraint(attribute="brand", operator="include", value="Samsung"),
+                HardConstraint(attribute="category", operator="include", value="smartphone"),
+                HardConstraint(attribute="storage", operator="greater_than", value=128),
+                HardConstraint(attribute="camera", operator="equal", value="64MP"),
+                HardConstraint(attribute="refresh_rate", operator="greater_than", value=120),
+            ]
+        )
+    )
+    # Default catalog-safe mode
+    filters = session_context_to_structured_filters(ctx)
+    assert filters.get("price_max") == 800.0
+    assert filters.get("brand") == "Samsung"
+    assert filters.get("category") == "smartphone"
+    # Technical specs must NOT be in filters
+    assert "storage_min" not in filters
+    assert "storage" not in filters
+    assert "camera" not in filters
+    assert "refresh_rate" not in filters
+
+    # Explicit catalog_safe=False preserves legacy keys
+    raw_filters = session_context_to_structured_filters(ctx, catalog_safe=False)
+    assert raw_filters.get("storage_min") == 128.0
+    assert raw_filters.get("camera") == "64MP"
+
+
+def test_extract_demoted_soft_preferences_high_polarity():
+    """R2: Demoted attribute constraints become soft preferences with high polarity."""
+    constraints = [
+        HardConstraint(attribute="storage", operator="greater_than", value=128),
+        HardConstraint(attribute="camera", operator="equal", value="64MP"),
+        HardConstraint(attribute="operating_system", operator="exclude", value="ChromeOS"),
+        HardConstraint(attribute="brand", operator="include", value="Samsung"),  # Catalog, not demoted
+    ]
+    demoted = extract_demoted_soft_preferences(constraints)
+    cats = {d["category"] for d in demoted}
+    assert "storage" in cats
+    assert "camera" in cats
+    assert "operating_system" in cats
+    assert "brand" not in cats  # Brand stays hard constraint
+
+    # Check polarity
+    storage_pref = next(d for d in demoted if d["category"] == "storage" and d["value"] == "128")
+    assert storage_pref["polarity"] == 1.0
+    os_pref = next(d for d in demoted if d["category"] == "operating_system")
+    assert os_pref["polarity"] == -1.0
+
+    # Unit variation added for additive scoring title match
+    assert any(d["category"] == "storage" and d["value"] == "128GB" for d in demoted)
+
+
+def test_session_context_to_soft_preferences_merging():
+    """R2: session_context_to_soft_preferences combines explicit soft prefs and demoted hard constraints."""
+    ctx = SessionContext(
+        extracted_parameters=ExtractedParameters(
+            hard_constraints=[
+                HardConstraint(attribute="storage", operator="greater_than", value="128GB"),
+                HardConstraint(attribute="brand", operator="include", value="Samsung"),
+            ],
+            soft_preferences=[
+                SoftPreference(category="connectivity", value="5G network connectivity", polarity=0.9),
+            ]
+        )
+    )
+    soft = session_context_to_soft_preferences(ctx, include_demoted=True)
+    values = {s["value"].lower() for s in soft}
+    assert "5g network connectivity" in values
+    assert "128gb" in values
+
+
+def test_live_eval_phone_01_candidate_recovery():
+    """
+    R3 Acceptance Criteria:
+    - Query live_eval_phone_01 executed through AgentOrchestrator returns >= 5 candidates.
+    - Target ASIN B08GNRGB67 is present in retrieved candidate pool.
+    - Cypher query generated for live_eval_phone_01 no longer contains pruning
+      EXISTS { MATCH (node)-[:HAS_ATTRIBUTE]->(a:Attribute) WHERE a.attribute_name = 'storage' } clauses.
+    """
+    import asyncio
+    from src.agents.orchestrator import AgentOrchestrator
+
+    async def _test():
+        orchestrator = AgentOrchestrator()
+        utterance = "I need an unlocked Samsung Galaxy smartphone that supports high-speed 5G network connectivity with at least 128GB of internal storage and a 64MP camera."
+        result = await orchestrator.run(
+            user_id="live_eval_phone_01",
+            user_message=utterance,
+            session_id="live_eval_phone_01"
+        )
+        assert result.get("action") == "SEARCH"
+
+        eval_trace = result.get("eval_trace", {})
+        raw_candidates = eval_trace.get("raw_candidates", [])
+        search_metadata = eval_trace.get("search_metadata", {})
+        cypher = search_metadata.get("cypher", "")
+
+        # 1. Candidate yield >= 5
+        assert len(raw_candidates) >= 5, f"Expected >= 5 candidates, got {len(raw_candidates)}"
+
+        # 2. Target ASIN present
+        asins = [c.get("asin") for c in raw_candidates]
+        assert "B08GNRGB67" in asins, f"Target B08GNRGB67 not in retrieved candidates: {asins}"
+
+        # 3. Cypher query does NOT contain storage pruning filter
+        assert "attribute_name = 'storage'" not in cypher
+        assert 'attribute_name = "storage"' not in cypher
+
+    asyncio.run(_test())
+
+
+def test_generate_attribute_unit_variations_adversarial_matrix():
+    """Adversarial check: generate_attribute_unit_variations correctly handles all formats."""
+    # Storage with and without units and spacing
+    assert set(generate_attribute_unit_variations("storage", "128")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("storage", "128GB")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("storage", "128 GB")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("storage", 128)) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("storage", 128.0)) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("storage", "1TB")) == {"1TB", "1 TB", "1"}
+
+    # Camera with and without units and spacing
+    assert set(generate_attribute_unit_variations("camera", "64")) == {"64MP", "64 MP", "64 megapixel", "64"}
+    assert set(generate_attribute_unit_variations("camera", "64MP")) == {"64MP", "64 MP", "64 megapixel", "64"}
+    assert set(generate_attribute_unit_variations("camera", "64 MP")) == {"64MP", "64 MP", "64 megapixel", "64"}
+
+    # Refresh rate
+    assert set(generate_attribute_unit_variations("refresh_rate", "120")) == {"120Hz", "120 Hz", "120"}
+    assert set(generate_attribute_unit_variations("refresh_rate", "120Hz")) == {"120Hz", "120 Hz", "120"}
+    assert set(generate_attribute_unit_variations("refresh_rate", "120 Hz")) == {"120Hz", "120 Hz", "120"}
+
+    # Screen size
+    assert set(generate_attribute_unit_variations("screen_size", "6.7")) == {"6.7-inch", "6.7 inch", '6.7"', "6.7"}
+    assert set(generate_attribute_unit_variations("screen_size", "6.7 inch")) == {"6.7-inch", "6.7 inch", '6.7"', "6.7"}
+    assert set(generate_attribute_unit_variations("screen_size", "6.7-inch")) == {"6.7-inch", "6.7 inch", '6.7"', "6.7"}
+    assert set(generate_attribute_unit_variations("screen_size", '6.7"')) == {"6.7-inch", "6.7 inch", '6.7"', "6.7"}
+
+    # Battery
+    assert set(generate_attribute_unit_variations("battery", "5000")) == {"5000mAh", "5000 mAh", "5000"}
+    assert set(generate_attribute_unit_variations("battery", "5000mAh")) == {"5000mAh", "5000 mAh", "5000"}
+
+    # Boundary and invalid inputs
+    assert generate_attribute_unit_variations("storage", None) == []
+    assert generate_attribute_unit_variations("storage", "") == []
+    assert generate_attribute_unit_variations("unknown_spec", "abc") == []
+
+
+def test_extract_demoted_soft_preferences_with_raw_dicts_and_units():
+    """Adversarial check: Raw dicts with unit strings are correctly parsed into multi-unit variations."""
+    raw_constraints = [
+        {"attribute": "storage", "operator": "greater_than", "value": "128GB"},
+        {"attribute": "camera", "operator": "equal", "value": "64 MP"},
+        {"attribute": "refresh_rate", "operator": "greater_than", "value": "120Hz"},
+        {"attribute": "price", "operator": "less_than", "value": "1000"},  # catalog safe, ignored
+    ]
+    demoted = extract_demoted_soft_preferences(raw_constraints)
+    values = {d["value"] for d in demoted}
+
+    # Verify unit variations exist
+    assert "128" in values
+    assert "128GB" in values
+    assert "128 GB" in values
+    assert "64" in values
+    assert "64MP" in values
+    assert "64 MP" in values
+    assert "120" in values
+    assert "120Hz" in values
+    assert "120 Hz" in values
+    assert "1000" not in values  # price stays hard constraint
+
+
+def test_session_context_to_structured_filters_accepts_list_directly():
+    """Adversarial check: session_context_to_structured_filters handles raw list input gracefully."""
+    constraints = [
+        HardConstraint(attribute="brand", operator="include", value="Samsung"),
+        HardConstraint(attribute="storage", operator="greater_than", value=128),
+    ]
+    # In catalog_safe mode (default)
+    filters = session_context_to_structured_filters(constraints)
+    assert filters.get("brand") == "Samsung"
+    assert "storage_min" not in filters
+    assert "storage" not in filters
+
+    # In legacy non-catalog safe mode
+    raw_filters = session_context_to_structured_filters(constraints, catalog_safe=False)
+    assert raw_filters.get("brand") == "Samsung"
+    assert raw_filters.get("storage_min") == 128.0
+
+
+def test_session_context_to_soft_preferences_accepts_list_directly():
+    """Adversarial check: session_context_to_soft_preferences handles raw list input gracefully."""
+    constraints = [
+        HardConstraint(attribute="storage", operator="greater_than", value="128GB"),
+        HardConstraint(attribute="operating_system", operator="exclude", value="ChromeOS"),
+        HardConstraint(attribute="brand", operator="include", value="Samsung"),
+    ]
+    soft = session_context_to_soft_preferences(constraints, include_demoted=True)
+    cats = {s["category"] for s in soft}
+    assert "storage" in cats
+    assert "operating_system" in cats
+    assert "brand" not in cats
+
+    # Polarity check
+    os_pref = next(s for s in soft if s["category"] == "operating_system")
+    assert os_pref["polarity"] == -1.0
+
+
+def test_critic_persona_negative_polarity_preservation():
+    """R2: Verify negative polarity demoted constraints enter disliked_qualities for CriticAgent."""
+    ctx = SessionContext(
+        extracted_parameters=ExtractedParameters(
+            hard_constraints=[
+                HardConstraint(attribute="operating_system", operator="exclude", value="ChromeOS"),
+                HardConstraint(attribute="brand", operator="exclude", value="Apple"),
+                HardConstraint(attribute="storage", operator="greater_than", value="128GB"),
+            ]
+        )
+    )
+    persona = session_context_to_user_persona(ctx)
+    disliked = persona.get("disliked_qualities", [])
+    assert any("chromeos" in d.lower() for d in disliked)
+    assert any("operating_system" in d.lower() for d in disliked)
+
+
+def test_session_context_to_structured_filters_root_hard_constraints_fallback():
+    """Adversarial check: session_context with hard_constraints at root (no extracted_parameters) works."""
+    raw_ctx = {
+        "hard_constraints": [
+            {"attribute": "brand", "operator": "include", "value": "Samsung"},
+            {"attribute": "price", "operator": "less_than", "value": "800"},
+            {"attribute": "storage", "operator": "greater_than", "value": "128GB"},
+        ]
+    }
+    filters = session_context_to_structured_filters(raw_ctx, catalog_safe=True)
+    assert filters.get("brand") == "Samsung"
+    assert filters.get("price_max") == 800.0
+    assert "storage" not in filters
+    assert "storage_min" not in filters
+
+
+def test_extracted_parameters_pydantic_model_inside_dict():
+    """Adversarial check: ExtractedParameters Pydantic model inside dict is correctly parsed."""
+    ep = ExtractedParameters(
+        hard_constraints=[
+            HardConstraint(attribute="brand", operator="include", value="Samsung"),
+            HardConstraint(attribute="storage", operator="greater_than", value="128GB"),
+        ]
+    )
+    # Test hard_constraints_to_structured_filters
+    filters = hard_constraints_to_structured_filters({"extracted_parameters": ep}, catalog_safe=True)
+    assert filters.get("brand") == "Samsung"
+    assert "storage" not in filters
+
+    # Test extract_demoted_soft_preferences
+    demoted = extract_demoted_soft_preferences({"extracted_parameters": ep})
+    cats = {d["category"] for d in demoted}
+    assert "storage" in cats
+    assert "brand" not in cats
+
+
+def test_catalog_safe_exclusions_and_asins():
+    """Adversarial check: exclude_category, brand_exclude, and excluded_asins are preserved in catalog_safe mode."""
+    constraints = [
+        {"attribute": "exclude_category", "operator": "include", "value": "Laptops"},
+        {"attribute": "brand_exclude", "operator": "include", "value": "Apple"},
+        {"attribute": "excluded_asins", "operator": "exclude", "value": ["B001", "B002"]},
+    ]
+    filters = hard_constraints_to_structured_filters(constraints, catalog_safe=True)
+    assert filters.get("exclude_category") == "Laptops"
+    assert filters.get("exclude_brand") == "Apple"
+    assert filters.get("excluded_asins") == ["B001", "B002"]
+
+
+def test_generate_attribute_unit_variations_with_comparator_prefixes_and_aliases():
+    """Adversarial check: comparator prefixes (>=, <=, at least) and aliases (internal_storage, main_camera) generate proper unit variations."""
+    # Prefix handling
+    assert set(generate_attribute_unit_variations("storage", ">= 128GB")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("storage", "128GB+")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("camera", "at least 64MP")) == {"64MP", "64 MP", "64 megapixel", "64"}
+
+    # Alias handling
+    assert set(generate_attribute_unit_variations("internal_storage", "128GB")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("main_camera", "64MP")) == {"64MP", "64 MP", "64 megapixel", "64"}
+    assert set(generate_attribute_unit_variations("display", "6.7 inch")) == {"6.7-inch", "6.7 inch", '6.7"', "6.7"}
+    assert set(generate_attribute_unit_variations("battery_capacity", "5000mAh")) == {"5000mAh", "5000 mAh", "5000"}
+
+

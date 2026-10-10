@@ -93,10 +93,18 @@ class MockGraphSearchTool:
     def __init__(self):
         self.search_calls: List[Dict[str, Any]] = []
 
-    def search(self, semantic_query: Optional[str] = None, structured_filters: Optional[Dict[str, Any]] = None, limit: int = 5) -> Dict[str, Any]:
+    def search(
+        self,
+        semantic_query: Optional[str] = None,
+        structured_filters: Optional[Dict[str, Any]] = None,
+        limit: int = 5,
+        soft_preferences: Optional[List[Dict[str, Any]]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
         self.search_calls.append({
             "semantic_query": semantic_query,
             "structured_filters": dict(structured_filters) if structured_filters else {},
+            "soft_preferences": list(soft_preferences) if soft_preferences else [],
             "limit": limit
         })
         return {
@@ -475,3 +483,144 @@ class TestAgentOrchestratorMultiTurnExecution:
             assert len(wrapper_a_cleared.current_session_context.extracted_parameters.hard_constraints) == 0
 
         asyncio.run(_run())
+
+    def test_critic_agent_receives_demoted_negative_and_positive_soft_preferences(self):
+        """
+        R2 Acceptance: Verify that demoted non-catalog constraints (including negative exclusions)
+        are passed to GraphSearchTool soft_preferences AND preserved in Critic persona
+        (preferred_qualities for positive, disliked_qualities for negative).
+        """
+        async def _run():
+            mock_llm = MockLLMHandler()
+            mock_graph = MockGraphSearchTool()
+            mock_critic = MockCriticAgent()
+            mock_parser = MockPreferenceParser()
+
+            mock_parser.set_extraction("I want a phone with 128GB storage but not ChromeOS", {
+                "current_session_context": {
+                    "session_intent": "initial_search",
+                    "situational_context": "Looking for phone with 128GB storage",
+                    "extracted_parameters": {
+                        "hard_constraints": [
+                            {"attribute": "category", "operator": "include", "value": "smartphone"},
+                            {"attribute": "storage", "operator": "greater_than", "value": "128GB"},
+                            {"attribute": "operating_system", "operator": "exclude", "value": "ChromeOS"},
+                        ],
+                        "soft_preferences": []
+                    },
+                    "dialogue_state": {
+                        "ready_for_recommendation": True,
+                        "missing_critical_attributes": [],
+                        "suggested_system_action": "present_results"
+                    }
+                }
+            })
+
+            orchestrator = AgentOrchestrator(
+                graph_tool=mock_graph,
+                llm_handler=mock_llm,
+                critic_agent=mock_critic,
+                dialogue_manager=DialogueManager(),
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
+            )
+
+            await orchestrator.run(user_id="user_demoted_test", user_message="I want a phone with 128GB storage but not ChromeOS")
+
+            # 1. Verify GraphSearchTool received demoted soft_preferences
+            assert len(mock_graph.search_calls) == 1
+            call = mock_graph.search_calls[0]
+            soft_prefs = call.get("soft_preferences", [])
+            categories = {sp.get("category") for sp in soft_prefs}
+            assert "storage" in categories
+            assert "operating_system" in categories
+
+            # Verify multi-unit variation for storage
+            storage_vals = {sp.get("value") for sp in soft_prefs if sp.get("category") == "storage"}
+            assert "128" in storage_vals
+            assert "128GB" in storage_vals
+            assert "128 GB" in storage_vals
+
+            # Verify negative polarity on excluded OS
+            os_pref = next(sp for sp in soft_prefs if sp.get("category") == "operating_system")
+            assert os_pref.get("polarity") == -1.0
+
+            # 2. Verify CriticAgent persona received both preferred_qualities and disliked_qualities
+            assert len(mock_critic.eval_calls) == 1
+            critic_profile = mock_critic.eval_calls[0]["profile"]
+            critic_prefs = critic_profile.get("preferences", {})
+
+            # storage in preferred_qualities
+            preferred = critic_prefs.get("preferred_qualities", [])
+            assert any("128" in p for p in preferred)
+
+            # ChromeOS in disliked_qualities
+            disliked = critic_prefs.get("disliked_qualities", [])
+            assert any("chromeos" in d.lower() for d in disliked)
+
+        asyncio.run(_run())
+
+    def test_active_filter_alias_normalization_and_critic_digit_preservation(self):
+        """
+        Adversarial check: Verify that active filter aliases (max_price, min_price, make)
+        are normalized into canonical Cypher keys (price_max, price_min, brand) and that
+        soft preferences with value '1' or '0' are not falsely dropped by Critic persona deduplication.
+        """
+        async def _run():
+            mock_llm = MockLLMHandler(default_response='{"action": "SEARCH", "reasoning": "Search for laptop"}')
+            mock_graph = MockGraphSearchTool()
+            mock_critic = MockCriticAgent()
+            mock_parser = MockPreferenceParser()
+
+            mock_parser.set_extraction("Find me a laptop under 1000 with 1TB SSD made by Asus", {
+                "current_session_context": {
+                    "session_intent": "initial_search",
+                    "extracted_parameters": {
+                        "hard_constraints": [
+                            {"attribute": "category", "operator": "include", "value": "laptop"},
+                            {"attribute": "max_price", "operator": "less_than", "value": 1000},
+                            {"attribute": "min_price", "operator": "greater_than", "value": 300},
+                            {"attribute": "make", "operator": "include", "value": "Asus"},
+                            {"attribute": "storage", "operator": "equal", "value": "1TB"},
+                        ],
+                        "soft_preferences": [
+                            {"category": "warranty", "value": "1", "polarity": 1.0, "confidence": 1.0}
+                        ]
+                    },
+                    "dialogue_state": {
+                        "ready_for_recommendation": True,
+                        "missing_critical_attributes": [],
+                        "suggested_system_action": "present_results"
+                    }
+                }
+            })
+
+            orchestrator = AgentOrchestrator(
+                graph_tool=mock_graph,
+                llm_handler=mock_llm,
+                critic_agent=mock_critic,
+                dialogue_manager=DialogueManager(),
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
+            )
+
+            await orchestrator.run(user_id="user_alias_test", user_message="Find me a laptop under 1000 with 1TB SSD made by Asus")
+
+            assert len(mock_graph.search_calls) == 1
+            call = mock_graph.search_calls[0]
+            filters = call.get("structured_filters", {})
+
+            # Canonical filter key normalization
+            assert filters.get("price_max") == 1000.0
+            assert filters.get("price_min") == 300.0
+            assert filters.get("brand") == "Asus"
+            assert "storage" not in filters
+
+            # Critic persona preservation of '1'
+            critic_profile = mock_critic.eval_calls[0]["profile"]
+            preferred = critic_profile.get("preferences", {}).get("preferred_qualities", [])
+            assert any("1 (category: warranty" in p for p in preferred)
+            assert any("1tb" in p.lower() for p in preferred)
+
+        asyncio.run(_run())
+

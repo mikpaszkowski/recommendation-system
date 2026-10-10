@@ -105,11 +105,35 @@ def _unwrap_session_context(context: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Catalog-Safe Taxonomy Constants
+# ---------------------------------------------------------------------------
+
+CATALOG_SAFE_ATTRIBUTES = {
+    "price", "budget", "cost", "price_max", "max_price", "price_min", "min_price",
+    "brand", "make", "manufacturer", "store",
+    "exclude_brand", "excluded_brand", "brand_exclude",
+    "category", "categories", "product_category", "product_type", "type",
+    "exclude_category", "excluded_category", "category_exclude",
+    "excluded_asins", "exclude_asins", "exclude_asin", "asin", "parent_asin"
+}
+
+CATALOG_SAFE_FILTER_KEYS = {
+    "price_max", "price_min", "price", "budget", "cost", "max_price", "min_price",
+    "brand", "brands", "make", "manufacturer", "store",
+    "exclude_brand", "exclude_brands", "brand_exclude", "excluded_brand",
+    "category", "categories", "exclude_category", "excluded_category", "category_exclude",
+    "product_category", "product_type", "type",
+    "excluded_asins", "exclude_asins", "exclude_asin"
+}
+
+
+# ---------------------------------------------------------------------------
 # Mapping Function 1: Hard Constraints -> GraphSearchTool Structured Filters
 # ---------------------------------------------------------------------------
 
 def hard_constraints_to_structured_filters(
-    hard_constraints: Union[List[Any], Dict[str, Any], Any]
+    hard_constraints: Union[List[Any], Dict[str, Any], Any],
+    catalog_safe: bool = False,
 ) -> Dict[str, Any]:
     """
     Translate hard constraints into structured filters compatible with
@@ -121,11 +145,15 @@ def hard_constraints_to_structured_filters(
       - brand: str
       - exclude_brand: str
       - category: str
-      + additional constraint keys preserved for downstream consumers.
+      + additional constraint keys preserved for downstream consumers when catalog_safe=False.
 
     Args:
         hard_constraints: List of HardConstraint objects/dicts, or a dict/SessionContext
                           containing 'hard_constraints' or 'extracted_parameters'.
+        catalog_safe: If True, only verified catalog fields (price, brand, exclude_brand, category)
+                      become hard filters. Non-catalog attributes are ignored to prevent
+                      false-positive candidate pruning on sparse knowledge graphs.
+                      Defaults to False for backwards compatibility with unit tests.
 
     Returns:
         Dict[str, Any] matching GraphSearchTool filter requirements.
@@ -150,7 +178,9 @@ def hard_constraints_to_structured_filters(
 
     if isinstance(hard_constraints, dict):
         extracted_params = hard_constraints.get("extracted_parameters")
-        if isinstance(extracted_params, dict) and "hard_constraints" in extracted_params:
+        if hasattr(extracted_params, "hard_constraints"):
+            raw_list = getattr(extracted_params, "hard_constraints", [])
+        elif isinstance(extracted_params, dict) and "hard_constraints" in extracted_params:
             raw_list = extracted_params["hard_constraints"]
         elif "hard_constraints" in hard_constraints:
             raw_list = hard_constraints["hard_constraints"]
@@ -158,7 +188,12 @@ def hard_constraints_to_structured_filters(
             raw_list = []
     elif hasattr(hard_constraints, "extracted_parameters"):
         extracted_params = getattr(hard_constraints, "extracted_parameters", None)
-        raw_list = getattr(extracted_params, "hard_constraints", [])
+        if hasattr(extracted_params, "hard_constraints"):
+            raw_list = getattr(extracted_params, "hard_constraints", [])
+        elif isinstance(extracted_params, dict):
+            raw_list = extracted_params.get("hard_constraints", [])
+        else:
+            raw_list = []
     elif isinstance(hard_constraints, list):
         raw_list = hard_constraints
     else:
@@ -180,13 +215,13 @@ def hard_constraints_to_structured_filters(
         if hasattr(op, "value"):
             op_str = str(op.value).lower().strip()
         else:
-            op_str = str(op).lower().strip()
+            op_str = str(op.lower().strip() if isinstance(op, str) else op)
 
         # 1. Price Constraints
         if attr in ("price", "budget", "cost", "price_max", "max_price", "price_min", "min_price"):
             num_val = _coerce_numeric(raw_val)
             if num_val is not None:
-                if op_str in ("less_than", "less_than_or_equal", "<", "<=") or attr in ("price_max", "max_price"):
+                if op_str in ("less_than", "less_than_or_equal", "<", "<=") or attr in ("price_max", "max_price", "budget", "cost"):
                     filters["price_max"] = num_val
                 elif op_str in ("greater_than", "greater_than_or_equal", ">", ">=") or attr in ("price_min", "min_price"):
                     filters["price_min"] = num_val
@@ -214,7 +249,7 @@ def hard_constraints_to_structured_filters(
                 if brand_str not in excluded_brands:
                     excluded_brands.append(brand_str)
 
-        elif attr in ("exclude_brand", "excluded_brand"):
+        elif attr in ("exclude_brand", "excluded_brand", "brand_exclude"):
             brand_str = str(raw_val).strip()
             filters["exclude_brand"] = brand_str
             filters["brand_exclude"] = brand_str
@@ -231,8 +266,25 @@ def hard_constraints_to_structured_filters(
             elif op_str == "exclude":
                 filters["exclude_category"] = cat_str
 
-        # 4. Other Attributes (e.g. operating_system, ram, storage, model, form_factor)
+        elif attr in ("exclude_category", "excluded_category", "category_exclude"):
+            cat_str = str(raw_val).strip()
+            filters["exclude_category"] = cat_str
+
+        # 4. ASIN Exclusions
+        elif attr in ("excluded_asins", "exclude_asins", "exclude_asin", "parent_asin", "asin"):
+            if op_str == "exclude" or attr in ("excluded_asins", "exclude_asins", "exclude_asin"):
+                if isinstance(raw_val, list):
+                    filters.setdefault("excluded_asins", []).extend([str(x).strip() for x in raw_val])
+                else:
+                    filters.setdefault("excluded_asins", []).append(str(raw_val).strip())
+
+        # 5. Other Attributes (e.g. operating_system, ram, storage, model, form_factor)
         else:
+            if catalog_safe:
+                # In catalog_safe mode, arbitrary technical specs / EAV attributes
+                # are demoted to soft preferences and must not become hard Cypher EXISTS filters.
+                continue
+
             if op_str == "exclude":
                 filters[f"exclude_{attr}"] = raw_val
                 filters[f"{attr}_exclude"] = raw_val
@@ -263,24 +315,269 @@ def hard_constraints_to_structured_filters(
     return filters
 
 
+def generate_attribute_unit_variations(attr: str, val: Any) -> List[str]:
+    """
+    Generate domain-specific unit representations (e.g., '128GB', '128 GB', '128')
+    for additive scoring in GraphSearchTool and title matching.
+    Supports input with or without units, European/US spacing, floats, comparator prefixes,
+    and domain-level attribute aliases.
+    """
+    if val is None:
+        return []
+
+    val_clean = str(val).strip()
+    if not val_clean:
+        return []
+
+    # Strip comparator prefixes (>=, <=, >, <, ~, at least, at most) and trailing +
+    val_clean = re.sub(r"^(?:>=|<=|>|<|~|at least|at most|\+)\s*", "", val_clean, flags=re.IGNORECASE)
+    val_clean = re.sub(r"\+$", "", val_clean).strip()
+
+    attr_clean = str(attr).lower().strip()
+    variations: List[str] = []
+
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*([a-zA-Z\"\-]*)$", val_clean)
+    if not m:
+        return variations
+
+    num_str = m.group(1)
+    unit_str = m.group(2).lower().replace("-", "").strip()
+
+    # Normalize integer representations (e.g., 128.0 -> 128)
+    if num_str.endswith(".0"):
+        num_clean = num_str[:-2]
+    else:
+        num_clean = num_str
+
+    is_storage = (
+        attr_clean in ("storage", "ram", "memory", "rom", "internal_storage", "hard_drive", "ssd", "disk")
+        or unit_str in ("gb", "tb", "mb")
+    )
+    is_camera = (
+        attr_clean in ("camera", "rear_camera", "front_camera", "main_camera", "camera_resolution", "sensor")
+        or unit_str in ("mp", "megapixel", "megapixels")
+    )
+    is_refresh = (
+        attr_clean in ("refresh_rate", "display_refresh_rate", "screen_refresh_rate")
+        or unit_str in ("hz",)
+    )
+    is_screen = (
+        attr_clean in ("screen_size", "screen", "display", "display_size")
+        or unit_str in ("inch", "inches", '"')
+    )
+    is_battery = (
+        attr_clean in ("battery", "battery_capacity", "battery_size")
+        or unit_str in ("mah",)
+    )
+
+    if is_storage:
+        if unit_str in ("", "gb"):
+            variations.extend([f"{num_clean}GB", f"{num_clean} GB", num_clean])
+            # If bare 1 or 2 storage constraint (e.g., 1TB / 2TB coerced to 1/2), cover TB variations
+            if num_clean in ("1", "2") and unit_str == "":
+                variations.extend([f"{num_clean}TB", f"{num_clean} TB"])
+        elif unit_str in ("tb",):
+            variations.extend([f"{num_clean}TB", f"{num_clean} TB", num_clean])
+        elif unit_str in ("mb",):
+            variations.extend([f"{num_clean}MB", f"{num_clean} MB", num_clean])
+    elif is_camera:
+        if unit_str in ("", "mp", "megapixel", "megapixels"):
+            variations.extend([f"{num_clean}MP", f"{num_clean} MP", f"{num_clean} megapixel", num_clean])
+    elif is_refresh:
+        if unit_str in ("", "hz"):
+            variations.extend([f"{num_clean}Hz", f"{num_clean} Hz", num_clean])
+    elif is_screen:
+        if unit_str in ("", "inch", "inches", '"'):
+            variations.extend([f"{num_clean}-inch", f"{num_clean} inch", f'{num_clean}"', num_clean])
+    elif is_battery:
+        if unit_str in ("", "mah"):
+            variations.extend([f"{num_clean}mAh", f"{num_clean} mAh", num_clean])
+
+    return variations
+
+
 def session_context_to_structured_filters(
-    session_context: Any
+    session_context: Any,
+    catalog_safe: bool = True,
 ) -> Dict[str, Any]:
     """
     Translate a SessionContext, CurrentSessionContextWrapper, or context dict
     directly into structured filters compatible with GraphSearchTool.
     Delegates to hard_constraints_to_structured_filters after payload unwrapping.
+    In catalog_safe mode (default: True), only universal verified catalog fields
+    (price, brand, exclude_brand, category) become hard structured filters for
+    Cypher query generation, preventing false-positive candidate drops on sparse
+    knowledge graph data.
     """
+    if isinstance(session_context, list):
+        return hard_constraints_to_structured_filters(session_context, catalog_safe=catalog_safe)
+
     ctx = _unwrap_session_context(session_context)
     extracted = ctx.get("extracted_parameters", {})
     if hasattr(extracted, "hard_constraints"):
         hard_constraints = getattr(extracted, "hard_constraints")
     elif isinstance(extracted, dict):
-        hard_constraints = extracted.get("hard_constraints", [])
+        hard_constraints = extracted.get("hard_constraints") or ctx.get("hard_constraints", [])
     else:
         hard_constraints = ctx.get("hard_constraints", [])
 
-    return hard_constraints_to_structured_filters(hard_constraints)
+    return hard_constraints_to_structured_filters(hard_constraints, catalog_safe=catalog_safe)
+
+
+def extract_demoted_soft_preferences(
+    hard_constraints: Union[List[Any], Dict[str, Any], Any]
+) -> List[Dict[str, Any]]:
+    """
+    Extract non-catalog hard constraints and convert them into soft preferences
+    with high polarity (+1.0 for affirmative/numeric, -1.0 for exclusions).
+    Ensures technical specs (e.g., storage, ram, screen_size, camera, refresh_rate)
+    trigger additive scoring in GraphSearchTool and context evaluation in CriticAgent
+    without hard Cypher pruning.
+    """
+    if not hard_constraints:
+        return []
+
+    # Unwrap 'current_session_context' if present
+    if hasattr(hard_constraints, "current_session_context") and getattr(hard_constraints, "current_session_context"):
+        hard_constraints = getattr(hard_constraints, "current_session_context")
+    elif isinstance(hard_constraints, dict) and "current_session_context" in hard_constraints:
+        hard_constraints = hard_constraints["current_session_context"]
+
+    if isinstance(hard_constraints, dict):
+        extracted_params = hard_constraints.get("extracted_parameters")
+        if hasattr(extracted_params, "hard_constraints"):
+            raw_list = getattr(extracted_params, "hard_constraints", [])
+        elif isinstance(extracted_params, dict) and "hard_constraints" in extracted_params:
+            raw_list = extracted_params["hard_constraints"]
+        elif "hard_constraints" in hard_constraints:
+            raw_list = hard_constraints["hard_constraints"]
+        else:
+            raw_list = []
+    elif hasattr(hard_constraints, "extracted_parameters"):
+        extracted_params = getattr(hard_constraints, "extracted_parameters", None)
+        if hasattr(extracted_params, "hard_constraints"):
+            raw_list = getattr(extracted_params, "hard_constraints", [])
+        elif isinstance(extracted_params, dict):
+            raw_list = extracted_params.get("hard_constraints", [])
+        else:
+            raw_list = []
+    elif isinstance(hard_constraints, list):
+        raw_list = hard_constraints
+    else:
+        raw_list = []
+
+    demoted: List[Dict[str, Any]] = []
+    seen: set = set()
+
+    for item in raw_list:
+        attr = str(_get_field(item, "attribute", "")).lower().strip()
+        op = _get_field(item, "operator", "")
+        raw_val = _get_field(item, "value")
+
+        if not attr or raw_val is None or attr in CATALOG_SAFE_ATTRIBUTES:
+            continue
+
+        if hasattr(op, "value"):
+            op_str = str(op.value).lower().strip()
+        else:
+            op_str = str(op).lower().strip()
+
+        polarity = -1.0 if op_str == "exclude" else 1.0
+
+        if isinstance(raw_val, float) and raw_val.is_integer():
+            val_str = str(int(raw_val))
+        else:
+            val_str = str(raw_val).strip()
+
+        key = (attr, val_str.lower(), polarity)
+        if key not in seen:
+            seen.add(key)
+            demoted.append({
+                "category": attr,
+                "value": val_str,
+                "polarity": polarity,
+                "confidence": 1.0,
+                "evidence": f"Demoted from hard constraint: {attr} {op_str} {val_str}",
+            })
+
+        # Add domain-specific unit variations to improve title match rate in additive scoring
+        unit_variations = generate_attribute_unit_variations(attr, val_str)
+
+        for u_val in unit_variations:
+            u_key = (attr, u_val.lower(), polarity)
+            if u_key not in seen:
+                seen.add(u_key)
+                demoted.append({
+                    "category": attr,
+                    "value": u_val,
+                    "polarity": polarity,
+                    "confidence": 1.0,
+                    "evidence": f"Demoted from hard constraint unit variation: {attr} {op_str} {u_val}",
+                })
+
+    return demoted
+
+
+def session_context_to_soft_preferences(
+    session_context: Any,
+    include_demoted: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Extract all soft preferences from a SessionContext, including non-catalog
+    hard constraints converted into soft preferences with high polarity (+1.0 or -1.0).
+    Returns list of dicts suitable for GraphSearchTool.search(soft_preferences=...)
+    and CriticAgent context evaluation.
+    """
+    if isinstance(session_context, list):
+        if include_demoted:
+            return extract_demoted_soft_preferences(session_context)
+        return []
+
+    ctx = _unwrap_session_context(session_context)
+    extracted = ctx.get("extracted_parameters", {})
+    if hasattr(extracted, "model_dump"):
+        extracted = extracted.model_dump()
+    elif not isinstance(extracted, dict):
+        extracted = {}
+
+    raw_soft = extracted.get("soft_preferences") or ctx.get("soft_preferences", [])
+    soft_list: List[Dict[str, Any]] = []
+    seen = set()
+
+    for sp in raw_soft:
+        val = str(_get_field(sp, "value", "")).strip()
+        cat = str(_get_field(sp, "category", "")).strip()
+        polarity = _coerce_numeric(_get_field(sp, "polarity", 1.0))
+        if polarity is None:
+            polarity = 1.0
+        polarity = _clamp(polarity, -1.0, 1.0)
+        confidence = _coerce_numeric(_get_field(sp, "confidence", 1.0))
+        if confidence is None:
+            confidence = 1.0
+        evidence = str(_get_field(sp, "evidence", "")).strip()
+
+        if val:
+            key = (cat.lower(), val.lower())
+            if key not in seen:
+                seen.add(key)
+                soft_list.append({
+                    "category": cat,
+                    "value": val,
+                    "polarity": polarity,
+                    "confidence": confidence,
+                    "evidence": evidence,
+                })
+
+    if include_demoted:
+        hard_constraints = extracted.get("hard_constraints") or ctx.get("hard_constraints", [])
+        demoted = extract_demoted_soft_preferences(hard_constraints)
+        for d in demoted:
+            key = (d["category"].lower(), d["value"].lower())
+            if key not in seen:
+                seen.add(key)
+                soft_list.append(d)
+
+    return soft_list
 
 
 # ---------------------------------------------------------------------------
@@ -470,13 +767,20 @@ def session_context_to_user_persona(
         if hasattr(op, "value"):
             op = str(op.value)
 
-        if op == "exclude":
+        attr_lower = str(attr).lower().strip()
+        op_lower = str(op).lower().strip()
+
+        if op_lower == "exclude":
             must_avoid.append(f"{attr} != {val}")
-        elif op in ("less_than", "less_than_or_equal", "<", "<="):
+        elif attr_lower not in CATALOG_SAFE_ATTRIBUTES:
+            # Non-catalog attribute: demoted to soft preference (preferred qualities)
+            # so CriticAgent evaluates functional fit without hard rejection on sparse KG
+            continue
+        elif op_lower in ("less_than", "less_than_or_equal", "<", "<="):
             must_have.append(f"{attr} < {val}")
-        elif op in ("greater_than", "greater_than_or_equal", ">", ">="):
+        elif op_lower in ("greater_than", "greater_than_or_equal", ">", ">="):
             must_have.append(f"{attr} > {val}")
-        elif op in ("equal", "include", "=="):
+        elif op_lower in ("equal", "include", "=="):
             must_have.append(f"{attr} == {val}")
         else:
             must_have.append(f"{attr} {op} {val}")
@@ -501,6 +805,28 @@ def session_context_to_user_persona(
             preferred.append(desc)
         else:
             disliked.append(desc)
+
+    # Convert demoted non-catalog hard constraints into soft preferences for CriticAgent
+    demoted_soft = extract_demoted_soft_preferences(hard_constraints)
+    for ds in demoted_soft:
+        val = ds.get("value", "")
+        cat = ds.get("category", "")
+        polarity = float(ds.get("polarity", 1.0))
+        evidence = ds.get("evidence", "")
+
+        desc = f"{val} (category: {cat}, polarity: {polarity:+.1f}"
+        if evidence:
+            desc += f", evidence: '{evidence}'"
+        desc += ")"
+
+        if polarity >= 0.0:
+            if not any(val.lower() == str(_get_field(sp, "value", "")).lower() for sp in soft_preferences):
+                if desc not in preferred:
+                    preferred.append(desc)
+        else:
+            if not any(val.lower() == str(_get_field(sp, "value", "")).lower() for sp in soft_preferences):
+                if desc not in disliked:
+                    disliked.append(desc)
 
     persona_dict = {
         "situational_context": situational,
