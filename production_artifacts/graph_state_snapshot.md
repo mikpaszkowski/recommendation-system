@@ -90,10 +90,31 @@ RETURN p.title, size(p.embedding) AS dims LIMIT 3;
 
 | Label | Total Nodes | Embedded | Missing |
 |---|---|---|---|
-| ParentProduct | *(run query)* | *(run query)* | *(run query)* |
-| Brand | *(run query)* | *(run query)* | *(run query)* |
-| Category | *(run query)* | *(run query)* | *(run query)* |
-| Attribute | *(run query)* | *(run query)* | *(run query)* |
+| ParentProduct | 30 | 30 | 0 |
+| Brand | 13 | 13 | 0 |
+| Category | 34 | 34 | 0 |
+| Attribute | 22,738 | 22,738 | 0 |
+
+**Full Node Counts:**
+- Attribute: 22,738
+- Review: 4,847
+- Category: 34
+- Variant: 31
+- User: 30
+- ParentProduct: 30
+- Product: 25
+- Brand: 13
+- PriceRange: 3
+
+**Vector Indexes:**
+- `product_embedding_index`, `brand_embedding_index`, `category_embedding_index`, `attribute_embedding_index` all present, ONLINE, and 100% populated. (Note: using `vector-1.0` provider).
+
+**Top Relationships:**
+- ABOUT_PRODUCT: 9,694
+- REVIEWS: 4,847
+- HAS_ATTRIBUTE: 800
+- BELONGS_TO_CATEGORY: 114
+
 
 ---
 

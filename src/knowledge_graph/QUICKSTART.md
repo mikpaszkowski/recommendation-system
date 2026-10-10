@@ -28,7 +28,7 @@ This will install:
 We provide a Docker Compose configuration that includes APOC and Graph Data Science plugins:
 
 ```bash
-cd src/knowledge-graph
+cd src/knowledge_graph
 docker-compose up -d
 ```
 
@@ -94,7 +94,7 @@ Run the test script:
 
 ```bash
 cd /Users/mikolajpaszkowski/recommendation-system
-python graphrag/knowledge_graph/test_connector.py
+python src/knowledge_graph/test_connector.py
 ```
 
 Expected output:
@@ -116,7 +116,7 @@ All tests passed! Neo4j connector is working correctly.
 Run the example script to see various usage patterns:
 
 ```bash
-python graphrag/knowledge_graph/example_usage.py
+python src/knowledge_graph/example_usage.py
 ```
 
 ## Usage in Your Code

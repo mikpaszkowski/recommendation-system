@@ -1,0 +1,849 @@
+[
+  {
+    "query_id": "ret_001",
+    "id": "ret_001",
+    "name": "Active User Noise-Cancelling Headphones",
+    "category": "Headphones",
+    "query_type": "profiled_user",
+    "user_id": "AHMNA5UK3V66O2V3DZSBJA4FYMOA",
+    "utterance": "I need premium over-ear headphones with active noise cancellation under $300",
+    "query": "I need premium over-ear headphones with active noise cancellation under $300",
+    "semantic_query": "over-ear headphones active noise cancellation high quality sound bluetooth",
+    "structured_filters": {
+      "category": "Headphones",
+      "price_max": 300.0
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "noise cancellation",
+        "polarity": 1.0
+      },
+      {
+        "category": "form_factor",
+        "value": "over-ear",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B094V7S7D7",
+    "target_title": "Sony WH-1000XM4 Wireless Premium Noise Canceling Overhead Headphones",
+    "ground_truth_asins": ["B094V7S7D7", "B002QEBMAK"],
+    "graded_relevance": {
+      "B094V7S7D7": 3.0,
+      "B002QEBMAK": 2.0,
+      "B08CBL35MM": 0.0
+    }
+  },
+  {
+    "query_id": "ret_002",
+    "id": "ret_002",
+    "name": "Budget Gaming Laptop with Dedicated GPU",
+    "category": "Laptops",
+    "query_type": "budget_constrained",
+    "user_id": "U_COLD_START_01",
+    "utterance": "Looking for a fast gaming laptop under $1200 with an RTX graphics card",
+    "query": "Looking for a fast gaming laptop under $1200 with an RTX graphics card",
+    "semantic_query": "gaming laptop high performance rtx dedicated graphics fast refresh rate",
+    "structured_filters": {
+      "category": "Laptops",
+      "price_max": 1200.0
+    },
+    "soft_preferences": [
+      {
+        "category": "gpu",
+        "value": "RTX",
+        "polarity": 1.0
+      },
+      {
+        "category": "performance",
+        "value": "gaming",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B08N5N6RSS",
+    "target_title": "ASUS TUF Gaming Laptop 15.6 FHD GeForce RTX 3060",
+    "ground_truth_asins": ["B08N5N6RSS", "B09XYZ1234"],
+    "graded_relevance": {
+      "B08N5N6RSS": 3.0,
+      "B09XYZ1234": 2.0,
+      "B0791TX5P5": 0.0
+    }
+  },
+  {
+    "query_id": "ret_003",
+    "id": "ret_003",
+    "name": "Durable Wireless Ergonomic Mouse",
+    "category": "Mice",
+    "query_type": "ergonomic_preference",
+    "user_id": "AHMNA5UK3V66O2V3DZSBJA4FYMOA",
+    "utterance": "Durable wireless mouse under $50 with ergonomic grip",
+    "query": "Durable wireless mouse under $50 with ergonomic grip",
+    "semantic_query": "wireless ergonomic mouse durable comfortable grip optical sensor",
+    "structured_filters": {
+      "category": "Mice",
+      "price_max": 50.0
+    },
+    "soft_preferences": [
+      {
+        "category": "connectivity",
+        "value": "wireless",
+        "polarity": 1.0
+      },
+      {
+        "category": "ergonomics",
+        "value": "ergonomic",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B01G8JO5F2",
+    "target_title": "Logitech M510 Wireless Computer Mouse Ergonomic Shape",
+    "ground_truth_asins": ["B01G8JO5F2", "B00B9970P6"],
+    "graded_relevance": {
+      "B01G8JO5F2": 3.0,
+      "B00B9970P6": 2.0,
+      "B01N5VHLUT": 1.0
+    }
+  },
+  {
+    "query_id": "ret_004",
+    "id": "ret_004",
+    "name": "Mechanical Keyboard with Quiet Switches",
+    "category": "Keyboards",
+    "query_type": "switch_specification",
+    "user_id": "U_COLD_START_02",
+    "utterance": "Mechanical keyboard with quiet switches for shared office under $100",
+    "query": "Mechanical keyboard with quiet switches for shared office under $100",
+    "semantic_query": "mechanical keyboard quiet linear silent switches office typing",
+    "structured_filters": {
+      "category": "Keyboards",
+      "price_max": 100.0
+    },
+    "soft_preferences": [
+      {
+        "category": "switch_type",
+        "value": "quiet",
+        "polarity": 1.0
+      },
+      {
+        "category": "keyboard_type",
+        "value": "mechanical",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B003L1ZYYM",
+    "target_title": "Logitech K845 Mechanical Illuminated Keyboard Red Switches",
+    "ground_truth_asins": ["B003L1ZYYM", "B0148NPH9I"],
+    "graded_relevance": {
+      "B003L1ZYYM": 3.0,
+      "B0148NPH9I": 2.0,
+      "B004G6002A": 1.0
+    }
+  },
+  {
+    "query_id": "ret_005",
+    "id": "ret_005",
+    "name": "27-inch 4K IPS Monitor for Programming",
+    "category": "Monitors",
+    "query_type": "display_specification",
+    "user_id": "U_ACTIVE_DEV_01",
+    "utterance": "27-inch 4K IPS monitor for programming and productivity under $450",
+    "query": "27-inch 4K IPS monitor for programming and productivity under $450",
+    "semantic_query": "27-inch 4k UHD IPS monitor USB-C productivity high resolution",
+    "structured_filters": {
+      "category": "Monitors",
+      "price_max": 450.0
+    },
+    "soft_preferences": [
+      {
+        "category": "resolution",
+        "value": "4K",
+        "polarity": 1.0
+      },
+      {
+        "category": "panel_type",
+        "value": "IPS",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B0791TX5P5",
+    "target_title": "LG 27UK850-W 27 Inch 4K UHD IPS Display with HDR 10",
+    "ground_truth_asins": ["B0791TX5P5"],
+    "graded_relevance": {
+      "B0791TX5P5": 3.0,
+      "B008DW96TE": 1.0
+    }
+  },
+  {
+    "query_id": "ret_006",
+    "id": "ret_006",
+    "name": "Over-Ear Studio Monitor Headphones",
+    "category": "Headphones",
+    "query_type": "audio_fidelity",
+    "user_id": "U_AUDIOPHILE_01",
+    "utterance": "Closed-back studio monitor headphones with accurate flat response under $150",
+    "query": "Closed-back studio monitor headphones with accurate flat response under $150",
+    "semantic_query": "studio monitor headphones closed back flat response mixing tracking",
+    "structured_filters": {
+      "category": "Headphones",
+      "price_max": 150.0
+    },
+    "soft_preferences": [
+      {
+        "category": "acoustic_design",
+        "value": "closed-back",
+        "polarity": 1.0
+      },
+      {
+        "category": "use_case",
+        "value": "studio monitor",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B002QEBMAK",
+    "target_title": "Audio-Technica ATH-M50x Professional Studio Monitor Headphones",
+    "ground_truth_asins": ["B002QEBMAK", "B094V7S7D7"],
+    "graded_relevance": {
+      "B002QEBMAK": 3.0,
+      "B094V7S7D7": 2.0
+    }
+  },
+  {
+    "query_id": "ret_007",
+    "id": "ret_007",
+    "name": "Lightweight High-DPI Gaming Mouse with RGB",
+    "category": "Mice",
+    "query_type": "gaming_hardware",
+    "user_id": "U_GAMER_01",
+    "utterance": "Ultra lightweight esports gaming mouse with optical switches and RGB under $70",
+    "query": "Ultra lightweight esports gaming mouse with optical switches and RGB under $70",
+    "semantic_query": "lightweight gaming mouse high DPI optical sensor RGB esports",
+    "structured_filters": {
+      "category": "Mice",
+      "price_max": 70.0
+    },
+    "soft_preferences": [
+      {
+        "category": "weight",
+        "value": "lightweight",
+        "polarity": 1.0
+      },
+      {
+        "category": "lighting",
+        "value": "RGB",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B01N5VHLUT",
+    "target_title": "Razer DeathAdder Elite Gaming Mouse Chroma RGB 16000 DPI",
+    "ground_truth_asins": ["B01N5VHLUT"],
+    "graded_relevance": {
+      "B01N5VHLUT": 3.0,
+      "B01G8JO5F2": 1.0
+    }
+  },
+  {
+    "query_id": "ret_008",
+    "id": "ret_008",
+    "name": "Ergonomic Split Wireless Keyboard",
+    "category": "Keyboards",
+    "query_type": "health_ergonomics",
+    "user_id": "U_WRITER_01",
+    "utterance": "Ergonomic split wireless keyboard with cushioned wrist rest under $130",
+    "query": "Ergonomic split wireless keyboard with cushioned wrist rest under $130",
+    "semantic_query": "ergonomic split keyboard wireless wrist rest comfort carpal tunnel",
+    "structured_filters": {
+      "category": "Keyboards",
+      "price_max": 130.0
+    },
+    "soft_preferences": [
+      {
+        "category": "form_factor",
+        "value": "split ergonomic",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "wrist rest",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B004G6002A",
+    "target_title": "Microsoft Sculpt Ergonomic Keyboard for Business Wireless Split Layout",
+    "ground_truth_asins": ["B004G6002A", "B0148NPH9I"],
+    "graded_relevance": {
+      "B004G6002A": 3.0,
+      "B0148NPH9I": 2.0
+    }
+  },
+  {
+    "query_id": "ret_009",
+    "id": "ret_009",
+    "name": "144Hz Gaming Monitor 1ms Response Time",
+    "category": "Monitors",
+    "query_type": "high_refresh_rate",
+    "user_id": "U_GAMER_02",
+    "utterance": "144Hz or higher gaming monitor with 1ms response time and FreeSync under $250",
+    "query": "144Hz or higher gaming monitor with 1ms response time and FreeSync under $250",
+    "semantic_query": "144Hz gaming monitor 1ms response time adaptive sync freesync 1080p",
+    "structured_filters": {
+      "category": "Monitors",
+      "price_max": 250.0
+    },
+    "soft_preferences": [
+      {
+        "category": "refresh_rate",
+        "value": "144Hz",
+        "polarity": 1.0
+      },
+      {
+        "category": "response_time",
+        "value": "1ms",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B008DW96TE",
+    "target_title": "ASUS VG248QE 24 Inch Full HD 1920x1080 144Hz 1ms Gaming Monitor",
+    "ground_truth_asins": ["B008DW96TE"],
+    "graded_relevance": {
+      "B008DW96TE": 3.0,
+      "B0791TX5P5": 1.0
+    }
+  },
+  {
+    "query_id": "ret_010",
+    "id": "ret_010",
+    "name": "True Wireless Earbuds Sweat Resistant for Running",
+    "category": "Headphones",
+    "query_type": "sports_fitness",
+    "user_id": "U_RUNNER_01",
+    "utterance": "True wireless earbuds with sweat resistance and secure fit for running under $100",
+    "query": "True wireless earbuds with sweat resistance and secure fit for running under $100",
+    "semantic_query": "true wireless earbuds IPX7 waterproof sweatproof running secure earhooks",
+    "structured_filters": {
+      "category": "Headphones",
+      "price_max": 100.0
+    },
+    "soft_preferences": [
+      {
+        "category": "water_resistance",
+        "value": "sweat resistant",
+        "polarity": 1.0
+      },
+      {
+        "category": "form_factor",
+        "value": "in-ear earbuds",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B00ENZUU3Y",
+    "target_title": "Anker Soundcore Spirit X Wireless Sports Earphones Bluetooth 5.0",
+    "ground_truth_asins": ["B00ENZUU3Y"],
+    "graded_relevance": {
+      "B00ENZUU3Y": 3.0,
+      "B094V7S7D7": 1.0
+    }
+  },
+  {
+    "query_id": "ret_011",
+    "id": "ret_011",
+    "name": "Compact Travel Bluetooth Mouse",
+    "category": "Mice",
+    "query_type": "portable_productivity",
+    "user_id": "U_TRAVELER_01",
+    "utterance": "Compact Bluetooth travel mouse with multi-device pairing under $40",
+    "query": "Compact Bluetooth travel mouse with multi-device pairing under $40",
+    "semantic_query": "compact bluetooth travel mouse multi-device silent click portable",
+    "structured_filters": {
+      "category": "Mice",
+      "price_max": 40.0
+    },
+    "soft_preferences": [
+      {
+        "category": "connectivity",
+        "value": "bluetooth",
+        "polarity": 1.0
+      },
+      {
+        "category": "size",
+        "value": "compact",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B00B9970P6",
+    "target_title": "Logitech M330 Silent Plus Wireless Mouse Compact Travel Size",
+    "ground_truth_asins": ["B00B9970P6", "B01G8JO5F2"],
+    "graded_relevance": {
+      "B00B9970P6": 3.0,
+      "B01G8JO5F2": 2.0
+    }
+  },
+  {
+    "query_id": "ret_012",
+    "id": "ret_012",
+    "name": "Low-Profile Wireless Mechanical Keyboard for Mac",
+    "category": "Keyboards",
+    "query_type": "os_compatibility",
+    "user_id": "U_MAC_USER_01",
+    "utterance": "Low profile mechanical keyboard compatible with macOS via Bluetooth under $110",
+    "query": "Low profile mechanical keyboard compatible with macOS via Bluetooth under $110",
+    "semantic_query": "low profile mechanical keyboard mac layout bluetooth multi-device",
+    "structured_filters": {
+      "category": "Keyboards",
+      "price_max": 110.0
+    },
+    "soft_preferences": [
+      {
+        "category": "profile",
+        "value": "low profile",
+        "polarity": 1.0
+      },
+      {
+        "category": "os",
+        "value": "macOS",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B0148NPH9I",
+    "target_title": "Keychron K3 Ultra-Slim Wireless Mechanical Keyboard for Mac and Windows",
+    "ground_truth_asins": ["B0148NPH9I", "B003L1ZYYM"],
+    "graded_relevance": {
+      "B0148NPH9I": 3.0,
+      "B003L1ZYYM": 1.0
+    }
+  },
+  {
+    "query_id": "ret_013",
+    "id": "ret_013",
+    "name": "Durable 3.5mm Braided Audio Cable",
+    "category": "Audio Accessories",
+    "query_type": "cable_accessory",
+    "user_id": "AHMNA5UK3V66O2V3DZSBJA4FYMOA",
+    "utterance": "Durable 3.5mm male to male braided auxiliary audio cable under $20",
+    "query": "Durable 3.5mm male to male braided auxiliary audio cable under $20",
+    "semantic_query": "3.5mm aux audio cable braided nylon gold plated durable headphone cable",
+    "structured_filters": {
+      "category": "Audio Accessories",
+      "price_max": 20.0
+    },
+    "soft_preferences": [
+      {
+        "category": "durability",
+        "value": "braided nylon",
+        "polarity": 1.0
+      },
+      {
+        "category": "connector",
+        "value": "3.5mm jack",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B08CBL35MM",
+    "target_title": "Anker 3.5mm Premium Braided Auxiliary Audio Cable 4ft",
+    "ground_truth_asins": ["B08CBL35MM"],
+    "graded_relevance": {
+      "B08CBL35MM": 3.0,
+      "B094V7S7D7": 0.0
+    }
+  },
+  {
+    "query_id": "ret_014",
+    "id": "ret_014",
+    "name": "High-Speed NVMe M.2 2TB Internal SSD",
+    "category": "Storage",
+    "query_type": "storage_performance",
+    "user_id": "U_BUILDER_01",
+    "utterance": "Fast PCIe Gen 4.0 NVMe M.2 SSD 2TB for gaming PC under $160",
+    "query": "Fast PCIe Gen 4.0 NVMe M.2 SSD 2TB for gaming PC under $160",
+    "semantic_query": "nvme m2 ssd 2tb pcie 4.0 high speed 7000mb/s read write heatsink",
+    "structured_filters": {
+      "category": "Storage",
+      "price_max": 160.0
+    },
+    "soft_preferences": [
+      {
+        "category": "interface",
+        "value": "PCIe Gen 4.0",
+        "polarity": 1.0
+      },
+      {
+        "category": "capacity",
+        "value": "2TB",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B08RK2SR23",
+    "target_title": "Samsung 980 PRO SSD 2TB PCIe NVMe Gen 4 Gaming M.2",
+    "ground_truth_asins": ["B08RK2SR23"],
+    "graded_relevance": {
+      "B08RK2SR23": 3.0
+    }
+  },
+  {
+    "query_id": "ret_015",
+    "id": "ret_015",
+    "name": "USB-C Multiport Hub with 4K HDMI and Power Delivery",
+    "category": "Cables & Interconnects",
+    "query_type": "docking_connectivity",
+    "user_id": "U_MAC_USER_02",
+    "utterance": "USB-C adapter hub with 4K HDMI output and 100W power delivery under $50",
+    "query": "USB-C adapter hub with 4K HDMI output and 100W power delivery under $50",
+    "semantic_query": "usb-c hub adapter 4k hdmi 100w power delivery usb 3.0 sd card reader",
+    "structured_filters": {
+      "category": "Cables & Interconnects",
+      "price_max": 50.0
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "4K HDMI",
+        "polarity": 1.0
+      },
+      {
+        "category": "power",
+        "value": "100W PD",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B07ZVKTP53",
+    "target_title": "Anker 7-in-1 USB-C Hub with 4K HDMI and 100W Power Delivery",
+    "ground_truth_asins": ["B07ZVKTP53"],
+    "graded_relevance": {
+      "B07ZVKTP53": 3.0
+    }
+  },
+  {
+    "query_id": "ret_016",
+    "id": "ret_016",
+    "name": "Over-Constrained Budget 4K Monitor (MACS Relaxation Probe)",
+    "category": "Monitors",
+    "query_type": "over_constrained_macs",
+    "user_id": "U_BUDGET_01",
+    "utterance": "I want a 32-inch 4K 144Hz monitor for under $150 from LG",
+    "query": "I want a 32-inch 4K 144Hz monitor for under $150 from LG",
+    "semantic_query": "32-inch 4K 144Hz high refresh monitor LG display",
+    "structured_filters": {
+      "category": "Monitors",
+      "brand": "LG",
+      "price_max": 150.0
+    },
+    "soft_preferences": [
+      {
+        "category": "resolution",
+        "value": "4K",
+        "polarity": 1.0
+      },
+      {
+        "category": "refresh_rate",
+        "value": "144Hz",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B0791TX5P5",
+    "target_title": "LG 27UK850-W 27 Inch 4K UHD IPS Display",
+    "ground_truth_asins": ["B0791TX5P5"],
+    "graded_relevance": {
+      "B0791TX5P5": 2.0
+    }
+  },
+  {
+    "query_id": "ret_017",
+    "id": "ret_017",
+    "name": "High-End Wireless Productivity Mouse",
+    "category": "Mice",
+    "query_type": "premium_productivity",
+    "user_id": "U_DEV_02",
+    "utterance": "Best ergonomic wireless mouse for multi-monitor productivity and horizontal scroll under $100",
+    "query": "Best ergonomic wireless mouse for multi-monitor productivity and horizontal scroll under $100",
+    "semantic_query": "ergonomic wireless mouse magspeed scroll wheel thumb rest logitech productivity",
+    "structured_filters": {
+      "category": "Mice",
+      "price_max": 100.0
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "horizontal thumb scroll",
+        "polarity": 1.0
+      },
+      {
+        "category": "brand",
+        "value": "Logitech",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B07S395RWD",
+    "target_title": "Logitech MX Master 3 Advanced Wireless Mouse Graphite",
+    "ground_truth_asins": ["B07S395RWD", "B01G8JO5F2"],
+    "graded_relevance": {
+      "B07S395RWD": 3.0,
+      "B01G8JO5F2": 2.0
+    }
+  },
+  {
+    "query_id": "ret_018",
+    "id": "ret_018",
+    "name": "Waterproof Portable Bluetooth Speaker",
+    "category": "Audio Accessories",
+    "query_type": "outdoor_audio",
+    "user_id": "U_OUTDOOR_01",
+    "utterance": "Waterproof rugged portable bluetooth speaker with strong bass under $80",
+    "query": "Waterproof rugged portable bluetooth speaker with strong bass under $80",
+    "semantic_query": "portable bluetooth speaker IPX7 waterproof durable outdoor deep bass",
+    "structured_filters": {
+      "category": "Audio Accessories",
+      "price_max": 80.0
+    },
+    "soft_preferences": [
+      {
+        "category": "waterproof",
+        "value": "IPX7",
+        "polarity": 1.0
+      },
+      {
+        "category": "sound",
+        "value": "deep bass",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B07P85M87P",
+    "target_title": "JBL Flip 5 Waterproof Portable Bluetooth Speaker",
+    "ground_truth_asins": ["B07P85M87P"],
+    "graded_relevance": {
+      "B07P85M87P": 3.0
+    }
+  },
+  {
+    "query_id": "ret_019",
+    "id": "ret_019",
+    "name": "4K Streaming Media Player with Dolby Vision",
+    "category": "Streaming Media",
+    "query_type": "home_theater",
+    "user_id": "U_ENTERTAIN_01",
+    "utterance": "4K HDR streaming stick with Dolby Vision and voice remote under $55",
+    "query": "4K HDR streaming stick with Dolby Vision and voice remote under $55",
+    "semantic_query": "4k streaming stick media player dolby vision atmos voice remote wifi 6",
+    "structured_filters": {
+      "category": "Streaming Media",
+      "price_max": 55.0
+    },
+    "soft_preferences": [
+      {
+        "category": "video_format",
+        "value": "Dolby Vision",
+        "polarity": 1.0
+      },
+      {
+        "category": "remote",
+        "value": "voice remote",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B08XVYZ1Y5",
+    "target_title": "Amazon Fire TV Stick 4K Max Streaming Device Wi-Fi 6",
+    "ground_truth_asins": ["B08XVYZ1Y5"],
+    "graded_relevance": {
+      "B08XVYZ1Y5": 3.0
+    }
+  },
+  {
+    "query_id": "ret_020",
+    "id": "ret_020",
+    "name": "Fast 100W USB-C GaN Charger Block",
+    "category": "Power & Chargers",
+    "query_type": "charging_accessory",
+    "user_id": "U_MAC_USER_03",
+    "utterance": "Compact 100W GaN wall charger with multiple USB-C ports for laptop under $60",
+    "query": "Compact 100W GaN wall charger with multiple USB-C ports for laptop under $60",
+    "semantic_query": "100W GaN charger compact fast wall charger dual usb-c ports power delivery",
+    "structured_filters": {
+      "category": "Power & Chargers",
+      "price_max": 60.0
+    },
+    "soft_preferences": [
+      {
+        "category": "technology",
+        "value": "GaN",
+        "polarity": 1.0
+      },
+      {
+        "category": "wattage",
+        "value": "100W",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B091Z6JNX4",
+    "target_title": "Anker 736 Charger Nano II 100W 3-Port Fast Wall Charger",
+    "ground_truth_asins": ["B091Z6JNX4"],
+    "graded_relevance": {
+      "B091Z6JNX4": 3.0
+    }
+  },
+  {
+    "query_id": "ret_021",
+    "id": "ret_021",
+    "name": "1080p Full HD Webcam with Stereo Microphone",
+    "category": "Webcams",
+    "query_type": "remote_work",
+    "user_id": "U_REMOTE_01",
+    "utterance": "Plug and play 1080p webcam with built-in microphone for Zoom meetings under $70",
+    "query": "Plug and play 1080p webcam with built-in microphone for Zoom meetings under $70",
+    "semantic_query": "1080p full hd webcam dual microphones autofocus privacy shutter zoom teams",
+    "structured_filters": {
+      "category": "Webcams",
+      "price_max": 70.0
+    },
+    "soft_preferences": [
+      {
+        "category": "resolution",
+        "value": "1080p",
+        "polarity": 1.0
+      },
+      {
+        "category": "microphone",
+        "value": "stereo mic",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B006JH8T3S",
+    "target_title": "Logitech C920 HD Pro Webcam Full HD 1080p Video Calling",
+    "ground_truth_asins": ["B006JH8T3S"],
+    "graded_relevance": {
+      "B006JH8T3S": 3.0
+    }
+  },
+  {
+    "query_id": "ret_022",
+    "id": "ret_022",
+    "name": "Broadcast Quality USB Podcast Microphone",
+    "category": "Audio Accessories",
+    "query_type": "creator_audio",
+    "user_id": "U_CREATOR_01",
+    "utterance": "Cardioid USB condenser microphone for podcasting and voiceover under $120",
+    "query": "Cardioid USB condenser microphone for podcasting and voiceover under $120",
+    "semantic_query": "usb condenser microphone cardioid podcasting streaming headphone monitoring gain control",
+    "structured_filters": {
+      "category": "Audio Accessories",
+      "price_max": 120.0
+    },
+    "soft_preferences": [
+      {
+        "category": "polar_pattern",
+        "value": "cardioid",
+        "polarity": 1.0
+      },
+      {
+        "category": "interface",
+        "value": "USB",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B002VA464S",
+    "target_title": "Blue Yeti USB Microphone for Recording and Streaming",
+    "ground_truth_asins": ["B002VA464S"],
+    "graded_relevance": {
+      "B002VA464S": 3.0
+    }
+  },
+  {
+    "query_id": "ret_023",
+    "id": "ret_023",
+    "name": "High-End Noise-Cancelling Wireless Earbuds",
+    "category": "Headphones",
+    "query_type": "anc_earbuds",
+    "user_id": "U_TRAVELER_02",
+    "utterance": "True wireless earbuds with industry-leading active noise cancellation and LDAC under $280",
+    "query": "True wireless earbuds with industry-leading active noise cancellation and LDAC under $280",
+    "semantic_query": "wireless earbuds active noise cancelling high resolution LDAC bluetooth transparency mode",
+    "structured_filters": {
+      "category": "Headphones",
+      "price_max": 280.0
+    },
+    "soft_preferences": [
+      {
+        "category": "codec",
+        "value": "LDAC",
+        "polarity": 1.0
+      },
+      {
+        "category": "noise_cancelling",
+        "value": "ANC",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B094C4VDJZ",
+    "target_title": "Sony WF-1000XM4 Industry Leading Noise Canceling Truly Wireless Earbuds",
+    "ground_truth_asins": ["B094C4VDJZ", "B094V7S7D7"],
+    "graded_relevance": {
+      "B094C4VDJZ": 3.0,
+      "B094V7S7D7": 2.0
+    }
+  },
+  {
+    "query_id": "ret_024",
+    "id": "ret_024",
+    "name": "Thin & Light Premium Productivity Laptop",
+    "category": "Laptops",
+    "query_type": "ultrabook",
+    "user_id": "U_EXECUTIVE_01",
+    "utterance": "Thin and light laptop with long 15+ hour battery life and silent fanless operation under $1100",
+    "query": "Thin and light laptop with long 15+ hour battery life and silent fanless operation under $1100",
+    "semantic_query": "thin light laptop long battery life silent fanless high resolution retina display",
+    "structured_filters": {
+      "category": "Laptops",
+      "price_max": 1100.0
+    },
+    "soft_preferences": [
+      {
+        "category": "portability",
+        "value": "thin and light",
+        "polarity": 1.0
+      },
+      {
+        "category": "battery",
+        "value": "long battery life",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B0B3C57X27",
+    "target_title": "Apple MacBook Air Laptop with M2 chip 13.6-inch Liquid Retina Display",
+    "ground_truth_asins": ["B0B3C57X27"],
+    "graded_relevance": {
+      "B0B3C57X27": 3.0,
+      "B08N5N6RSS": 1.0
+    }
+  },
+  {
+    "query_id": "ret_025",
+    "id": "ret_025",
+    "name": "Rugged External Portable SSD 1TB USB 3.2",
+    "category": "Storage",
+    "query_type": "rugged_storage",
+    "user_id": "U_PHOTOGRAPHER_01",
+    "utterance": "Rugged drop-resistant portable external SSD 1TB with fast transfer speeds under $110",
+    "query": "Rugged drop-resistant portable external SSD 1TB with fast transfer speeds under $110",
+    "semantic_query": "portable external SSD 1TB rugged drop resistant IP55 usb 3.2 gen 2 nvme",
+    "structured_filters": {
+      "category": "Storage",
+      "price_max": 110.0
+    },
+    "soft_preferences": [
+      {
+        "category": "durability",
+        "value": "rugged drop-resistant",
+        "polarity": 1.0
+      },
+      {
+        "category": "capacity",
+        "value": "1TB",
+        "polarity": 1.0
+      }
+    ],
+    "target_asin": "B08HN37XC1",
+    "target_title": "SanDisk 1TB Extreme Portable SSD Up to 1050MB/s USB-C External Drive",
+    "ground_truth_asins": ["B08HN37XC1"],
+    "graded_relevance": {
+      "B08HN37XC1": 3.0,
+      "B08RK2SR23": 1.0
+    }
+  }
+]

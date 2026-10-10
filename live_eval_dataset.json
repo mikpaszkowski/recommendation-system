@@ -1,0 +1,1960 @@
+[
+  {
+    "query_id": "live_eval_camera_01",
+    "id": "live_eval_camera_01",
+    "sample_id": "live_eval_camera_01",
+    "category": "Camera",
+    "utterance": "I need a Full HD streaming webcam that supports smooth 60FPS at 1080p with 2X electronic pan-tilt-zoom and a physical privacy shutter under $60.",
+    "query": "I need a Full HD streaming webcam that supports smooth 60FPS at 1080p with 2X electronic pan-tilt-zoom and a physical privacy shutter under $60.",
+    "user_query": "I need a Full HD streaming webcam that supports smooth 60FPS at 1080p with 2X electronic pan-tilt-zoom and a physical privacy shutter under $60.",
+    "semantic_query": "streaming webcam 1080p 60fps autofocus ePTZ digital zoom ring light privacy cover dual stereo mics",
+    "target_asin": "B0BGXS26QL",
+    "target_title": "NexiGo N620E 60FPS AutoFocus ePTZ Webcam, 2X Digital Zoom, Ring Light & Privacy Cover, [Software Included], 1080P FHD Streaming Web Camera, Dual Stereo Mics, for Zoom Skype Teams",
+    "ground_truth_asins": [
+      "B0BGXS26QL"
+    ],
+    "peer_asins": [
+      "B096K4MF5V",
+      "B09X2TM3J4",
+      "B07K2PL8YM",
+      "B095XJQDP2",
+      "B08DFK8NML"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Sensor & Frame Rate",
+      "value": "1080P FHD at smooth 60FPS with 2X electronic pan-tilt-zoom (ePTZ) and magnetic privacy shutter",
+      "salience": 1.0,
+      "feature_name": "Sensor & Frame Rate",
+      "feature_value": "1080P FHD at 60FPS with 2X ePTZ Zoom and Privacy Shutter",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Candidate peers in the webcam pool (such as Razer Kiyo B09DV19SMR) only support 30 FPS at 1080p and lack ePTZ digital zoom, making 60FPS at 1080p with ePTZ unique to the NexiGo N620E."
+    },
+    "structured_filters": {
+      "category": "Camera",
+      "price_max": 60.0,
+      "brand": "NexiGo"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "1080p 60FPS video recording",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "2X ePTZ digital zoom",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "privacy cover",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Camera",
+      "preferred_brands": [
+        "NexiGo"
+      ],
+      "price_anchor": 49.99,
+      "distinguishing_feature": "Sensor & Frame Rate"
+    },
+    "graded_relevance": {
+      "B0BGXS26QL": 1.0,
+      "B096K4MF5V": 0.45,
+      "B09X2TM3J4": 0.45,
+      "B07K2PL8YM": 0.45,
+      "B095XJQDP2": 0.45,
+      "B08DFK8NML": 0.45,
+      "B0BWD4WGJB": 0.2,
+      "B07GXDLJP9": 0.2,
+      "B09WWCYMJX": 0.2,
+      "B00AWN82P0": 0.2,
+      "B0BY8KX5CW": 0.2,
+      "B0B4WM5CB8": 0.2,
+      "B07CYY9LQY": 0.2,
+      "B08ZK551W4": 0.2,
+      "B003LL3CLY": 0.2,
+      "B08NW33WSM": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "White"
+      },
+      {
+        "brand": "NexiGo"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Camera'})-[:DESIRES]->(Attribute {name: '60FPS 1080p ePTZ'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0BGXS26QL'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_camera_02",
+    "id": "live_eval_camera_02",
+    "sample_id": "live_eval_camera_02",
+    "category": "Camera",
+    "utterance": "I'm looking for a complete smart home security bundle that includes an outdoor weather-resistant camera, an indoor mini camera, and a video doorbell system all integrated together.",
+    "query": "I'm looking for a complete smart home security bundle that includes an outdoor weather-resistant camera, an indoor mini camera, and a video doorbell system all integrated together.",
+    "user_query": "I'm looking for a complete smart home security bundle that includes an outdoor weather-resistant camera, an indoor mini camera, and a video doorbell system all integrated together.",
+    "semantic_query": "smart home security bundle video doorbell system outdoor camera mini indoor camera Alexa compatible",
+    "target_asin": "B08F6GPRH6",
+    "target_title": "Blink Whole Home Bundle | Video Doorbell System, Outdoor camera, and Mini camera | HD video, motion detection, Works with Alexa",
+    "ground_truth_asins": [
+      "B08F6GPRH6"
+    ],
+    "peer_asins": [
+      "B0BWD4WGJB",
+      "B09WWCYMJX",
+      "B08DFK8NML",
+      "B092WHC7C1",
+      "B0B4WM5CB8"
+    ],
+    "distinguishing_feature": {
+      "attribute": "System Configuration",
+      "value": "Complete 3-part Whole Home Security Bundle including Video Doorbell, weather-resistant Outdoor camera, and compact Mini indoor camera",
+      "salience": 1.0,
+      "feature_name": "System Configuration",
+      "feature_value": "3-Piece Whole Home Bundle (Doorbell + Outdoor + Mini Indoor)",
+      "feature_type": "functional_capability",
+      "discriminative_justification": "Similar peer cameras in the pool (e.g. standalone Blink Mini B0BWD4WGJB or LaView Baby Monitor B0C2V538MK) only provide single indoor units, whereas B08F6GPRH6 uniquely bundles a Video Doorbell and outdoor camera."
+    },
+    "structured_filters": {
+      "category": "Camera",
+      "price_max": 250.0,
+      "brand": "Blink"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "video doorbell system",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "outdoor weather-resistant camera",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "indoor mini camera",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Camera",
+      "preferred_brands": [
+        "Blink"
+      ],
+      "price_anchor": 219.96,
+      "distinguishing_feature": "System Configuration"
+    },
+    "graded_relevance": {
+      "B08F6GPRH6": 1.0,
+      "B0BWD4WGJB": 0.45,
+      "B09WWCYMJX": 0.45,
+      "B08DFK8NML": 0.45,
+      "B092WHC7C1": 0.45,
+      "B0B4WM5CB8": 0.45,
+      "B0B22PFD46": 0.2,
+      "B07K2PL8YM": 0.2,
+      "B07CYY9LQY": 0.2,
+      "B09M8N7YML": 0.2,
+      "B096K4MF5V": 0.2,
+      "B09X2TM3J4": 0.2,
+      "B095XJQDP2": 0.2,
+      "B08ZK551W4": 0.2,
+      "B099RQDXGL": 0.2,
+      "B0B84Z33BZ": 0.2
+    },
+    "graph_evidence": [
+      {
+        "brand": "Blink"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Camera'})-[:DESIRES]->(Attribute {name: 'Whole Home Bundle'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08F6GPRH6'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_camera_03",
+    "id": "live_eval_camera_03",
+    "sample_id": "live_eval_camera_03",
+    "category": "Camera",
+    "utterance": "I want an affordable Fujifilm Instax Mini instant print film camera in matte black with a high-key portrait brightness adjustment dial under $120.",
+    "query": "I want an affordable Fujifilm Instax Mini instant print film camera in matte black with a high-key portrait brightness adjustment dial under $120.",
+    "user_query": "I want an affordable Fujifilm Instax Mini instant print film camera in matte black with a high-key portrait brightness adjustment dial under $120.",
+    "semantic_query": "instant film camera Fujifilm Instax Mini high-key brightness adjustment black analog photo prints",
+    "target_asin": "B014TUZ92U",
+    "target_title": "Fujifilm Instax Mini 8 Instant Film Camera (Black) (Discontinued by Manufacturer)",
+    "ground_truth_asins": [
+      "B014TUZ92U"
+    ],
+    "peer_asins": [
+      "B0873GV89G",
+      "B00HNOOVGK",
+      "B00AWN82P0",
+      "B003LL3CLY",
+      "B00HE67GV4"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Exposure Mode",
+      "value": "Iconic matte Black instant analog film camera with automatic exposure measurement and high-key portrait brightness dial",
+      "salience": 1.0,
+      "feature_name": "Exposure Mode",
+      "feature_value": "Analog Instant Film with High-Key Brightness Adjustment Dial",
+      "feature_type": "functional_capability",
+      "discriminative_justification": "Peers in the camera pool (such as digital Fujifilms B00HNOOVGK or high-end Instax Mini 90 B0873GV89G) lack the dedicated analog high-key brightness dial in matte black at this entry price."
+    },
+    "structured_filters": {
+      "category": "Camera",
+      "price_max": 120.0,
+      "brand": "Fujifilm"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "instant print film",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "high-key brightness dial",
+        "polarity": 1.0
+      },
+      {
+        "category": "color",
+        "value": "Black",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Camera",
+      "preferred_brands": [
+        "Fujifilm"
+      ],
+      "price_anchor": 98.0,
+      "distinguishing_feature": "Exposure Mode"
+    },
+    "graded_relevance": {
+      "B014TUZ92U": 1.0,
+      "B0873GV89G": 0.45,
+      "B00HNOOVGK": 0.45,
+      "B00AWN82P0": 0.45,
+      "B003LL3CLY": 0.45,
+      "B00HE67GV4": 0.45,
+      "B00QFY4JRA": 0.2,
+      "B07FZ1Z3C2": 0.2,
+      "B01A756PA6": 0.2,
+      "B07145SB45": 0.2,
+      "B00909C7G2": 0.2,
+      "B00O0ADQYS": 0.2,
+      "B00B8KXJXG": 0.2,
+      "B0BX74LYLM": 0.2,
+      "B007BJC3M6": 0.2,
+      "B0BWD4WGJB": 0.2
+    },
+    "graph_evidence": [
+      {
+        "brand": "Fujifilm"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Camera'})-[:DESIRES]->(Attribute {name: 'Instant Film'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B014TUZ92U'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_phone_01",
+    "id": "live_eval_phone_01",
+    "sample_id": "live_eval_phone_01",
+    "category": "Phone",
+    "utterance": "I need an unlocked Samsung Galaxy smartphone that supports high-speed 5G network connectivity with at least 128GB of internal storage and a 64MP camera.",
+    "query": "I need an unlocked Samsung Galaxy smartphone that supports high-speed 5G network connectivity with at least 128GB of internal storage and a 64MP camera.",
+    "user_query": "I need an unlocked Samsung Galaxy smartphone that supports high-speed 5G network connectivity with at least 128GB of internal storage and a 64MP camera.",
+    "semantic_query": "Samsung Galaxy unlocked smartphone 5G network connectivity 128GB internal storage 64MP camera",
+    "target_asin": "B08GNRGB67",
+    "target_title": "Samsung Galaxy S20+ Plus 5G Factory Unlocked New Android Cell Phone US Version, 128GB of Storage, Fingerprint ID and Facial Recognition, Long-Lasting Battery, Black, SM-G986UZKAXAA",
+    "ground_truth_asins": [
+      "B08GNRGB67"
+    ],
+    "peer_asins": [
+      "B07N4L36H7",
+      "B07VV9HSGL",
+      "B082DL58F5",
+      "B06Y38BVJB",
+      "B00KY3VV2Y"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Network & Storage",
+      "value": "Factory unlocked 5G connectivity with 128GB internal storage and 64MP high-resolution telephoto zoom camera",
+      "salience": 1.0,
+      "feature_name": "Network & Storage",
+      "feature_value": "Factory Unlocked 5G with 128GB Storage and 64MP Camera",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Peer phones in the candidate pool (such as Galaxy S9+ B07VV9HSGL or iPhone 8 Plus B089SRK8VQ) are 4G LTE only with 64GB storage, whereas B08GNRGB67 is the only candidate providing genuine 5G connectivity with 128GB storage."
+    },
+    "structured_filters": {
+      "category": "Phone",
+      "price_max": 800.0,
+      "brand": "Samsung Electronics"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "5G network connectivity",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "128GB internal storage",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "64MP camera",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Phone",
+      "preferred_brands": [
+        "Samsung Electronics"
+      ],
+      "price_anchor": 758.39,
+      "distinguishing_feature": "Network & Storage"
+    },
+    "graded_relevance": {
+      "B08GNRGB67": 1.0,
+      "B07N4L36H7": 0.45,
+      "B07VV9HSGL": 0.45,
+      "B082DL58F5": 0.45,
+      "B06Y38BVJB": 0.45,
+      "B00KY3VV2Y": 0.45,
+      "B07YH11J2L": 0.2,
+      "B0BVGRBDRH": 0.2,
+      "B089SRK8VQ": 0.2,
+      "B0BVX6BBMJ": 0.2,
+      "B00VPI598E": 0.2,
+      "B0832DYYFP": 0.2,
+      "B008ZE9A0E": 0.2,
+      "B07YXBRXKF": 0.2,
+      "B0BFMXC4NN": 0.2,
+      "B0BLB4SMVQ": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Cosmic Black"
+      },
+      {
+        "brand": "Samsung Electronics"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Phone'})-[:DESIRES]->(Attribute {name: '5G Connectivity'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08GNRGB67'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_phone_02",
+    "id": "live_eval_phone_02",
+    "sample_id": "live_eval_phone_02",
+    "category": "Phone",
+    "utterance": "I'm searching for a factory unlocked Samsung Galaxy S9+ smartphone in Midnight Black that retains a dedicated 3.5mm headphone jack and rear fingerprint reader.",
+    "query": "I'm searching for a factory unlocked Samsung Galaxy S9+ smartphone in Midnight Black that retains a dedicated 3.5mm headphone jack and rear fingerprint reader.",
+    "user_query": "I'm searching for a factory unlocked Samsung Galaxy S9+ smartphone in Midnight Black that retains a dedicated 3.5mm headphone jack and rear fingerprint reader.",
+    "semantic_query": "Samsung Galaxy S9+ factory unlocked smartphone 64GB Midnight Black 3.5mm headphone jack dual aperture rear fingerprint",
+    "target_asin": "B07VV9HSGL",
+    "target_title": "SAMSUNG Galaxy S9+ Factory Unlocked Smartphone 64GB - Midnight Black",
+    "ground_truth_asins": [
+      "B07VV9HSGL"
+    ],
+    "peer_asins": [
+      "B00KY3VV2Y",
+      "B06Y38BVJB",
+      "B08GNRGB67",
+      "B07N4L36H7",
+      "B082DL58F5"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Hardware Interface",
+      "value": "Dual Aperture f/1.5-f/2.4 rear camera with dedicated 3.5mm stereo headphone jack and physical rear capacitive fingerprint sensor",
+      "salience": 1.0,
+      "feature_name": "Hardware Interface",
+      "feature_value": "Dedicated 3.5mm Headphone Jack and Rear Fingerprint Sensor with Dual Aperture",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Modern peers like Galaxy S20+ (B08GNRGB67) removed the 3.5mm audio jack and moved to in-display fingerprint, making the S9+ uniquely suited for users requiring wired analog audio."
+    },
+    "structured_filters": {
+      "category": "Phone",
+      "price_max": 600.0,
+      "brand": "SAMSUNG"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "3.5mm headphone jack",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "rear fingerprint scanner",
+        "polarity": 1.0
+      },
+      {
+        "category": "color",
+        "value": "Midnight Black",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Phone",
+      "preferred_brands": [
+        "SAMSUNG"
+      ],
+      "price_anchor": 555.35,
+      "distinguishing_feature": "Hardware Interface"
+    },
+    "graded_relevance": {
+      "B07VV9HSGL": 1.0,
+      "B00KY3VV2Y": 0.45,
+      "B06Y38BVJB": 0.45,
+      "B08GNRGB67": 0.45,
+      "B07N4L36H7": 0.45,
+      "B082DL58F5": 0.45,
+      "B07YXBRXKF": 0.2,
+      "B07KQ5NQKH": 0.2,
+      "B07YH11J2L": 0.2,
+      "B00VPI598E": 0.2,
+      "B0BLB4SMVQ": 0.2,
+      "B008ZE9A0E": 0.2,
+      "B00WZZ5KLW": 0.2,
+      "B0832DYYFP": 0.2,
+      "B0BVGRBDRH": 0.2,
+      "B0BVX6BBMJ": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black"
+      },
+      {
+        "brand": "SAMSUNG"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Phone'})-[:DESIRES]->(Attribute {name: '3.5mm Audio Jack'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B07VV9HSGL'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_phone_03",
+    "id": "live_eval_phone_03",
+    "sample_id": "live_eval_phone_03",
+    "category": "Phone",
+    "utterance": "Looking for a renewed Apple iPhone in gold finish with a tactile Touch ID home button and dual cameras supporting Portrait mode for under $220.",
+    "query": "Looking for a renewed Apple iPhone in gold finish with a tactile Touch ID home button and dual cameras supporting Portrait mode for under $220.",
+    "user_query": "Looking for a renewed Apple iPhone in gold finish with a tactile Touch ID home button and dual cameras supporting Portrait mode for under $220.",
+    "semantic_query": "Apple iPhone 8 Plus renewed 64GB Gold Touch ID home button dual cameras portrait mode",
+    "target_asin": "B089SRK8VQ",
+    "target_title": "Apple iPhone 8 Plus, US Version, 64GB, Gold - AT&T (Renewed)",
+    "ground_truth_asins": [
+      "B089SRK8VQ"
+    ],
+    "peer_asins": [
+      "B06Y38BVJB",
+      "B08GNRGB67",
+      "B0BGQT138Z",
+      "B082DL58F5",
+      "B0BVGRBDRH"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Platform & Biometrics",
+      "value": "Apple iOS smartphone with physical Touch ID home button and dual 12MP Portrait mode optical zoom cameras in Gold finish",
+      "salience": 1.0,
+      "feature_name": "Platform & Biometrics",
+      "feature_value": "Apple iOS with Physical Touch ID and Dual 12MP Portrait Camera",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "All competing peers in the 50 candidate pool are Android smartphones (Samsung Galaxy S9+, S20+, Note 4), making B089SRK8VQ the only Apple iOS device with physical Touch ID."
+    },
+    "structured_filters": {
+      "category": "Phone",
+      "price_max": 220.0,
+      "brand": "Amazon Renewed"
+    },
+    "soft_preferences": [
+      {
+        "category": "platform",
+        "value": "iOS",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "Touch ID home button",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "dual portrait camera",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Phone",
+      "preferred_brands": [
+        "Amazon Renewed"
+      ],
+      "price_anchor": 195.0,
+      "distinguishing_feature": "Platform & Biometrics"
+    },
+    "graded_relevance": {
+      "B089SRK8VQ": 1.0,
+      "B06Y38BVJB": 0.45,
+      "B08GNRGB67": 0.45,
+      "B0BGQT138Z": 0.45,
+      "B082DL58F5": 0.45,
+      "B0BVGRBDRH": 0.45,
+      "B07YH11J2L": 0.2,
+      "B0883SBTWF": 0.2,
+      "B07N4L36H7": 0.2,
+      "B07YXBRXKF": 0.2,
+      "B07VV9HSGL": 0.2,
+      "B00KY3VV2Y": 0.2,
+      "B0BVX6BBMJ": 0.2,
+      "B0BLB4SMVQ": 0.2,
+      "B07KQ5NQKH": 0.2,
+      "B00VPI598E": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Gold"
+      },
+      {
+        "brand": "Amazon Renewed"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Phone'})-[:DESIRES]->(Attribute {name: 'Touch ID'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B089SRK8VQ'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_charger_01",
+    "id": "live_eval_charger_01",
+    "sample_id": "live_eval_charger_01",
+    "category": "Charger",
+    "utterance": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together under $60.",
+    "query": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together under $60.",
+    "user_query": "I need a compact 65W GaN wall charger that provides 4 simultaneous ports including 3 USB-C outputs to charge my laptop and phone together under $60.",
+    "semantic_query": "65W USB C charger 4 ports GaN technology fast power delivery wall charger adapter",
+    "target_asin": "B088FHJLR1",
+    "target_title": "UGREEN 65W USB C Charger 4 Ports USB C Power Adapter GaN PD Fast Wall Charger Compatible with MacBook Pro/Air M2, Dell XPS 13, iPad Pro/Air, iPhone 14 Pro Max/13, Galaxy S23, Steam Deck, and More",
+    "ground_truth_asins": [
+      "B088FHJLR1"
+    ],
+    "peer_asins": [
+      "B08B14VXPL",
+      "B0936X8RDR",
+      "B0BNM7YQHF",
+      "B0C4NGYVWK",
+      "B097PTBB5V"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Power Delivery & Port Count",
+      "value": "High-efficiency 65W GaN fast wall charger equipped with 4 simultaneous charging ports (3 USB-C + 1 USB-A)",
+      "salience": 1.0,
+      "feature_name": "Power Delivery & Port Count",
+      "feature_value": "65W GaN with 4 Ports (3x USB-C + 1x USB-A)",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Competing chargers in the candidate pool (such as RAMPOW 61W B08B14VXPL or Apple 20W B08L5M9BTJ) provide only a single USB port, whereas UGREEN B088FHJLR1 provides 4 multi-device ports powered by GaN."
+    },
+    "structured_filters": {
+      "category": "Charger",
+      "price_max": 60.0,
+      "brand": "UGREEN"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "65W GaN technology",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "4 charging ports",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "triple USB-C outputs",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Charger",
+      "preferred_brands": [
+        "UGREEN"
+      ],
+      "price_anchor": 55.99,
+      "distinguishing_feature": "Power Delivery & Port Count"
+    },
+    "graded_relevance": {
+      "B088FHJLR1": 1.0,
+      "B08B14VXPL": 0.45,
+      "B0936X8RDR": 0.45,
+      "B0BNM7YQHF": 0.45,
+      "B0C4NGYVWK": 0.45,
+      "B097PTBB5V": 0.45,
+      "B0C6PFLWFN": 0.2,
+      "B0C57Y2ZSB": 0.2,
+      "B00DUMFZ6O": 0.2,
+      "B07BQRSF6X": 0.2,
+      "B07WZT643Q": 0.2,
+      "B08L5M9BTJ": 0.2,
+      "B06XK4B5JR": 0.2,
+      "B0C6KVXZH9": 0.2,
+      "B07SMFV58F": 0.2,
+      "B0819FGZ7P": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black"
+      },
+      {
+        "brand": "UGREEN"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Charger'})-[:DESIRES]->(Attribute {name: '65W GaN 4 Ports'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B088FHJLR1'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_charger_02",
+    "id": "live_eval_charger_02",
+    "sample_id": "live_eval_charger_02",
+    "category": "Charger",
+    "utterance": "I want an official Apple 20W USB-C power adapter cube for fast charging my iPhone safely under $25.",
+    "query": "I want an official Apple 20W USB-C power adapter cube for fast charging my iPhone safely under $25.",
+    "user_query": "I want an official Apple 20W USB-C power adapter cube for fast charging my iPhone safely under $25.",
+    "semantic_query": "official Apple 20W USB-C power adapter iPhone fast charger Type C wall plug",
+    "target_asin": "B08L5M9BTJ",
+    "target_title": "Apple 20W USB-C Power Adapter - iPhone Charger with Fast Charging Capability, Type C Wall Charger",
+    "ground_truth_asins": [
+      "B08L5M9BTJ"
+    ],
+    "peer_asins": [
+      "B09KC21JTY",
+      "B0BN1X5LPX",
+      "B0819FGZ7P",
+      "B08SB7F5FV",
+      "B096K1PR9K"
+    ],
+    "distinguishing_feature": {
+      "attribute": "OEM Compatibility",
+      "value": "Official genuine Apple 20W USB-C Power Adapter engineered specifically with Apple Power Delivery profile",
+      "salience": 1.0,
+      "feature_name": "OEM Compatibility",
+      "feature_value": "Official Genuine Apple 20W Power Delivery Profile",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Peers in the candidate pool are third-party generic chargers (Citelect B09KC21JTY, KASHIMURA B0C3C66TNY); B08L5M9BTJ is the only authentic first-party OEM Apple adapter."
+    },
+    "structured_filters": {
+      "category": "Charger",
+      "price_max": 25.0,
+      "brand": "Apple"
+    },
+    "soft_preferences": [
+      {
+        "category": "brand",
+        "value": "Apple",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "20W USB-C Power Delivery",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Charger",
+      "preferred_brands": [
+        "Apple"
+      ],
+      "price_anchor": 18.99,
+      "distinguishing_feature": "OEM Compatibility"
+    },
+    "graded_relevance": {
+      "B08L5M9BTJ": 1.0,
+      "B09KC21JTY": 0.45,
+      "B0BN1X5LPX": 0.45,
+      "B0819FGZ7P": 0.45,
+      "B08SB7F5FV": 0.45,
+      "B096K1PR9K": 0.45,
+      "B0C6KVXZH9": 0.2,
+      "B088FHJLR1": 0.2,
+      "B0C15QC49W": 0.2,
+      "B0936X8RDR": 0.2,
+      "B08B14VXPL": 0.2,
+      "B0BNM7YQHF": 0.2,
+      "B0C3712X38": 0.2,
+      "B09TRVYXXG": 0.2,
+      "B0C4NGYVWK": 0.2,
+      "B097PTBB5V": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "compatible_phone_models",
+        "attribute_value": "IPhone 14, iPhone 14 Pro, iPhone 14 Pro Max, iPhone 14 Plus, iPhone 13 Pro, iPhone 13 Pro Max, iPhone 13 mini, iPhone 13, iPhone 12 Pro, iPhone 12 Pro Max, iPhone 12 mini, iPhone 12, iPhone 11 Pro, iPhone 11 Pro Max, iPhone 11, iPhone SE (2nd generation), iPhone XS, iPhone XS Max, iPhone XR, iPhone X, iPhone 8, iPhone 8 PlusIPhone 14, iPhone 14 Pro, iPhone 14 Pro Max, iPhone 14 Plus, iPhone 13 Pro, iPhone 13 Pro Max, iPhone 13 mini, iPhone 13, iPhone 12 Pro, iPhone 12 Pro Max, iPhone 12 mini, iPhone 12, iPhone 11 Pro, iPhone 11 Pro Max, iPhone 11, iPhon\u2026  See more"
+      },
+      {
+        "attribute_name": "feature",
+        "attribute_value": "The Apple 20W USB\u2011C Power Adapter offers fast, efficient charging at home, in the office, or on the go."
+      },
+      {
+        "attribute_name": "feature",
+        "attribute_value": "Or pair it with the iPad Pro and iPad Air for optimal charging performance."
+      },
+      {
+        "attribute_name": "brand",
+        "attribute_value": "Apple"
+      },
+      {
+        "attribute_name": "color",
+        "attribute_value": "White"
+      },
+      {
+        "attribute_name": "included_components",
+        "attribute_value": "USB-C Power Adapter"
+      },
+      {
+        "attribute_name": "connectivity_technology",
+        "attribute_value": "USB-C"
+      },
+      {
+        "attribute_name": "special_feature",
+        "attribute_value": "Lightweight Design, Travel, Universal, Fast Charging"
+      },
+      {
+        "attribute_name": "feature",
+        "attribute_value": "Works with all iPhone, AirPods, iPad and Apple Watch models"
+      },
+      {
+        "attribute_name": "mounting_type",
+        "attribute_value": "Wall Mount"
+      },
+      {
+        "attribute_name": "feature",
+        "attribute_value": "Pair it with iPhone 8 or later for fast charging \u2014 50 percent battery in around 30 minutes."
+      },
+      {
+        "attribute_name": "input_voltage",
+        "attribute_value": "15 Volts"
+      },
+      {
+        "attribute_name": "compatible_devices",
+        "attribute_value": "Apple iPhone"
+      },
+      {
+        "attribute_name": "connector_type",
+        "attribute_value": "USB Type C"
+      },
+      {
+        "attribute_name": "feature",
+        "attribute_value": "USB-C wall charger only, charging cable sold separately."
+      },
+      {
+        "brand": "Apple"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Charger'})-[:DESIRES]->(Attribute {name: 'Apple 20W OEM'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08L5M9BTJ'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_charger_03",
+    "id": "live_eval_charger_03",
+    "sample_id": "live_eval_charger_03",
+    "category": "Charger",
+    "utterance": "I'm traveling abroad and need an all-in-one universal international travel power adapter with 4 dedicated USB-A ports delivering 3.4A smart IC output across EU, UK, and US sockets under $20.",
+    "query": "I'm traveling abroad and need an all-in-one universal international travel power adapter with 4 dedicated USB-A ports delivering 3.4A smart IC output across EU, UK, and US sockets under $20.",
+    "user_query": "I'm traveling abroad and need an all-in-one universal international travel power adapter with 4 dedicated USB-A ports delivering 3.4A smart IC output across EU, UK, and US sockets under $20.",
+    "semantic_query": "universal travel adapter all-in-one international plug adapter EU UK US AUS 4 USB-A ports 3.4A smart IC",
+    "target_asin": "B095LLDH4H",
+    "target_title": "HaoZi SLIronM-01 All-in-One Universal Travel Adapter with 3.4A 4 USB, Europe Multifunctional Power Adapter Wall Charger, Black",
+    "ground_truth_asins": [
+      "B095LLDH4H"
+    ],
+    "peer_asins": [
+      "B0936X8RDR",
+      "B088FHJLR1",
+      "B08B14VXPL",
+      "B007J4BOWI",
+      "B07BQRSF6X"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Port Configuration & Amperage",
+      "value": "All-in-one universal international travel adapter with 4 dedicated USB-A charging ports and 3.4A smart IC output across US, EU, UK, and AUS sockets",
+      "salience": 1.0,
+      "feature_name": "Port Configuration & Amperage",
+      "feature_value": "Universal Worldwide Travel Adapter with 4 USB-A Ports and 3.4A Output",
+      "feature_type": "functional_capability",
+      "discriminative_justification": "Peer travel adapter ZGGCD B07SMFV58F features a mixed USB port layout (3 USB-A + 1 USB Type-C) with 4.5A output, whereas other charger peers are fixed US wall plugs. B095LLDH4H is uniquely equipped with 4 dedicated USB-A charging ports delivering 3.4A balanced output across worldwide sliding plugs."
+    },
+    "structured_filters": {
+      "category": "Charger",
+      "price_max": 20.0,
+      "brand": "HAOZI"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "international travel adapter",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "4 dedicated USB-A ports",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "3.4A smart IC output",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Charger",
+      "preferred_brands": [
+        "HAOZI"
+      ],
+      "price_anchor": 17.97,
+      "distinguishing_feature": "Port Configuration & Amperage"
+    },
+    "graded_relevance": {
+      "B095LLDH4H": 1.0,
+      "B0936X8RDR": 0.45,
+      "B088FHJLR1": 0.45,
+      "B08B14VXPL": 0.45,
+      "B007J4BOWI": 0.45,
+      "B07BQRSF6X": 0.45,
+      "B07SMFV58F": 0.2,
+      "B07MJPGPQP": 0.2,
+      "B09PR8WQ3X": 0.2,
+      "B0BCPLQV7P": 0.2,
+      "B07TFCY5RQ": 0.2,
+      "B06XK4B5JR": 0.2,
+      "B0C6PFLWFN": 0.2,
+      "B00G9DDRCU": 0.2,
+      "B0749LCNGQ": 0.2,
+      "B003LD4T0K": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "4U-black"
+      },
+      {
+        "brand": "HAOZI"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Charger'})-[:DESIRES]->(Attribute {name: 'Universal 4 USB-A 3.4A'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B095LLDH4H'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_mouse_01",
+    "id": "live_eval_mouse_01",
+    "sample_id": "live_eval_mouse_01",
+    "category": "Mouse",
+    "utterance": "I need an ultra-quiet, silent-clicking wireless mouse with a USB nano receiver in an olive green finish for office work under $15.",
+    "query": "I need an ultra-quiet, silent-clicking wireless mouse with a USB nano receiver in an olive green finish for office work under $15.",
+    "user_query": "I need an ultra-quiet, silent-clicking wireless mouse with a USB nano receiver in an olive green finish for office work under $15.",
+    "semantic_query": "seenda wireless mouse 2.4G noiseless silent click USB receiver olive green portable",
+    "target_asin": "B0B4SWZTZ1",
+    "target_title": "seenda Wireless Mouse, 2.4G Noiseless Mouse with USB Receiver Portable Computer Mice for PC, Tablet, Laptop with Windows System (Olive Green)",
+    "ground_truth_asins": [
+      "B0B4SWZTZ1"
+    ],
+    "peer_asins": [
+      "B088NMVW4Y",
+      "B0B4KJRD1C",
+      "B086P73W2F",
+      "B07W1Q3X7S",
+      "B08JYBC9MY"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Acoustic Noise Reduction",
+      "value": "Ultra-quiet noiseless click switches with Olive Green streamlined compact casing and drop-resistant build",
+      "salience": 1.0,
+      "feature_name": "Acoustic Noise Reduction",
+      "feature_value": "Noiseless Silent Micro-Switches with Olive Green Finish",
+      "feature_type": "functional_capability",
+      "discriminative_justification": "Peer mice (such as OKIMO B088NMVW4Y or Uiosmuph B082M94GY9) feature loud clicks or flashy glowing RGB lights; B0B4SWZTZ1 uniquely combines noiseless silent switches with an elegant matte olive green design."
+    },
+    "structured_filters": {
+      "category": "Mouse",
+      "price_max": 15.0,
+      "brand": "seenda"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "noiseless silent click",
+        "polarity": 1.0
+      },
+      {
+        "category": "color",
+        "value": "Olive Green",
+        "polarity": 1.0
+      },
+      {
+        "category": "connectivity",
+        "value": "2.4G wireless USB",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Mouse",
+      "preferred_brands": [
+        "seenda"
+      ],
+      "price_anchor": 11.99,
+      "distinguishing_feature": "Acoustic Noise Reduction"
+    },
+    "graded_relevance": {
+      "B0B4SWZTZ1": 1.0,
+      "B088NMVW4Y": 0.45,
+      "B0B4KJRD1C": 0.45,
+      "B086P73W2F": 0.45,
+      "B07W1Q3X7S": 0.45,
+      "B08JYBC9MY": 0.45,
+      "B07H9C1WM8": 0.2,
+      "B07P5JMW4F": 0.2,
+      "B07J3H9K8N": 0.2,
+      "B0C6KPFH39": 0.2,
+      "B08P664SGP": 0.2,
+      "B07QW971RS": 0.2,
+      "B09Z6KMDLN": 0.2,
+      "B07ZCYC5BX": 0.2,
+      "B09NYG2RZ6": 0.2,
+      "B0BBMKBCGB": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Olive Green"
+      },
+      {
+        "brand": "seenda"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Mouse'})-[:DESIRES]->(Attribute {name: 'Noiseless Click'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0B4SWZTZ1'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_mouse_02",
+    "id": "live_eval_mouse_02",
+    "sample_id": "live_eval_mouse_02",
+    "category": "Mouse",
+    "utterance": "I want a rechargeable ergonomic vertical mouse with multi-device triple connectivity supporting Bluetooth 5.0, Bluetooth 3.0, and USB connection to switch smoothly between my Mac and PC.",
+    "query": "I want a rechargeable ergonomic vertical mouse with multi-device triple connectivity supporting Bluetooth 5.0, Bluetooth 3.0, and USB connection to switch smoothly between my Mac and PC.",
+    "user_query": "I want a rechargeable ergonomic vertical mouse with multi-device triple connectivity supporting Bluetooth 5.0, Bluetooth 3.0, and USB connection to switch smoothly between my Mac and PC.",
+    "semantic_query": "seenda wireless vertical ergonomic mouse rechargeable Bluetooth 5.0 Bluetooth 3.0 USB multi-device handshake Mac Windows",
+    "target_asin": "B0B4KJRD1C",
+    "target_title": "seenda Ergonomic Mouse, Wireless Vertical Mouse - Rechargeable Optical Mice for Multi-Purpose (Bluetooth 5.0 + Bluetooth 3.0 + USB Connection) Compatible Apple Mac and Windows Computers - Black",
+    "ground_truth_asins": [
+      "B0B4KJRD1C"
+    ],
+    "peer_asins": [
+      "B086P73W2F",
+      "B0B4SWZTZ1",
+      "B07J3H9K8N",
+      "B082V8GC6T",
+      "B08V9VN5Q6"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Connectivity & Form Factor",
+      "value": "Ergonomic vertical handshake design with multi-device triple connectivity (Bluetooth 5.0 + Bluetooth 3.0 + 2.4G USB)",
+      "salience": 1.0,
+      "feature_name": "Connectivity & Form Factor",
+      "feature_value": "Bluetooth 5.0 + Bluetooth 3.0 + USB Triple Mode Vertical Mouse",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Competing vertical mice in the pool (such as Vassink B08JYBC9MY and Viwind B09XXFK7RM) only support a single 2.4GHz USB nano receiver without Bluetooth, while Bluetooth peers (such as TECKNET B082V8GC6T and MMK B086P73W2F) are standard flat horizontal mice. B0B4KJRD1C uniquely combines vertical ergonomic handshake contouring with multi-device Bluetooth and USB triple connectivity."
+    },
+    "structured_filters": {
+      "category": "Mouse",
+      "price_max": 30.0,
+      "brand": "seenda"
+    },
+    "soft_preferences": [
+      {
+        "category": "ergonomics",
+        "value": "vertical handshake grip",
+        "polarity": 1.0
+      },
+      {
+        "category": "connectivity",
+        "value": "multi-device Bluetooth and USB triple mode",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "rechargeable battery",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Mouse",
+      "preferred_brands": [
+        "seenda"
+      ],
+      "price_anchor": 26.98,
+      "distinguishing_feature": "Connectivity & Form Factor"
+    },
+    "graded_relevance": {
+      "B0B4KJRD1C": 1.0,
+      "B086P73W2F": 0.45,
+      "B0B4SWZTZ1": 0.45,
+      "B07J3H9K8N": 0.45,
+      "B082V8GC6T": 0.45,
+      "B08V9VN5Q6": 0.45,
+      "B09Z6KMDLN": 0.2,
+      "B08JYBC9MY": 0.2,
+      "B07ZCYC5BX": 0.2,
+      "B07H9C1WM8": 0.2,
+      "B093GFJXN5": 0.2,
+      "B07P5JMW4F": 0.2,
+      "B09NYG2RZ6": 0.2,
+      "B007PJ4Q4A": 0.2,
+      "B088NMVW4Y": 0.2,
+      "B08P664SGP": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black Ergonomic Mouse"
+      },
+      {
+        "brand": "seenda"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Mouse'})-[:DESIRES]->(Attribute {name: 'Triple Mode Vertical Ergonomics'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0B4KJRD1C'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_mouse_03",
+    "id": "live_eval_mouse_03",
+    "sample_id": "live_eval_mouse_03",
+    "category": "Mouse",
+    "utterance": "I'm looking for a durable Logitech wireless mouse with micro-precise web scrolling and an extended 3-year battery life in red and black.",
+    "query": "I'm looking for a durable Logitech wireless mouse with micro-precise web scrolling and an extended 3-year battery life in red and black.",
+    "user_query": "I'm looking for a durable Logitech wireless mouse with micro-precise web scrolling and an extended 3-year battery life in red and black.",
+    "semantic_query": "Logitech wireless mouse M525 micro-precise scroll wheel 3-year battery life red black rubber grips",
+    "target_asin": "B006MCDUZM",
+    "target_title": "Logitech Wireless Mouse M525 - Red/Black",
+    "ground_truth_asins": [
+      "B006MCDUZM"
+    ],
+    "peer_asins": [
+      "B00E7IPN0I",
+      "B003NR57BY",
+      "B08V9VN5Q6",
+      "B0BVPY54T9",
+      "B00CBB6TPQ"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Scrolling Precision & Longevity",
+      "value": "Micro-precise scroll wheel with enhanced detents and exceptional 3-year battery life in contoured Red/Black dual-finish",
+      "salience": 1.0,
+      "feature_name": "Scrolling Precision & Longevity",
+      "feature_value": "Micro-Precise Scroll Wheel with 3-Year Battery Life",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Similar Logitech peers (M325 B08YMVB98D and B00E7IPN0I) have standard scrolling and only 12-18 months battery life; B006MCDUZM specifically features the micro-precise high-groove wheel and 36-month battery."
+    },
+    "structured_filters": {
+      "category": "Mouse",
+      "price_max": 35.0,
+      "brand": "Logitech"
+    },
+    "soft_preferences": [
+      {
+        "category": "brand",
+        "value": "Logitech",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "micro-precise scroll wheel",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "3-year battery life",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Mouse",
+      "preferred_brands": [
+        "Logitech"
+      ],
+      "price_anchor": 26.9,
+      "distinguishing_feature": "Scrolling Precision & Longevity"
+    },
+    "graded_relevance": {
+      "B006MCDUZM": 1.0,
+      "B00E7IPN0I": 0.45,
+      "B003NR57BY": 0.45,
+      "B08V9VN5Q6": 0.45,
+      "B0BVPY54T9": 0.45,
+      "B00CBB6TPQ": 0.45,
+      "B005HQ514C": 0.2,
+      "B00745IE1Q": 0.2,
+      "B007PJ4Q4A": 0.2,
+      "B0B3TRT8WM": 0.2,
+      "B0043T7FXE": 0.2,
+      "B09XXFK7RM": 0.2,
+      "B004DI7DGO": 0.2,
+      "B07H9C1WM8": 0.2,
+      "B086P73W2F": 0.2,
+      "B0BBMKBCGB": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Red/Black"
+      },
+      {
+        "brand": "Logitech"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Mouse'})-[:DESIRES]->(Attribute {name: 'Micro-Precise Scroll'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B006MCDUZM'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_headphone_01",
+    "id": "live_eval_headphone_01",
+    "sample_id": "live_eval_headphone_01",
+    "category": "Headphone",
+    "utterance": "I want lightweight open-ear wireless sports headphones with bone conduction technology so my ear canals remain open to hear ambient traffic while running outdoors.",
+    "query": "I want lightweight open-ear wireless sports headphones with bone conduction technology so my ear canals remain open to hear ambient traffic while running outdoors.",
+    "user_query": "I want lightweight open-ear wireless sports headphones with bone conduction technology so my ear canals remain open to hear ambient traffic while running outdoors.",
+    "semantic_query": "Aftershokz bone conduction wireless headphones open-ear sports running ambient sound traffic awareness",
+    "target_asin": "B08BG7J2MN",
+    "target_title": "Aftershokz Aeropex Mini (Rebranded as Shokz OpenRun Mini) Bone Conduction Wireless Bluetooth Headphones",
+    "ground_truth_asins": [
+      "B08BG7J2MN"
+    ],
+    "peer_asins": [
+      "B074F3YW3R",
+      "B0C337TNGS",
+      "B0C3R2WCKX",
+      "B0BHWYQ47Y",
+      "B0BY32J7TK"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Acoustic Transducer Technology",
+      "value": "Open-ear bone conduction technology transmitting audio via cheekbones leaving ear canals completely open for outdoor awareness",
+      "salience": 1.0,
+      "feature_name": "Acoustic Transducer Technology",
+      "feature_value": "Open-Ear Bone Conduction Transducer Technology",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Candidate peers in the sports pool (such as Bose SoundSport Free B074F3YW3R or Beats Powerbeats Pro B0C337TNGS) are in-ear earbuds that block the ear canal, whereas Aftershokz B08BG7J2MN uniquely uses open-ear bone conduction transducers for situational awareness."
+    },
+    "structured_filters": {
+      "category": "Headphone",
+      "price_max": 180.0,
+      "brand": "Aftershokz"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "bone conduction technology",
+        "polarity": 1.0
+      },
+      {
+        "category": "form_factor",
+        "value": "open-ear",
+        "polarity": 1.0
+      },
+      {
+        "category": "use_case",
+        "value": "outdoor running safety",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Headphone",
+      "preferred_brands": [
+        "Aftershokz"
+      ],
+      "price_anchor": 169.95,
+      "distinguishing_feature": "Acoustic Transducer Technology"
+    },
+    "graded_relevance": {
+      "B08BG7J2MN": 1.0,
+      "B074F3YW3R": 0.45,
+      "B0C337TNGS": 0.45,
+      "B0C3R2WCKX": 0.45,
+      "B0BHWYQ47Y": 0.45,
+      "B0BY32J7TK": 0.45,
+      "B09MFJQBYR": 0.2,
+      "B0BQCF4N32": 0.2,
+      "B07CYZGQ12": 0.2,
+      "B07KR62YBD": 0.2,
+      "B0C33C3XFV": 0.2,
+      "B08DWN51TQ": 0.2,
+      "B09DB8XK9Y": 0.2,
+      "B08PFW1S1V": 0.2,
+      "B0B9H3NN8T": 0.2,
+      "B09Y54MQWT": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black"
+      },
+      {
+        "brand": "Aftershokz"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Headphone'})-[:DESIRES]->(Attribute {name: 'Bone Conduction'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08BG7J2MN'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_headphone_02",
+    "id": "live_eval_headphone_02",
+    "sample_id": "live_eval_headphone_02",
+    "category": "Headphone",
+    "utterance": "I want comfortable wireless over-ear travel headphones with hybrid active noise cancelling, Hi-Res Audio certification, and 40 hours of playtime under $75.",
+    "query": "I want comfortable wireless over-ear travel headphones with hybrid active noise cancelling, Hi-Res Audio certification, and 40 hours of playtime under $75.",
+    "user_query": "I want comfortable wireless over-ear travel headphones with hybrid active noise cancelling, Hi-Res Audio certification, and 40 hours of playtime under $75.",
+    "semantic_query": "Soundcore Anker Life Q20 hybrid active noise cancelling ANC wireless over-ear headphones Hi-Res Audio 40H battery",
+    "target_asin": "B08PFW1S1V",
+    "target_title": "Soundcore Anker Life Q20 Hybrid Active Noise Cancelling Headphones, Wireless Over Ear Bluetooth Headphones, 40H Playtime, Hi-Res Audio, Deep Bass, Memory Foam Ear Cups, for Travel, Home Office",
+    "ground_truth_asins": [
+      "B08PFW1S1V"
+    ],
+    "peer_asins": [
+      "B0BQCF4N32",
+      "B08DWN51TQ",
+      "B07CYZGQ12",
+      "B097MRW46F",
+      "B07S1582YY"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Acoustic Noise Control & Audio Certification",
+      "value": "Hybrid Active Noise Cancelling (ANC) with certified Hi-Res Audio and 40-hour playtime in an over-ear design under $75",
+      "salience": 1.0,
+      "feature_name": "Acoustic Noise Control & Audio Certification",
+      "feature_value": "Hybrid Active Noise Cancelling with Hi-Res Audio and 40-Hour Battery",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Competing over-ear headsets in the budget pool (pollini B0BQCF4N32, August B08DWN51TQ, PowerLocus B07CYZGQ12) provide only passive isolation and standard audio, whereas Soundcore Life Q20 B08PFW1S1V is the only candidate offering hybrid ANC with certified Hi-Res Audio under $75."
+    },
+    "structured_filters": {
+      "category": "Headphone",
+      "price_max": 75.0,
+      "brand": "Soundcore"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "hybrid active noise cancelling",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "Hi-Res Audio",
+        "polarity": 1.0
+      },
+      {
+        "category": "form_factor",
+        "value": "over-ear",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Headphone",
+      "preferred_brands": [
+        "Soundcore"
+      ],
+      "price_anchor": 65.99,
+      "distinguishing_feature": "Acoustic Noise Control & Audio Certification"
+    },
+    "graded_relevance": {
+      "B08PFW1S1V": 1.0,
+      "B0BQCF4N32": 0.45,
+      "B08DWN51TQ": 0.45,
+      "B07CYZGQ12": 0.45,
+      "B097MRW46F": 0.45,
+      "B07S1582YY": 0.45,
+      "B077NB82ZN": 0.2,
+      "B0BS1QXF6M": 0.2,
+      "B0C338S8M7": 0.2,
+      "B0BHWYQ47Y": 0.2,
+      "B0C38XWF4T": 0.2,
+      "B0C337TNGS": 0.2,
+      "B08Q2RBN1C": 0.2,
+      "B0105VDCZ8": 0.2,
+      "B0BZVGQ1M3": 0.2,
+      "B09D41HQVZ": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Blue"
+      },
+      {
+        "brand": "Soundcore"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Headphone'})-[:DESIRES]->(Attribute {name: 'Hybrid ANC Hi-Res'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08PFW1S1V'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_headphone_03",
+    "id": "live_eval_headphone_03",
+    "sample_id": "live_eval_headphone_03",
+    "category": "Headphone",
+    "utterance": "I need reliable wired in-ear earbuds with a 3.5mm jack, inline call microphone, and angled ergonomic tips for comfortable sleeping and study.",
+    "query": "I need reliable wired in-ear earbuds with a 3.5mm jack, inline call microphone, and angled ergonomic tips for comfortable sleeping and study.",
+    "user_query": "I need reliable wired in-ear earbuds with a 3.5mm jack, inline call microphone, and angled ergonomic tips for comfortable sleeping and study.",
+    "semantic_query": "Panasonic ErgoFit wired earbuds in-ear headphones 3.5mm jack inline microphone call controller comfortable fit",
+    "target_asin": "B07S764D9V",
+    "target_title": "Panasonic ErgoFit Wired Earbuds, In-Ear Headphones with Microphone and Call Controller, Ergonomic Custom-Fit Earpieces (S/M/L), 3.5mm Jack for Phones and Laptops - RP-TCM125-A (Blue)",
+    "ground_truth_asins": [
+      "B07S764D9V"
+    ],
+    "peer_asins": [
+      "B07KR62YBD",
+      "B0BQCF4N32",
+      "B07CYZGQ12",
+      "B07V3RB9C1",
+      "B09Y54MQWT"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Acoustic Ergonomics",
+      "value": "Wired 3.5mm in-ear canal design with patented angled ErgoFit earbuds and integrated inline microphone call controller in Blue",
+      "salience": 1.0,
+      "feature_name": "Acoustic Ergonomics",
+      "feature_value": "Patented ErgoFit Angled Ear Canal Design with Inline Mic",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Peers in the pool (ELECDER B078RGL8SB, PowerLocus B07CYZGQ12) are bulky over-ear headbands; Panasonic ErgoFit B07S764D9V provides an ultra-compact in-ear profile with zero battery requirement."
+    },
+    "structured_filters": {
+      "category": "Headphone",
+      "price_max": 20.0,
+      "brand": "Panasonic"
+    },
+    "soft_preferences": [
+      {
+        "category": "connectivity",
+        "value": "wired 3.5mm jack",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "inline microphone",
+        "polarity": 1.0
+      },
+      {
+        "category": "ergonomics",
+        "value": "ErgoFit angled in-ear",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Headphone",
+      "preferred_brands": [
+        "Panasonic"
+      ],
+      "price_anchor": 13.99,
+      "distinguishing_feature": "Acoustic Ergonomics"
+    },
+    "graded_relevance": {
+      "B07S764D9V": 1.0,
+      "B07KR62YBD": 0.45,
+      "B0BQCF4N32": 0.45,
+      "B07CYZGQ12": 0.45,
+      "B07V3RB9C1": 0.45,
+      "B09Y54MQWT": 0.45,
+      "B0B9H3NN8T": 0.2,
+      "B09S1BSZQB": 0.2,
+      "B00V9FN2VY": 0.2,
+      "B0C3R2WCKX": 0.2,
+      "B0C5MCNJKR": 0.2,
+      "B077NB82ZN": 0.2,
+      "B0BY32J7TK": 0.2,
+      "B01G8JO5F2": 0.2,
+      "B00QUG4XL0": 0.2,
+      "B08PFW1S1V": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Blue"
+      },
+      {
+        "brand": "Panasonic"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Headphone'})-[:DESIRES]->(Attribute {name: 'ErgoFit In-Ear'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B07S764D9V'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_laptop_01",
+    "id": "live_eval_laptop_01",
+    "sample_id": "live_eval_laptop_01",
+    "category": "Laptop",
+    "utterance": "I am looking for a lightweight 13-inch Apple MacBook Air featuring the revolutionary M1 chip, silent fanless cooling, and a Retina display under $900.",
+    "query": "I am looking for a lightweight 13-inch Apple MacBook Air featuring the revolutionary M1 chip, silent fanless cooling, and a Retina display under $900.",
+    "user_query": "I am looking for a lightweight 13-inch Apple MacBook Air featuring the revolutionary M1 chip, silent fanless cooling, and a Retina display under $900.",
+    "semantic_query": "Apple MacBook Air 13-inch laptop M1 chip 8GB RAM 256GB SSD Retina display fanless silent Touch ID",
+    "target_asin": "B0BRZ6VK9N",
+    "target_title": "Apple 2020 MacBook Air Laptop M1 Chip, 13\" Retina Display, 8GB RAM, 256GB SSD Storage, Backlit Keyboard, FaceTime HD Camera, Touch ID. Works with iPhone/iPad; Silver",
+    "ground_truth_asins": [
+      "B0BRZ6VK9N"
+    ],
+    "peer_asins": [
+      "B0863VLHQR",
+      "B01MD0CGGS",
+      "B076919RKR",
+      "B0C1GPRVCQ",
+      "B084LVVQ7F"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Processor Architecture",
+      "value": "Apple M1 system-on-chip with fanless completely silent thermal architecture and 18-hour battery life",
+      "salience": 1.0,
+      "feature_name": "Processor Architecture",
+      "feature_value": "Apple M1 Silicon with Fanless Silent Thermal Architecture",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Peer laptops in the candidate pool (older MacBook Air B0863VLHQR or MacBook Pro B01MD0CGGS) use Intel Core processors requiring noisy active fan cooling, whereas the M1 MacBook Air is completely fanless."
+    },
+    "structured_filters": {
+      "category": "Laptop",
+      "price_max": 900.0,
+      "brand": "Apple"
+    },
+    "soft_preferences": [
+      {
+        "category": "processor",
+        "value": "Apple M1 Chip",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "silent fanless cooling",
+        "polarity": 1.0
+      },
+      {
+        "category": "display",
+        "value": "13-inch Retina Display",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Laptop",
+      "preferred_brands": [
+        "Apple"
+      ],
+      "price_anchor": 849.0,
+      "distinguishing_feature": "Processor Architecture"
+    },
+    "graded_relevance": {
+      "B0BRZ6VK9N": 1.0,
+      "B0863VLHQR": 0.45,
+      "B01MD0CGGS": 0.45,
+      "B076919RKR": 0.45,
+      "B0C1GPRVCQ": 0.45,
+      "B084LVVQ7F": 0.45,
+      "B07JVK8J97": 0.2,
+      "B081FY9HRR": 0.2,
+      "B01B16MXLU": 0.2,
+      "B0C6JXQCF5": 0.2,
+      "B07RY3RVVY": 0.2,
+      "B07CSQDR4N": 0.2,
+      "B08DTJC9N7": 0.2,
+      "B0C39LSL4L": 0.2,
+      "B096X5YYZM": 0.2,
+      "B07DN2JG5T": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Silver"
+      },
+      {
+        "brand": "Apple"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Laptop'})-[:DESIRES]->(Attribute {name: 'Apple M1 Chip'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0BRZ6VK9N'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_laptop_02",
+    "id": "live_eval_laptop_02",
+    "sample_id": "live_eval_laptop_02",
+    "category": "Laptop",
+    "utterance": "I need an affordable 14-inch Chromebook with a 180-degree lay-flat swivel hinge and AMD Dual-Core processor for under $200.",
+    "query": "I need an affordable 14-inch Chromebook with a 180-degree lay-flat swivel hinge and AMD Dual-Core processor for under $200.",
+    "user_query": "I need an affordable 14-inch Chromebook with a 180-degree lay-flat swivel hinge and AMD Dual-Core processor for under $200.",
+    "semantic_query": "HP Chromebook 14-inch laptop 180-degree swivel hinge AMD Dual-Core A4 4GB RAM 32GB eMMC",
+    "target_asin": "B08CSHM6L3",
+    "target_title": "HP Chromebook 14-inch Laptop with 180-Degree Swivel, AMD Dual-Core A4-9120 Processor, 4 GB SDRAM, 32 GB eMMC Storage, Chrome OS (14-db0020nr, Chalkboard Gray)",
+    "ground_truth_asins": [
+      "B08CSHM6L3"
+    ],
+    "peer_asins": [
+      "B0B5DFFJ6S",
+      "B096JQY4YR",
+      "B00GZ1GV3I",
+      "B0856QVM2F",
+      "B07GLV1VC7"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Hinge Mechanism & APU",
+      "value": "180-degree lay-flat swivel hinge with AMD Dual-Core A4-9120 APU and Chalkboard Gray anti-glare finish",
+      "salience": 1.0,
+      "feature_name": "Hinge Mechanism & APU",
+      "feature_value": "180-Degree Lay-Flat Swivel Hinge with AMD Dual-Core A4",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Peer Chromebooks (such as HP Chromebook 14 B0B5DFFJ6S or Acer C720 B00GZ1GV3I) use Intel Celeron processors and standard rigid hinges that cannot fold flat to 180 degrees."
+    },
+    "structured_filters": {
+      "category": "Laptop",
+      "price_max": 200.0,
+      "brand": "HP"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "180-degree swivel hinge",
+        "polarity": 1.0
+      },
+      {
+        "category": "processor",
+        "value": "AMD Dual-Core",
+        "polarity": 1.0
+      },
+      {
+        "category": "os",
+        "value": "Chrome OS",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Laptop",
+      "preferred_brands": [
+        "HP"
+      ],
+      "price_anchor": 179.83,
+      "distinguishing_feature": "Hinge Mechanism & APU"
+    },
+    "graded_relevance": {
+      "B08CSHM6L3": 1.0,
+      "B0B5DFFJ6S": 0.45,
+      "B096JQY4YR": 0.45,
+      "B00GZ1GV3I": 0.45,
+      "B0856QVM2F": 0.45,
+      "B07GLV1VC7": 0.45,
+      "B00P8DK7AM": 0.2,
+      "B0C39LSL4L": 0.2,
+      "B08DTJC9N7": 0.2,
+      "B07QJYV14C": 0.2,
+      "B00D6WF80G": 0.2,
+      "B0C6LCK1QJ": 0.2,
+      "B07RY3RVVY": 0.2,
+      "B0BM3JL7K4": 0.2,
+      "B09MZKWZQF": 0.2,
+      "B0C6JXQCF5": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Chalkboard Gray"
+      },
+      {
+        "brand": "HP"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Laptop'})-[:DESIRES]->(Attribute {name: '180-Degree Swivel'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08CSHM6L3'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_laptop_03",
+    "id": "live_eval_laptop_03",
+    "sample_id": "live_eval_laptop_03",
+    "category": "Laptop",
+    "utterance": "I want a 15.6-inch gaming laptop equipped with an NVIDIA GeForce RTX 3050 discrete graphics card and a 144Hz IPS display under $750.",
+    "query": "I want a 15.6-inch gaming laptop equipped with an NVIDIA GeForce RTX 3050 discrete graphics card and a 144Hz IPS display under $750.",
+    "user_query": "I want a 15.6-inch gaming laptop equipped with an NVIDIA GeForce RTX 3050 discrete graphics card and a 144Hz IPS display under $750.",
+    "semantic_query": "Acer Nitro 5 gaming laptop Intel Core i5 NVIDIA GeForce RTX 3050 15.6 FHD 144Hz IPS display",
+    "target_asin": "B0BWV4MXQG",
+    "target_title": "Acer Nitro 5 AN515-55-53E5 Gaming Laptop | Intel Core i5-10300H | NVIDIA GeForce RTX 3050 GPU | 15.6\" FHD 144Hz IPS Display | 8GB DDR4 | 256GB NVMe SSD | Intel Wi-Fi 6 | Backlit Keyboard",
+    "ground_truth_asins": [
+      "B0BWV4MXQG"
+    ],
+    "peer_asins": [
+      "B087RSQGSV",
+      "B076919RKR",
+      "B09YVTK8LN",
+      "B0BW85W1YX",
+      "B08YCZ328B"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Discrete GPU & Refresh Rate",
+      "value": "Dedicated NVIDIA GeForce RTX 3050 GPU with ray-tracing support and 144Hz high-refresh-rate Full HD IPS gaming panel",
+      "salience": 1.0,
+      "feature_name": "Discrete GPU & Refresh Rate",
+      "feature_value": "NVIDIA GeForce RTX 3050 Discrete GPU with 144Hz IPS Display",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Competing laptops in the 50 candidate pool (Acer Aspire E15 B076919RKR with entry-level MX150 or SGIN B0C6JXQCF5 with Intel integrated graphics) lack ray-tracing RTX gaming hardware and high-refresh 144Hz screens."
+    },
+    "structured_filters": {
+      "category": "Laptop",
+      "price_max": 750.0,
+      "brand": "Acer"
+    },
+    "soft_preferences": [
+      {
+        "category": "gpu",
+        "value": "NVIDIA GeForce RTX 3050",
+        "polarity": 1.0
+      },
+      {
+        "category": "display",
+        "value": "144Hz IPS refresh rate",
+        "polarity": 1.0
+      },
+      {
+        "category": "display_size",
+        "value": "15.6 inch",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Laptop",
+      "preferred_brands": [
+        "Acer"
+      ],
+      "price_anchor": 730.01,
+      "distinguishing_feature": "Discrete GPU & Refresh Rate"
+    },
+    "graded_relevance": {
+      "B0BWV4MXQG": 1.0,
+      "B087RSQGSV": 0.45,
+      "B076919RKR": 0.45,
+      "B09YVTK8LN": 0.45,
+      "B0BW85W1YX": 0.45,
+      "B08YCZ328B": 0.45,
+      "B06XNP29BR": 0.2,
+      "B09YRY6QCX": 0.2,
+      "B0BM3JL7K4": 0.2,
+      "B0C2ZMJW53": 0.2,
+      "B0C39LSL4L": 0.2,
+      "B0BN9D5HQ2": 0.2,
+      "B0B5DFFJ6S": 0.2,
+      "B0C6LCK1QJ": 0.2,
+      "B08M8VCHCQ": 0.2,
+      "B0BYSLQ78L": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black"
+      },
+      {
+        "brand": "Acer"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Laptop'})-[:DESIRES]->(Attribute {name: 'RTX 3050 144Hz'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0BWV4MXQG'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_keyboard_01",
+    "id": "live_eval_keyboard_01",
+    "sample_id": "live_eval_keyboard_01",
+    "category": "Keyboard",
+    "utterance": "I need an ergonomic split-key wired USB keyboard with a curved split layout and integrated palm rest to relieve typing wrist strain under $50.",
+    "query": "I need an ergonomic split-key wired USB keyboard with a curved split layout and integrated palm rest to relieve typing wrist strain under $50.",
+    "user_query": "I need an ergonomic split-key wired USB keyboard with a curved split layout and integrated palm rest to relieve typing wrist strain under $50.",
+    "semantic_query": "Perixx Periboard-512 ergonomic split keyboard natural ergonomic split-key palm rest wired USB",
+    "target_asin": "B08JZZ4TK7",
+    "target_title": "Perixx Periboard-512 Ergonomic Split Keyboard - Natural Ergonomic Design - Black - Bulky Size 19.09\"x9.29\"x1.73\", US English Layout",
+    "ground_truth_asins": [
+      "B08JZZ4TK7"
+    ],
+    "peer_asins": [
+      "B097J7JPQX",
+      "B0BJ6TQTR8",
+      "B07X77RNFP",
+      "B08L7P71VN",
+      "B081C4XWXZ"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Keybed Geometry",
+      "value": "Split-key 3D curved ergonomic layout with integrated padded palm rest to encourage natural arm posture",
+      "salience": 1.0,
+      "feature_name": "Keybed Geometry",
+      "feature_value": "3D Curved Split-Key Geometry with Integrated Palm Rest",
+      "feature_type": "technical_spec",
+      "discriminative_justification": "Other Perixx keyboards in the pool (PERIBOARD-213U B097J7JPQX, PERIBOARD-426 B0BJ6TQTR8) feature standard straight flat key layouts; B08JZZ4TK7 is the only Perixx offering full ergonomic split architecture."
+    },
+    "structured_filters": {
+      "category": "Keyboard",
+      "price_max": 50.0,
+      "brand": "Perixx"
+    },
+    "soft_preferences": [
+      {
+        "category": "ergonomics",
+        "value": "split-key curved layout",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "integrated palm rest",
+        "polarity": 1.0
+      },
+      {
+        "category": "connectivity",
+        "value": "wired USB",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Keyboard",
+      "preferred_brands": [
+        "Perixx"
+      ],
+      "price_anchor": 44.99,
+      "distinguishing_feature": "Keybed Geometry"
+    },
+    "graded_relevance": {
+      "B08JZZ4TK7": 1.0,
+      "B097J7JPQX": 0.45,
+      "B0BJ6TQTR8": 0.45,
+      "B07X77RNFP": 0.45,
+      "B08L7P71VN": 0.45,
+      "B081C4XWXZ": 0.45,
+      "B09296NQ32": 0.2,
+      "B09WDLZ4M9": 0.2,
+      "B07WNM1WNP": 0.2,
+      "B00HLOL17Y": 0.2,
+      "B07ZWQGZHD": 0.2,
+      "B09G5MMBQ5": 0.2,
+      "B07HDVSYMR": 0.2,
+      "B081TK1W3Z": 0.2,
+      "B01D2K40DM": 0.2,
+      "B084G4GY2N": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black"
+      },
+      {
+        "brand": "Perixx"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Keyboard'})-[:DESIRES]->(Attribute {name: 'Split Ergonomics'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08JZZ4TK7'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_keyboard_02",
+    "id": "live_eval_keyboard_02",
+    "sample_id": "live_eval_keyboard_02",
+    "category": "Keyboard",
+    "utterance": "I'm searching for a pocket-sized tri-folding Bluetooth keyboard with a built-in touchpad that can switch seamlessly between 3 paired devices.",
+    "query": "I'm searching for a pocket-sized tri-folding Bluetooth keyboard with a built-in touchpad that can switch seamlessly between 3 paired devices.",
+    "user_query": "I'm searching for a pocket-sized tri-folding Bluetooth keyboard with a built-in touchpad that can switch seamlessly between 3 paired devices.",
+    "semantic_query": "iClever BK08 Bluetooth folding keyboard sensitive touchpad sync 3 devices tri-folded portable",
+    "target_asin": "B084G4GY2N",
+    "target_title": "iClever Bluetooth Keyboard, BK08 Folding Keyboard with Sensitive Touchpad (Sync Up to 3 Devices), Pocket-Sized Tri-Folded Fodable Keyboard for Windows Mac Android iOS",
+    "ground_truth_asins": [
+      "B084G4GY2N"
+    ],
+    "peer_asins": [
+      "B0B15CWFS2",
+      "B08L7P71VN",
+      "B00SK0FOHG",
+      "B07DM54P8F",
+      "B00VUK4R0S"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Portability & Input Integration",
+      "value": "Pocket-sized tri-folding aluminum casing featuring an integrated sensitive touchpad and multi-device pairing for up to 3 devices",
+      "salience": 1.0,
+      "feature_name": "Portability & Input Integration",
+      "feature_value": "Pocket Tri-Folding Aluminum Body with Integrated Touchpad and 3-Device Bluetooth",
+      "feature_type": "functional_capability",
+      "discriminative_justification": "Competing Bluetooth keyboards in the pool (e.g. UBOTIE B08L7P71VN) are rigid non-folding units lacking touchpads, while B084G4GY2N folds into a compact pocketable form factor."
+    },
+    "structured_filters": {
+      "category": "Keyboard",
+      "price_max": 65.0,
+      "brand": "iClever"
+    },
+    "soft_preferences": [
+      {
+        "category": "form_factor",
+        "value": "tri-fold portable",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "built-in touchpad",
+        "polarity": 1.0
+      },
+      {
+        "category": "feature",
+        "value": "3-device Bluetooth sync",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Keyboard",
+      "preferred_brands": [
+        "iClever"
+      ],
+      "price_anchor": 56.99,
+      "distinguishing_feature": "Portability & Input Integration"
+    },
+    "graded_relevance": {
+      "B084G4GY2N": 1.0,
+      "B0B15CWFS2": 0.45,
+      "B08L7P71VN": 0.45,
+      "B00SK0FOHG": 0.45,
+      "B07DM54P8F": 0.45,
+      "B00VUK4R0S": 0.45,
+      "B0BX8M56L9": 0.2,
+      "B0BYDYRGB6": 0.2,
+      "B09G5MMBQ5": 0.2,
+      "B00HLOL17Y": 0.2,
+      "B09WDLZ4M9": 0.2,
+      "B004L9MBH6": 0.2,
+      "B01E57MUVK": 0.2,
+      "B07ZWQGZHD": 0.2,
+      "B07HDVSYMR": 0.2,
+      "B09296NQ32": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Dark grey"
+      },
+      {
+        "brand": "iClever"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Keyboard'})-[:DESIRES]->(Attribute {name: 'Tri-Fold Touchpad'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B084G4GY2N'})"
+    ]
+  },
+  {
+    "query_id": "live_eval_keyboard_03",
+    "id": "live_eval_keyboard_03",
+    "sample_id": "live_eval_keyboard_03",
+    "category": "Keyboard",
+    "utterance": "I need a wireless living room keyboard with an integrated 3.5-inch multi-touch touchpad to control my media center PC connected to the TV.",
+    "query": "I need a wireless living room keyboard with an integrated 3.5-inch multi-touch touchpad to control my media center PC connected to the TV.",
+    "user_query": "I need a wireless living room keyboard with an integrated 3.5-inch multi-touch touchpad to control my media center PC connected to the TV.",
+    "semantic_query": "Logitech wireless touch keyboard K400 built-in multi-touch touchpad media center HTPC TV control",
+    "target_asin": "B00SK0FOHG",
+    "target_title": "Logitech Wireless Touch Keyboard K400 with Built-In Multi-Touch Touchpad, Black (Renewed)",
+    "ground_truth_asins": [
+      "B00SK0FOHG"
+    ],
+    "peer_asins": [
+      "B07DM54P8F",
+      "B002MMY4WY",
+      "B009UQG2BQ",
+      "B084G4GY2N",
+      "B09WDLZ4M9"
+    ],
+    "distinguishing_feature": {
+      "attribute": "Media Navigation Touchpad",
+      "value": "Integrated large 3.5-inch multi-touch touchpad with dedicated left/right buttons for lean-back PC-to-TV home entertainment navigation",
+      "salience": 1.0,
+      "feature_name": "Media Navigation Touchpad",
+      "feature_value": "Built-In 3.5-Inch Multi-Touch Touchpad for Living Room PC-to-TV Navigation",
+      "feature_type": "functional_capability",
+      "discriminative_justification": "Peers like Logitech K350 Wave (B002MMY4WY) or K360 (B07DM54P8F) are traditional desktop keyboards requiring a separate desk mouse, whereas K400 incorporates an all-in-one touchpad for couch navigation."
+    },
+    "structured_filters": {
+      "category": "Keyboard",
+      "price_max": 30.0,
+      "brand": "Amazon Renewed"
+    },
+    "soft_preferences": [
+      {
+        "category": "feature",
+        "value": "integrated multi-touch touchpad",
+        "polarity": 1.0
+      },
+      {
+        "category": "connectivity",
+        "value": "wireless USB receiver",
+        "polarity": 1.0
+      },
+      {
+        "category": "use_case",
+        "value": "PC-to-TV media navigation",
+        "polarity": 1.0
+      }
+    ],
+    "preferences": {
+      "category": "Keyboard",
+      "preferred_brands": [
+        "Amazon Renewed"
+      ],
+      "price_anchor": 21.95,
+      "distinguishing_feature": "Media Navigation Touchpad"
+    },
+    "graded_relevance": {
+      "B00SK0FOHG": 1.0,
+      "B07DM54P8F": 0.45,
+      "B002MMY4WY": 0.45,
+      "B009UQG2BQ": 0.45,
+      "B084G4GY2N": 0.45,
+      "B09WDLZ4M9": 0.45,
+      "B004VVLZN0": 0.2,
+      "B00VUK4R0S": 0.2,
+      "B0B15CWFS2": 0.2,
+      "B002DV8ZTM": 0.2,
+      "B0143BNIXW": 0.2,
+      "B07TXCBWDD": 0.2,
+      "B08L7P71VN": 0.2,
+      "B0BX8M56L9": 0.2,
+      "B004L9MBH6": 0.2,
+      "B00OBD08W2": 0.2
+    },
+    "graph_evidence": [
+      {
+        "attribute_name": "Color",
+        "attribute_value": "Black"
+      },
+      {
+        "attribute_name": "Style",
+        "attribute_value": "Modern"
+      },
+      {
+        "brand": "Amazon Renewed"
+      }
+    ],
+    "reasoning_paths": [
+      "(User:Preference {category: 'Keyboard'})-[:DESIRES]->(Attribute {name: 'Built-in Touchpad'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B00SK0FOHG'})"
+    ]
+  }
+]

@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
 
 from src.llm.abstract_llm_handler import LLMHandlerInterface
 
@@ -19,19 +20,21 @@ class SimpleLLMHandler(LLMHandlerInterface):
     with no template formatting functionality.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o-mini", provider: str = "openai"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o", provider: str = "openai"):
         """
         Initialize the LLM handler.
         
         Args:
             api_key: OpenAI API key. If None, will try to get from environment (only for openai)
-            model_name: Name of the model to use (default: gpt-4o-mini, or llama3.1 for ollama)
+            model_name: Name of the model to use (default: gpt-4o, or llama3.1 for ollama)
             provider: 'openai' or 'ollama'
         """
         self.provider = provider
         
         if self.provider == "openai":
             # Set up API key
+            if not api_key:
+                load_dotenv(override=True)
             self.api_key = api_key or os.getenv("OPENAI_API_KEY")
             if not self.api_key:
                 raise ValueError("OpenAI API key must be provided or set in OPENAI_API_KEY environment variable")

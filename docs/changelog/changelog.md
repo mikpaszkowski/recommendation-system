@@ -5,6 +5,341 @@
 
 ---
 
+## 📅 2026-10-09 (AFP-005)
+
+### Changelog (względem stanu po wdrożeniu AFP-004)
+
+> **Kontekst**: Wdrożenie propozycji architektonicznej `AFP-005` (`production_artifacts/Proposed_Fix_Cypher_Ranking_and_Typing.md`): Implementacja deterministycznego rankingu dla czystych zapytań Cypher z wykorzystaniem reguły Bayesa (z ograniczeniem wpływu liczby recenzji) oraz naprawa mechanizmu parsowania atrybutów numerycznych EAV w zapytaniach fallbackowych i w procesie partycjonowania bazy danych.
+
+#### 🔴 Nowe komponenty i testy
+
+1.  **Testy jednostkowe weryfikujące parsowanie i sortowanie (`tests/test_cypher_ranking.py`):**
+    *   `test_cypher_search_deterministic_ranking`: Weryfikacja deterministycznego, malejącego rankingu dla wyników filtrowania.
+    *   `test_numeric_eav_unit_coercion`: Testowanie na żywej bazie parsowania i odrzucania jednostek (np. `"144 Hz"` $\to$ `144.0`, `"65W"` $\to$ `65.0`).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`src/tools/graph_search_tool.py`:**
+    *   **Deterministyczny ranking w filtrach (`_execute_cypher_search`)**: Dodano Bayesian Quality Ranking do sortowania zapytań czysto-grafowych.
+    *   **Fallback atrybutów EAV (`_build_filters`)**: Zmieniono logikę z `COALESCE(toFloat(a.attribute_value))` na zaawansowany wielostopniowy ekstrakcyjny ciąg instrukcji `split` i `replace` wspierający dziesiątki jednostek bez zwracania `NULL`.
+
+2.  **`scripts/graph_ingestion/batch_ingest.py`:**
+    *   **Zaawansowane parsowanie i jednostki (`parse_numeric_attribute`)**: Dodano wstępne parsowanie z użyciem wyrażeń regularnych (`UNIT_ANCHORED_NUMERIC_REGEX`, `STANDALONE_NUMERIC_REGEX`) przed zasileniem bazy do atrybutów.
+    *   **Cypher dla partycjonowania**: Zmodyfikowano węzły `Attribute`, tak aby przechowywały też pre-parsowane wartości `numeric_value`.
+
+
+## 📅 2026-10-07
+
+### Changelog (względem stanu z 2026-10-04)
+
+> **Kontekst**: Wdrożenie propozycji architektonicznej `AFP-003` (`production_artifacts/Proposed_Fix_Category_Resolution.md`): Rozwiązanie taksonomii kategorii, normalizacja semantyczna oraz hierarchiczna filtracja Cypher z tokenizowanym fallbackiem tytułowym. Zmiana usuwa krytyczne wąskie gardło filtracji kategorii, które eliminowało do 81% poprawnych produktów w scenariuszach ewaluacji.
+
+#### 🔴 Nowe komponenty i testy
+
+1.  **Dedykowany Zestaw Testów Normalizacji i Taksonomii Kategorii (`tests/test_category_resolution.py`):**
+    *   Weryfikuje kompletne spektrum wymagań i kryteriów akceptacji `AC-003.1` – `AC-003.5`:
+        - `test_category_constants_and_ac_compliance`: weryfikacja stałych `CATEGORY_CONFIDENCE == 0.70` oraz `CATEGORY_MARGIN == 0.05` w `GraphSearchTool` i `ResolverService`.
+        - `test_category_normalization_plural_resolution`: weryfikacja poprawnej normalizacji form pojedynczych/mnogich (`"mouse"` $\to$ `"Mice"`).
+        - `test_category_normalization_margin_check`: weryfikacja ochrony przed dryfem kategorialnym (`"cord"` pozostaje `"cord"` w obliczu bliskich konkurentów z różnych domen, $\Delta s < 0.05$).
+        - `test_category_word_boundary_isolation`: weryfikacja izolacji granic słów w Cypher (`"phone"` dopasowuje `"Cell Phones & Accessories"` i `"Fire Phone"`, blokując fałszywe dopasowania do `"Headphones, Earbuds & Accessories"`).
+        - `test_category_multi_word_conjunction_title_fallback`: weryfikacja wielowyrazowej koniunkcji tokenów w tytule (`toLower(title) CONTAINS 'mechanical' AND toLower(title) CONTAINS 'keyboard'`).
+        - `test_category_resolver_unit_margin_logic`: testy jednostkowe logiki marginesu z syntetycznymi kandydatami.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`src/tools/graph_search_tool.py`:**
+    *   **Rekalibracja progu pewności i reguła marginesu (`_normalize_filters`)**: Obniżono próg pewności normalizacji kategorii `CATEGORY_CONFIDENCE` z `0.80` na `0.70` oraz zaimplementowano sprawdzanie marginesu `CATEGORY_MARGIN = 0.05`. W przypadku wyszukiwania wektorowego (Tier 3), jeśli konkurent z odrębnej gałęzi taksonomicznej ma wynik zbliżony o mniej niż `0.05`, zapytanie zachowuje oryginalny ciąg tekstowy dla precyzyjnego fallbacku.
+    *   **Hierarchiczna filtracja grafowa i tokenizowany fallback (`_build_filters`)**: Zastąpiono sztywny 1-skokowy warunek Cypher relacją wieloskokową `(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)` oraz dopasowaniem regex na granicach słów `(?i).*(^|[^a-z])<cat>(s)?([^a-z]|$).*`.
+    *   **Koniunkcyjny fallback tytułowy**: Dla kategorii wielowyrazowych (np. `"mechanical keyboard"`, `"external ssd"`) zamiast sztywnego podciągu wprowadzono koniunkcję `AND` tokenów słownych w tytule produktu, zabezpieczając produkty z modyfikatorami w nazwie.
+
+2.  **`src/knowledge_graph/graphdb/resolver_service.py`:**
+    *   **Izolacja wyrażeń regularnych w Tier 2 (`_execute_waterfall`)**: Zastąpiono naiwne `toLower(...) CONTAINS ...` wyrażeniem regularnym z granicami słów dla węzłów typu `Category`, eliminując zanieczyszczenia krzyżowe (np. `phone` nie dopasowuje już leksykalnie `Headphones`).
+    *   **Metoda walidacji kandydatów (`validate_category_candidates`)**: Dodano formalną metodę walidacji kandydata top-1 pod kątem progu 0.70 oraz marginesu 0.05 względem konkurentów spoza linii taksonomicznej.
+    *   **Eksport stałych**: Zdefiniowano stałe modułowe i klasowe `CATEGORY_CONFIDENCE = 0.70` oraz `CATEGORY_MARGIN = 0.05`.
+
+---
+
+## 📅 2026-10-04
+
+### Changelog (względem stanu z 2026-10-02)
+
+> **Kontekst**: Wdrożenie kompleksowego, dwupoziomowego frameworka ewaluacyjnego (Two-Tiered Evaluation Framework) na potrzeby pracy magisterskiej (*"Explainable Hybrid GraphRAG for Conversational Recommendation"*), zgodnie z wymaganiami R1–R4 (decyzja architektoniczna `2026-10-03-008` w `production_artifacts/Vision_Report.md`). Framework obejmuje silnik metryk Information Retrieval dla warstwy wyszukiwania (Tier 1), wielokryterialny silnik sędziowski LLM-as-a-Judge (Tier 2), dedykowane benchmarki testowe w domenie Amazon Electronics, wykonywalne skrypty CLI, wersjonowany system persystencji wyników i automatyczną generację publikacyjnych wykresów 300 DPI, a także kompletny zestaw 66 przechodzących testów (45 E2E + 21 adversarial).
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Silnik Metryk Rankingu i Information Retrieval (`src/evaluation/metrics.py`):**
+    *   Implementuje formalne, matematyczne reguły obliczania metryk jakości rankingu i odzyskiwania: $\text{NDCG@K}$ (z obsługą wag binarnych oraz stopniowalnych *graded relevance* i deduplikacją kandydatów z zachowaniem rang *rank-preserving deduplication*), $\text{Hit Rate@K}$ ($\text{HR@K}$), $\text{Mean Reciprocal Rank}$ ($\text{MRR}$), $\text{Precision@K}$, $\text{Recall@K}$ oraz $\text{Mean Average Precision}$ ($\text{MAP@K}$) dla horyzontów odcięcia $K \in \{1, 3, 5, 10, 20\}$.
+    *   Dostarcza funkcję wsadową `evaluate_retrieval_batch()` agregującą wyniki per-query oraz średnie dla całego zbioru testowego, gwarantując ścisłe ograniczenie wyników do przedziału $[0.0, 1.0]$ oraz odporność na puste zbiory kandydatów i brak ground-truth (eliminacja błędów dzielenia przez zero).
+    *   *Stanowi fundament empirycznej weryfikacji pytań badawczych pracy magisterskiej ($\mathbf{RQ_1}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$), umożliwiając rygorystyczne porównanie wyszukiwania hybrydowego GraphRAG z liniami bazowymi (Vector-Only, Cypher-Only).*
+
+2.  **Wielokryterialny Silnik Sędziowski LLM-as-a-Judge (`src/evaluation/judge.py`):**
+    *   Implementuje 4-filarową dekompozycję oceny jakości konwersacyjnej i generatywnej:
+        - **Groundedness** (zakotwiczenie w wiedzy grafowej): weryfikacja zgodności z faktami z Knowledge Graph wraz z bezwzględną regułą *Hard Dilution Cap Rule* (wykrycie sfabrykowanych atrybutów lub halucynacji obniża ocenę do 1.0 w skali Likerta).
+        - **Explainability** (wyjaśnialność i proweniencja): weryfikacja wierności ścieżek wnioskowania topologicznego KECR (*path fidelity*) z karą za fałszywą proweniencję (*fake provenance penalty*).
+        - **Coherence** (spójność wieloturowa): ocena utrzymania kontekstu dialogu, retencji ograniczeń użytkownika i wykrywanie opóźnienia kontekstowego (*context lag*).
+        - **Recoverability** (odzyskiwalność po negatywnym feedbacku): adaptacja do odrzuceń użytkownika i surowa kara za naruszenie zakazu rekomendacji odrzuconej marki/cechy (*constraint betrayal penalty* – democja do oceny 1.0).
+    *   Obsługuje dwa tryby wykonania: deterministyczny tryb offline/mock (natychmiastowa weryfikacja heurystyczna bez wywołań sieciowych, $0.00 kosztu) oraz tryb live z modelami OpenAI (`gpt-4o`, `gpt-4o-mini`) wymuszający ustrukturyzowany format JSON w paradygmacie odwróconego łańcucha myśli (*Inverted Chain-of-Thought*).
+    *   *Umożliwia ilościową i powtarzalną ewaluację wymiarów generatywnych CRS ($\mathbf{RQ_2}$, $\mathbf{RQ_5}$, $\mathbf{RQ_6}$), eliminując ograniczenia metryk n-gramowych (BLEU/ROUGE), które karzą poprawną różnorodność językową.*
+
+3.  **Silnik Wersjonowania i Persystencji Badań (`src/evaluation/tracker.py`):**
+    *   Zapewnia niezmienne (immutable), wersjonowane rejestrowanie każdego przebiegu ewaluacji w strukturze `evaluations/eval_YYYY-MM-DD_HHMM/` (z automatyczną detekcją i obsługą kolizji sekundowych `_HHMMSS` lub sufiksów numerycznych).
+    *   Persystuje kompletny zestaw znormalizowanych artefaktów: `manifest.json` (hash commitu git, znaczniki czasu, hiperparametry, czas wykonania), `retrieval_metrics.json` / `generative_metrics.json` (surowe wyniki JSON), `retrieval_metrics.csv` / `generative_metrics.csv` (spłaszczone tabele dla analiz statystycznych w Pandas/R) oraz syntetyczny plik `summary.json`.
+    *   *Gwarantuje 100% powtarzalność eksperymentów naukowych i pełną proweniencję danych pomiarowych na potrzeby publikacji i rozdziału empirycznego pracy dyplomowej.*
+
+4.  **Publikacyjny Silnik Wizualizacji Danych (`src/evaluation/visualizer.py`):**
+    *   Wymusza bezgłowy backend renderowania (`matplotlib.use("Agg")`) przed jakimkolwiek importem `pyplot`, całkowicie eliminując błędy braku serwera X11/Cocoa w środowiskach CI/CD i na macOS.
+    *   Generuje publikacyjne wykresy o wysokiej rozdzielczości (300 DPI) w formatach PNG i JPG:
+        - `plot_retrieval_metrics`: zgrupowane wykresy słupkowe porównujące metryki IR ($\text{NDCG@K}$, $\text{HR@K}$, $\text{MRR}$) pomiędzy strategiami wyszukiwania (Hybrid, Vector-Only, Cypher-Only, Post-Critic).
+        - `plot_generative_metrics`: wykresy słupkowe i wieloosiowe wykresy radarowe dla wymiarów LLM-as-a-Judge (skala 1.0–5.0).
+        - `plot_comparative_summary`: znormalizowane karty podsumowujące (scorecards).
+    *   *Dostarcza gotowe do wklejenia do pracy magisterskiej, estetyczne i typograficznie spójne ryciny badawcze (Seaborn/Matplotlib).*
+
+5.  **Wykonywalne Skrypty Narzędziowe CLI (`scripts/evaluate_retrieval.py` i `scripts/evaluate_generative.py`):**
+    *   `scripts/evaluate_retrieval.py`: autonomiczny skrypt wiersza poleceń dla Tier 1 z obsługą flag `--mode {live,offline,mock}`, `--benchmark`, `--k-values`, `--strategies`, `--include-critic` oraz `--output-dir`.
+    *   `scripts/evaluate_generative.py`: autonomiczny skrypt wiersza poleceń dla Tier 2 z obsługą flag `--mode {live,offline,mock}`, `--benchmark`, `--judge-model`, `--metrics`, `--sample-size` oraz `--output-dir`.
+    *   *Umożliwiają natychmiastowe uruchomienie pełnego potoku ewaluacyjnego zarówno w lokalnym środowisku deweloperskim, jak i w zautomatyzowanych potokach CI/CD.*
+
+6.  **Ustandaryzowane Zbiory Benchmarkowe (`evaluations/benchmarks/`):**
+    *   `evaluations/benchmarks/retrieval_benchmark.json`: zbiór 25 zróżnicowanych zapytań zakupowych w kategorii Amazon Electronics (myszy, klawiatury, monitory, słuchawki, laptopy, akcesoria), definiujący zapytania semantyczne, twarde filtry Cypher i zbiory ground-truth ASIN.
+    *   `evaluations/benchmarks/generative_benchmark.json`: zbiór 15 scenariuszy dialogowych (w tym zapytania wieloturowe, skrajne oraz testujące reakcję na negatywny feedback) zawierający ground-truth dowody z grafu (`graph_evidence`), ścieżki KECR i historię sesji.
+    *   *Tworzy deterministyczny, powtarzalny punkt odniesienia do benchmarkowania obecnych i przyszłych wariantów systemu.*
+
+7.  **Zestawy Testów E2E i Testów Odpornościowych (`tests/test_evaluation_framework_e2e.py` i `tests/test_evaluation_adversarial.py`):**
+    *   `tests/test_evaluation_framework_e2e.py`: 45 testów End-to-End w 4 poziomach (Tiers 1–4: Feature Coverage, Boundary Cases, Cross-Feature Interactions, Real-World Application Scenarios).
+    *   `tests/test_evaluation_adversarial.py`: 21 testów odpornościowych (Tier 5 Adversarial Hardening) testujących singularności matematyczne (puste zbiory, $k \le 0$, float $k$, duplikaty ASIN, ujemne wagi), parsowanie zniekształconego JSON-a, próby obejścia zakazu rekomendacji odrzuconej marki oraz kolizje współbieżnych folderów ewaluacyjnych.
+    *   Dokumentacja infrastruktury: `TEST_INFRA.md` oraz raport gotowości `TEST_READY.md`. Wszystkie 66 testów kończy się wynikiem 100% PASS.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`production_artifacts/Vision_Report.md`** — Dodano formalny wpis w Decision Log: `📅 2026-10-03-008: Two-Tiered Evaluation Framework for CRS Master's Thesis`, definiujący architekturę ewaluacji, wymiary pomiarowe Tier 1 i Tier 2 oraz decyzję o rezygnacji z metryk BLEU/ROUGE na rzecz LLM-as-a-Judge i metryk IR.
+2.  **`src/tools/kecr_tool.py`** — Znormalizowano format wyjściowy `PathExtractionResult` oraz ścieżki dowodowe wstrzykiwane do promptu, umożliwiając bezpośrednie przechwytywanie grafowych ścieżek wnioskowania przez moduł ewaluacji `judge.py`.
+3.  **`src/agents/orchestrator.py` & `src/llm_interface/prompt_constructor.py`** — Ujednolicono punkty przechwytywania (interception hooks) dla kandydatów przed i po weryfikacji CriticAgent oraz zapewniono transparentne przekazywanie sekcji `[GRAPH EVIDENCE]` do analizy zakotwiczenia odpowiedzi (Groundedness).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   `GraphSearchTool` (`src/tools/graph_search_tool.py`) — hybrydowe wyszukiwanie z algorytmem MACS.
+*   `CriticAgent` (`src/agents/critic_agent.py`) — pydanticowa ewaluacja kandydatów i kompromisów jakościowych.
+*   `DialogueManager` (`src/dialog_manager/dialogue_manager.py`) — zarządzanie stanem dialogu i profilowaniem sesji.
+*   `ResolverService` (`src/tools/resolver_service.py`) — kaskadowe dopasowywanie encji i normalizacja filtrów.
+*   Interfejs Chainlit (`src/ui/app.py`) — interfejs użytkownika bez zmian.
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   Trwała persystencja wieloturowa MemoCRS bazująca na bazie SQLite / `SqliteSaver` (`sqlite_profile_manager.py`, `sqlite_history_manager.py` — GAP-B2).
+*   Jawne śledzenie stanu dojaśniania `pending_clarification` w ramach kontekstu sesji (GAP-B3).
+*   Klasyczne linie bazowe Meta-Fazy C (Collaborative Filtering w `scikit-surprise` oraz Content-Based w `lightfm` trenowane na podzbiorze Amazon Reviews 2023).
+
+### Zaktualizowana Architektura (jeśli zmieniła się)
+
+```mermaid
+flowchart TD
+    subgraph CRS_Runtime ["CRS Runtime Pipeline"]
+        UserInput[User Input] --> StateInit["State Init<br/>(History + Profile)"]
+        StateInit --> Router["Router LLM<br/>(Intent Classification)"]
+        Router -->|SEARCH| SearchParams["LLM Search Params"]
+        SearchParams --> Normalize["ResolverService<br/>(Waterfall Resolution)"]
+        Normalize --> GST["GraphSearchTool<br/>(Hybrid + MACS)"]
+        GST --> Neo4j[(Neo4j Knowledge Graph)]
+        Neo4j --> RawCandidates[Raw Candidates]
+        RawCandidates --> Critic["CriticAgent<br/>(Pydantic Reranking)"]
+        Critic --> RerankedCandidates[Reranked Candidates]
+        RerankedCandidates --> KECR["KnowledgePathExtractor<br/>(KECR Dual-Context Paths)"]
+        KECR --> PromptBuild["PromptConstructor<br/>(Graph Evidence Injection)"]
+        PromptBuild --> LLMFinal["LLM Synthesized Grounding<br/>(AgentOrchestrator)"]
+        LLMFinal --> UserOutput[Final Conversational Response]
+    end
+
+    subgraph Eval_Framework ["Two-Tiered Evaluation Framework"]
+        subgraph Tier1 ["Tier 1: Retrieval & Recommendation Engine"]
+            BenchRet["retrieval_benchmark.json<br/>(25 Amazon Queries)"] --> RunnerRet["scripts/evaluate_retrieval.py"]
+            RawCandidates -.->|Interception Hook| RunnerRet
+            RerankedCandidates -.->|Interception Hook| RunnerRet
+            RunnerRet --> MetricsEngine["src/evaluation/metrics.py<br/>(NDCG@K, HR@K, MRR, P@K, R@K, MAP)"]
+        end
+
+        subgraph Tier2 ["Tier 2: Generative LLM-as-a-Judge Engine"]
+            BenchGen["generative_benchmark.json<br/>(15 Multi-turn Scenarios)"] --> RunnerGen["scripts/evaluate_generative.py"]
+            PromptBuild -.->|Evidence Interception| RunnerGen
+            LLMFinal -.->|Response Interception| RunnerGen
+            RunnerGen --> JudgeEngine["src/evaluation/judge.py<br/>(Groundedness, Explainability,<br/>Coherence, Recoverability)"]
+        end
+
+        subgraph Persistence ["Tracking & Publication Analytics"]
+            MetricsEngine --> Tracker["src/evaluation/tracker.py"]
+            JudgeEngine --> Tracker
+            Tracker --> Disk["evaluations/eval_YYYY-MM-DD_HHMM/<br/>├── manifest.json<br/>├── summary.json<br/>├── {retrieval,generative}_metrics.json<br/>└── {retrieval,generative}_metrics.csv"]
+            Tracker --> Visualizer["src/evaluation/visualizer.py<br/>(Headless Agg, 300 DPI)"]
+            Visualizer --> Plots["evaluations/eval_YYYY-MM-DD_HHMM/plots/<br/>├── retrieval_ranking_comparison.png/.jpg<br/>└── llm_judge_radar.png/.jpg"]
+        end
+    end
+```
+
+---
+
+## 📅 2026-10-02
+
+### Raport z Audytu Stanu Projektu (Pipeline `/audit-state`)
+
+> **Kontekst**: Wpis podsumowujący audyt stanu projektu. Decyzją użytkownika, brakujące testy integracyjne dla KECR oraz ewaluacje (GAP-A6) z Meta-Fazy A zostają odroczone do czasu pełnego zasilenia bazy danych. Zespół przechodzi bezpośrednio do Meta-Fazy B (persystencja MemoCRS).
+
+#### 📊 Pokrycie Faz (stan na dziś)
+* **Foundation (Faza 0 & 1)**: 100%
+* **Meta-Faza A**: 70% (logika wdrożona, wstrzymano testy i ewaluacje)
+* **Meta-Faza B**: 0%
+* **Meta-Faza C & D**: 0%
+
+#### 🔄 Potwierdzone przepływy (End-to-End)
+* **Flow 1: Recommendation (SEARCH)** — ✅ W pełni okablowane. Ścieżki KECR są poprawnie ekstrahowane przez `KnowledgePathExtractor` i wstrzykiwane przez `PromptConstructor`.
+
+#### 📋 Zidentyfikowane Luki i Nowy Priorytet Wdrożeń
+Audyt zidentyfikował brak persystencji jako główną blokadę dla funkcji wieloturowych. Zatwierdzona kolejność (Implementation Order) na najbliższy sprint:
+
+1. **[GAP-B2] MemoCRS Persistent Memory** (🔴 Krytyczny) — implementacja `sqlite_profile_manager.py` oraz `sqlite_history_manager.py`.
+2. **[GAP-B3] CLARIFY Path Structural Deficiency** (🟡 Średni) — dodanie śledzenia `pending_clarification` do stanu sesji.
+3. *[ZAWIESZONE]* GAP-A4-TESTS, GAP-A5-TESTS, GAP-A6 (do czasu pełnego importu danych).
+
+---
+
+## 📅 2026-10-01
+
+### Changelog (względem stanu z 2026-09-29)
+
+> **Kontekst**: Wdrożenie Fazy A4 (KECR Path Extraction), dostarczającej zaawansowany mechanizm wyciągania wieloskokowych ścieżek wnioskowania z Knowledge Graph. Integruje on dane z historii użytkownika z bieżącymi intencjami konwersacyjnymi (Dual-Context).
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Ekstraktor Ścieżek Wiedzy (`KnowledgePathExtractor` w `src/tools/kecr_tool.py`):**
+    *   Implementuje złożone zapytanie Cypher (Unified Dual-Context Cypher Query) do ekstrahowania ścieżek wnioskowania: historycznych (współzakupy, lojalność wobec marki, zbieżne atrybuty/kategorie ważone funkcją zaniku w czasie) oraz konwersacyjnych (bieżące filtry użytkownika).
+    *   Wprowadza dynamiczną wagę bazową (Gating Alpha), balansując wyniki historyczne względem bieżących intencji konwersacyjnych. Zwraca ustandaryzowaną strukturę `PathExtractionResult`.
+    *   *Umożliwia pełną przejrzystość rekomendacji (Explainable GraphRAG) poprzez łączenie twardych faktów historycznych z miękkimi preferencjami.*
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`AgentOrchestrator` (`src/agents/orchestrator.py`)** — Zintegrowano nową warstwę KECR na etapie `3d.5`, bezpośrednio po działaniu CriticAgent. Zwrócone ścieżki (evidence) są bezpośrednio przekazywane do `PromptConstructor`, kończąc pipeline Explainable GraphRAG zdefiniowany w Meta-Fazie A.
+2.  **Testy Jednostkowe Orkiestratora (`tests/test_agent_orchestrator.py`)** — Zaktualizowano asercje i mockowanie z uwzględnieniem nowo wstrzykniętej zależności `kecr_tool`.
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   `CriticAgent` — nadal rygorystycznie przeprowadzający weryfikację z modelem LLM.
+*   `GraphSearchTool` — hybrydowe wyszukiwanie wraz z progresywną relaksacją (MACS).
+*   `DialogueManager` i `SessionAdapter` — stabilne zarządzanie cyklem życia sesji i ekstrahowaniem preferencji.
+*   `PromptConstructor` — struktura promptów jest niezmienna, przetwarza dostarczone `graph_reasoning_paths`.
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   Pełna integracja środowiska LangGraph dla persystencji MemoCRS bazującego na `SqliteSaver` (Meta-Faza B).
+*   Potok ewaluacyjny Meta-Fazy C (Classic Baseline Comparison - scikit-surprise, lightfm).
+
+### Zaktualizowana Architektura (jeśli zmieniła się)
+
+```mermaid
+flowchart TD
+    UserInput[User Input] --> StateInit["State Init<br/>(History + Profile)"]
+    StateInit --> Router["Router LLM<br/>(Intent Classification)"]
+
+    Router -->|SEARCH| SearchParams["LLM Search Params"]
+    
+    SearchParams --> Normalize["ResolverService<br/>(Waterfall Resolution)"]
+    Normalize --> GST["GraphSearchTool<br/>(Hybrid + MACS)"]
+    GST --> Neo4j[(Neo4j Knowledge Graph)]
+    Neo4j --> Candidates[Candidates]
+    Candidates --> Critic["CriticAgent<br/>(Pydantic Reranking)"]
+    Critic --> KECR["KnowledgePathExtractor<br/>(KECR Dual-Context Paths)"]
+    KECR --> Neo4j
+    KECR --> PromptBuild["PromptConstructor<br/>(Graph Evidence Injection)"]
+    PromptBuild --> LLMFinal[LLM Synthesized Grounding]
+
+    LLMFinal --> UserOutput[Final Answer]
+```
+
+## 📅 2026-09-27
+
+### Changelog (względem stanu z 2026-09-23)
+
+> **Kontekst**: Wdrożenie fundamentów Meta-Fazy B (MemoCRS, zarządzanie sesją), restrukturyzacja agentów oraz dodanie zautomatyzowanego potoku ewaluacji dla pracy magisterskiej.
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Nowa warstwa danych i modelowania sesji (`src/dialog_manager/session_schema.py` & `session_adapter.py`):**
+    *   Wprowadzono ustandaryzowany schemat Pydantic (`SessionContext`, `ExtractedPreferences`) dla twardego typowania preferencji użytkownika i stanu konwersacji.
+    *   Dodano `SessionAdapter` jako warstwę kompatybilności dla starszego formatu orkiestratora.
+    *   *Stanowi to krytyczny fundament pod wdrożenie trwałej persystencji (MemoCRS) w Meta-Fazie B.*
+2.  **`DialogueManager` (`src/dialog_manager/dialogue_manager.py`):**
+    *   Nowy, scentralizowany menedżer przepływu. Integruje ekstrakcję przez LLM z persystencją stanu sesji, oddzielając zarządzanie dialogiem od logiki routingu.
+3.  **Framework Ewaluacyjny (Benchmark) (`tests/benchmarks/scripts/run_benchmark.py`):**
+    *   Zbudowano potężny zestaw narzędzi i testów (`tests/benchmarks/`) do zautomatyzowanej ewaluacji strategii promptów LLM (Zero-Shot, Few-Shot, CoT). Framework generuje wizualizacje (Seaborn) i statystyki skuteczności ekstrakcji.
+4.  **Ewaluator Pracy Magisterskiej (`.agents/skills/thesis_evaluator/SKILL.md`):**
+    *   Nowa rola agentowa `@thesis-evaluator` odpowiedzialna za audyt wprowadzanych zmian pod kątem rygoru naukowego i automatyczne strukturyzowanie rozdziałów w katalogu `thesis/` (wygenerowano `1-doc-dialogue-state.md` oraz `2-doc-preference-benchmark.md`).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`LLMPreferenceParser` i Prompty (`src/llm_interface/preference_parser.py`)**:
+    *   Przebudowane tak, by wymuszać ustrukturyzowane wyjście JSON poprzez Pydantic. Znacznie zredukowano ryzyko błędów parsowania.
+2.  **`ProfileTool` (`src/tools/profile_tool.py`)**:
+    *   Gruntownie zrefaktoryzowany pod ścisłą integrację z nowym `SessionAdapter` i `DialogueManager`.
+3.  **Architektura Agent Skills**:
+    *   Zmigrowano luźne pliki konfiguracyjne agentów (z plików `*.md` na nową strukturę `SKILL.md` w podfolderach `skills/`), ułatwiając odkrywalność i modularność.
+4.  **Rozszerzenie testów E2E**:
+    *   Ogromna rozbudowa zestawu testów pokrywająca cały nowy cykl zarządzania sesją dialogową.
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Mechanizmy bezpośredniego wyszukiwania na grafie (`GraphSearchTool`, Cypher resolver) w `src/tools/` i `src/knowledge_graph/`.
+*   Zasady działania `CriticAgent`.
+*   Interfejs Chainlit (`src/ui/app.py`).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   Implementacja GraphRAG (brak chunków tekstu, brak połączeń `MENTIONS` w grafie).
+*   Pełna integracja `LangGraph` dla orkiestratora z bazą `SqliteSaver` (zadeklarowana w Meta-Fazie B w zaktualizowanym raporcie wizji).
+
+
+## 📅 2026-09-23 (F1.1 Introspection)
+
+### Changelog (Foundation F1.1 Completion)
+
+> **Kontekst**: Ewaluacja stanu aktualnej bazy wiedzy Neo4j.
+
+#### ✅ Zrealizowane zadania
+1. **[GAP-F1.1]**: Uruchomiono zestaw skryptów inspekcyjnych na żywej bazie danych Neo4j. Wyniki zostały zapisane w `graph_state_snapshot.md`.
+   - **Odkrycie**: Baza Neo4j zawiera dokładnie 30 węzłów `ParentProduct`, 30 `User` oraz 4,847 `Review`. Embeddingi są w 100% wygenerowane dla węzłów strukturalnych. Wskazuje to, że obecna baza już stanowi bardzo dobrą (miniaturową) próbę badawczą (bardzo zbliżoną do tego co miał wygenerować GAP-F2/F3).
+
+#### 🔜 Następne kroki
+Przejście do analizy, czy obecny rozmiar bazy wymaga faktycznie wygenerowania nowego podzbioru F2/F3, czy też możemy potraktować tę bazę jako gotowy "Curated Subset" dla Meta-Fazy A.
+
+## 📅 2026-09-23
+
+### Changelog (Foundation F0 Completion)
+
+> **Kontekst**: Rozwiązanie dwóch kluczowych problemów blokujących Fazy F0 przed budową Grafu Wiedzy.
+
+#### ✅ Zrealizowane zadania
+1. **[GAP-011]**: Dodano zależność `langgraph>=1.0.0` do pliku `requirements.txt`.
+2. **[GAP-003]**: Pomyślnie zmigrowano przestarzałą funkcję `CALL db.index.vector.queryNodes` do nowej składni Cypher 25 `VECTOR SEARCH` w pliku `vector_search_helper.py`. Zapytania wykorzystują teraz predykat `SEARCH node IN (VECTOR INDEX ...) SCORE AS score`, a dotychczasowe filtry zostały odpowiednio dostosowane.
+
+#### 🔜 Następne kroki
+Przejście do realizacji **F1.1** (Uruchomienie zapytań inspekcyjnych na żywej bazie Neo4j) oraz **F2** (Wyodrębnienie zestawu wyselekcjonowanych danych z Amazona do CSV).
+
+## 📅 2026-09-19
+
+### Changelog (względem stanu z 2026-07-11)
+
+> **Kontekst**: Niniejszy wpis dokumentuje wyniki sesji audytu `/audit-state` (w tym inspekcję kodu, ocenę aktualności wizji oraz analizę luk). 
+
+#### 🔴 Nowe odkrycia i status projektu
+- Wizja projektu i zaktualizowany dwuosiowy plan wdrożeniowy (Faza F0 -> Meta-Faza A -> Meta-Faza B) pozostają **aktualne**.
+- Kod zyskał asynchroniczność w głównym orkiestratorze (GAP-001) oraz zaktualizowano DDL dla wektorowych indeksów Neo4j, ale wyszukiwanie wciąż korzysta z przestarzałej funkcji `CALL db.index.vector.queryNodes()` (częściowy brak realizacji GAP-003).
+- **Zablokowana Faza F3 (Budowa Grafu)**: Skrypt `extract_curated_subset.py` pobiera odpowiednie ID, ale nie generuje przefiltrowanych plików CSV z recenzjami i metadanymi. Z tego powodu nie ma jeszcze odpowiednio przygotowanej bazy danych `kg_curated`.
+- **Raport stanu grafu (`graph_state_snapshot.md`)** istnieje, lecz wciąż nie wypełniono go prawdziwymi statystykami z Neo4j (GAP-F1.1).
+
+#### 📋 Zidentyfikowane luki i kolejność prac (Next Sprint)
+Zatwierdzona kolejność wdrożeń (Implementation Order) zapobiegająca tworzeniu funkcji na niepełnych fundamentach:
+1. **[GAP-003]** Migracja `vector_search_helper.py` do składni Cypher 25 `VECTOR SEARCH`.
+2. **[GAP-011]** Dodanie brakującej zależności `langgraph>=1.0.0` do `requirements.txt`.
+3. **[GAP-F1.1]** Wykonanie kwerend z `graph_state_snapshot.md` na bazie Neo4j celem zapisania aktualnego stanu.
+4. **[GAP-F2]** Rozszerzenie `extract_curated_subset.py` o faktyczne zapisywanie odfiltrowanych wierszy do CSV.
+5. **[GAP-F3]** Zbudowanie od zera i zaludnienie grafu na przygotowanym podzbiorze w nowej bazie `kg_curated`.
+6. Przejście do implementacji silnika rekomendacji (Meta-Faza A).
 ## 📅 2026-07-08
 
 ### Changelog (względem stanu z 2026-06-21)
@@ -448,3 +783,113 @@ Aby przejść do Fazy II i zrealizować pełną wizję projektu, należy skupić
     *   Wdrożyć FAISS dla szybkiego wyszukiwania podobieństw (ANN).
 3.  **Trening GNN (KGAT):**
     *   Zaimplementować model KGAT do uczenia się relacji w grafie.
+
+## [2026-07-11] - F0: Usprawnienia Infrastrukturalne (Przed-Faza A/B)
+
+### Zrealizowane w tej aktualizacji
+Zgodnie z decyzją 2026-07-11-004 z Raportu Wizji (odłożenie integracji LLM-REDIAL i praca na wycinku danych Amazon), przeprowadzono obowiązkowe poprawki infrastrukturalne w celu przygotowania bazy kodu do dalszych prac nad silnikiem rekomendacji (Faza F0).
+
+*   **Naprawa pętli zdarzeń asyncio (GAP-001)**: Główny klasa `AgentOrchestrator` została w pełni przepisana na asynchroniczną (`async def`). Usunięto obejście z `cl.make_async` w Chainlit, naprawiając tym samym błąd uruchomieniowy w produkcji. Zintegrowano bezpośrednie wywołania `await` dla zapytań LLM oraz `CriticAgent`.
+*   **Aktualizacja API wektorowego Neo4j (GAP-003)**:
+    *   Scentralizowano wszystkie zapytania wyszukiwania wektorowego w nowym pliku `vector_search_helper.py`, co pozwoli na łatwiejszą migrację do składni Cypher 25 `VECTOR SEARCH` w przyszłości.
+    *   Całkowicie usunięto przestarzałą funkcję `CALL db.index.vector.createNodeIndex`.
+    *   Wszystkie skrypty tworzące indeksy (`create_vector_indexes.cypher`, `create_indexes.py`, `backfill_category_embeddings.py`) zostały zaktualizowane o nowoczesną składnię DDL `CREATE VECTOR INDEX ... IF NOT EXISTS`.
+*   **Oczyszczanie zależności (GAP-011)**:
+    *   Oczyszczono `requirements.txt` ze zbędnych paczek (przeniesiono do `requirements-legacy.txt`).
+    *   Wymuszono wersję `openai>=1.0.0` oraz dodano `pytest-asyncio`.
+    *   Utworzono plik konfiguracyjny `.env.example` dla łatwiejszego wdrażania projektu.
+    *   Przywrócono domyślną walidację zmiennych środowiskowych w `Neo4jConnector`.
+
+### Stan w stosunku do Raportu Wizji
+Krok ten zamyka sekcję F0 (Infrastructure Prerequisites) z dokumentu Implementation Plan. Kolejnym etapem będzie przygotowanie wyselekcjonowanego podzbioru danych Amazon (Faza F2) oraz zasilenie nowej bazy grafowej `kg_curated` (Faza F3).
+
+## 📅 2026-09-29
+
+### Realizacja Fazy A1 i A2: Soft-Scored Hybrid Retrieval & Critic Reranking
+W pełni zrealizowano kluczowe postulaty badawcze z Fazy A (zgodnie z `Implementation_Plan.md`), wdrażając hybrydowy silnik rekomendacyjny odporny na błędy parsowania (Zero-Result Dead Ends) i dbający o transparentność.
+
+#### ✅ Zrealizowane w tej aktualizacji (Faza A1)
+*   **MACS (Progressive Relaxation)**: Wbudowano w `GraphSearchTool` mechanizm kaskadowego łagodzenia wymogów. Gdy zapytanie zwraca mniej niż 3 kandydatów, system automatycznie (1) zwiększa budżet o 15%, a w ostateczności (2) całkowicie odrzuca twardy filtr kategorii, bazując wyłącznie na podobieństwie wektorowym.
+*   **Explicit Constraint Taxonomy**: Przebudowano `preference_extract_prompt.py`, co zmusza LLM do sztywnego oddzielania twardych granic (np. maksymalna cena) od miękkich preferencji (np. specyfikacje techniczne, takie jak 144Hz czy typ matrycy).
+*   **Soft Additive Scoring**: Zaimplementowano skryptowe, addytywne punktowanie miękkich preferencji na poziomie Pythona, które dynamicznie podbija trafność (score) wektorowych kandydatów w oparciu o obecność pożądanych cech.
+*   **Poprawka błędu `NaN Price Liquidation`**: Zapytania Cypher wykorzystują teraz warunek `IS NULL OR`, przez co asortyment z brakującymi cenami nie jest bezwzględnie wyrzucany z wyników filtrowania.
+*   **Oczyszczenie infrastruktury**: Przeniesiono skrypty ładujące graf z nieprawidłowego katalogu `graph-builder` do `scripts/graph_ingestion/`. 
+
+#### ✅ Zrealizowane w tej aktualizacji (Faza A2)
+*   **Selection-then-Rerank (CriticAgent)**: Przebudowano agenta `CriticAgent`, wprowadzając metodę `evaluate_candidate_tradeoffs` opartą o Pydantic, wymuszając zwracanie ścisłej struktury JSON.
+*   **Obrona przed "Zdradą Semantyczną"**: Zaimplementowano weryfikację techniczną (atrybuty) i funkcjonalną (recenzje). CriticAgent wczytuje fragmenty rzeczywistych recenzji, by np. ukarać produkt o opinii "szybko się psuje", jeśli użytkownik szukał czegoś "trwałego".
+*   **Human-in-the-Loop przy kompromisach**: System nie podejmuje już arbitralnych decyzji finansowych. Jeśli MACS musiał nagiąć budżet, CriticAgent generuje bezpośrednie, zrozumiałe pytanie do użytkownika z prośbą o akceptację kompromisu.
+
+#### Testy i Walidacja
+*   Utworzono integracyjne i jednostkowe skrypty testowe: `tests/test_graph_search_tool_macs.py` i `tests/test_critic_agent.py`, przywrócono poprawne działanie pętli `asyncio.run`. W pełni zweryfikowano rygorystyczne filtrowanie i generowanie odpowiedniego powiadomienia kompromisowego.
+
+### Realizacja Fazy A3: Explainable GraphRAG Injection Slots (PromptConstructor)
+Wdrożono architekturę przygotowującą system do generowania rekomendacji silnie opartych na strukturze grafu (Explainable GraphRAG), zgodnie z wytycznymi pracy magisterskiej.
+
+#### ✅ Zrealizowane w tej aktualizacji (Faza A3)
+*   **Modyfikacja PromptConstructor**: Rozszerzono główną metodę `construct_recommendation_prompt` o nowy parametr `graph_reasoning_paths`, który przyjmuje surowe ścieżki (evidence) wyciągnięte z bazy Neo4j.
+*   **Dynamiczna Iniekcja Kontekstu**: Stworzono dedykowaną logikę odpowiedzialną za wstrzykiwanie bloku `[GRAPH EVIDENCE]` do kontekstu modelu językowego, zachowując przy tym pełną kompatybilność wsteczną (fallback), jeśli ścieżki grafowe są niedostępne.
+*   **Synthesized Grounding (Ochrona przed amnezją)**: System Instruction dla LLM został zmodyfikowany tak, aby zmuszał model do syntetyzowania argumentacji. Zamiast ograniczać LLM wyłącznie do faktów z grafu, zmusza go do argumentowania poprzez łączenie **Jordana (Kontekst Rozmowy / Preferencje)** z **Faktami z Grafu**. To zapobiega robotycznym odpowiedziom ignorującym prośby użytkownika.
+
+#### Testy i Walidacja
+*   Napisano testy jednostkowe `tests/test_prompt_constructor.py` weryfikujące poprawność generowania promptów w zależności od obecności parametrów grafowych.
+
+---
+
+## 📅 2026-10-07
+
+### Realizacja Poprawek Architektonicznych AFP-003 oraz AFP-001 (Ewaluacja i Rozwiązywanie Kategorii)
+
+W odpowiedzi na analizę awarii w sesji ewaluacyjnej `eval_2026-10-07_0222` (zidentyfikowaną w `production_artifacts/Vision_Report.md`), zrealizowano kompleksowy pakiet poprawek architektonicznych usuwających sztuczne zaniżanie trafności rekomendacji (metric collapse) oraz blokady odfiltrowywania produktów w grafie wiedzy.
+
+#### 1. Rozwiązanie Problemu Taksonomii Kategorii i Hierarchii Grafu (AFP-003)
+Zgodnie ze specyfikacją `production_artifacts/Proposed_Fix_Category_Resolution.md`:
+* **Rekalibracja progu semantycznego i kontrola marginesu**: Obniżono stałą `CATEGORY_CONFIDENCE` z 0.80 do 0.70 w `GraphSearchTool` i `ResolverService`. Wprowadzono warunek marginesu kandydata $\ge 0.05$ przy wyszukiwaniu wektorowym, co umożliwia poprawne mapowanie form l. pojedynczej i mnogiej (`mouse` $\to$ `Mice` z podobieństwem ~0.797) bez ryzyka błędnego przypisywania wieloznacznych zapytań międzydomenowych (`cord`, `adapter`).
+* **Dopasowanie leksykalne z granicami słów (Word-Boundary Regex)**: Zastąpiono naiwne dopasowanie podciągów (`CONTAINS`) wyrażeniem regularnym `(?i).*(^|[^a-z])<cat>(s)?([^a-z]|$).*` w Tier 2 `ResolverService` oraz w klauzulach filtrujących Cypher, eliminując fałszywe dopasowania (np. `"phone"` pasujące do `"Headphones"`).
+* **Wielopoziomowa taksonomia podkategorii (Hierarchical Graph Traversal)**: Zastąpiono sztywne 1-skokowe relacje `[:BELONGS_TO_CATEGORY]` zmienno-długościowym przechodzeniem grafu `(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)` w zapytaniach Cypher, co pozwala odnajdywać specyficzne podkategorie należące do wyższych węzłów taksonomicznych.
+* **Tokenizowana koniunkcja tytułu (Token Conjunction Fallback)**: Dla kategorii wielowyrazowych (`"mechanical keyboard"`, `"external ssd"`) wprowadzono sprawdzanie koniunkcji tokenów słownych w tytule produktu zamiast wymogu wystąpienia ścisłego, nieprzerwanego ciągu znaków.
+* **Weryfikacja**: Utworzono dedykowany zestaw testów `tests/test_category_resolution.py` (6/6 testów zakończonych sukcesem).
+
+#### 2. Uziemienie Zbioru Ewaluacyjnego i Zestrojenie Benchmarku (AFP-001)
+Zgodnie ze specyfikacją `production_artifacts/Proposed_Fix_Benchmark_Alignment.md`:
+* **Przepięcie domyślnego zbioru benchmarkowego**: Zmieniono domyślny parametr `--benchmark` w `scripts/evaluate_retrieval.py` z przestarzałego pliku `evaluations/benchmarks/retrieval_benchmark.json` (gdzie 96% ASIN-ów nie istniało lub było uszkodzone w bazie Neo4j) na w pełni uziemiony zbiór `live_eval_dataset.json` (21 zweryfikowanych scenariuszy powiązanych z istniejącymi węzłami `ParentProduct`).
+* **Korekta limitu budżetowego (`live_eval_charger_01`)**: Zaktualizowano `price_max` z `$50.0` do `$60.0` (oraz treść zapytania użytkownika) w `live_eval_dataset.json`, dostosowując filtr do rzeczywistej ceny katalogowej ładowarki UGREEN 65W GaN ($55.99) i usuwając paradoks samowykluczenia ze zbioru trafień.
+* **Przedstartowa bramka weryfikacji uziemienia grafowego (`validate_benchmark_graph_grounding`)**: Wbudowano w `scripts/evaluate_retrieval.py` zautomatyzowaną kontrolę spójności przed uruchomieniem ewaluacji. Skrypt natychmiast przerywa działanie z błędem `ValueError`, jeśli jakikolwiek docelowy ASIN nie istnieje w Neo4j, posiada `title = NULL`, jest węzłem odizolowanym (`degree == 0`) lub narusza twardy filtr cenowy.
+* **Wieloaspektowa ewaluacja i metryki z wagami (Graded & Soft Metrics)**: Zaktualizowano `src/evaluation/metrics.py` oraz moduł raportujący w `scripts/evaluate_retrieval.py` o jednoczesne obliczanie:
+  - `strict_hit@{k}` oraz `soft_hit@{k}` (uwzględniające alternatywne produkty tożsame `peer_asins`),
+  - `strict_ndcg@{k}` oraz `graded_ndcg@{k}` (uwzględniające stopniowalną trafność modeli zastępczych z mapowaniem wag `graded_relevance`),
+  - Agregatów: `mean_strict_hr@{k}`, `mean_soft_hr@{k}`, `mean_graded_ndcg@{k}` i `mean_strict_ndcg@{k}` przy zachowaniu pełnej kompatybilności wstecznej kluczy wynikowych.
+* **Weryfikacja**: Utworzono zestaw testów `tests/test_benchmark_alignment.py` (5/5 testów zakończonych sukcesem) weryfikujący wszystkie kryteria akceptacji AC-001.1 do AC-001.5.
+
+---
+
+## 📅 2026-10-09
+
+### Realizacja Poprawki Architektonicznej AFP-004 (Realineacja Schematu Promptów i Eliminacja Inwersji Marek)
+
+W odpowiedzi na analizę awarii zapytania 16 (`ret_016`) w sesji ewaluacyjnej `eval_2026-10-07_0222` (udokumentowaną w `production_artifacts/Proposed_Fix_Prompt_Constraint_Inversion.md`), zrealizowano kompleksowy pakiet zmian usuwających błąd inwersji intencji użytkownika przy zadawaniu kryteriów marek oraz blokadę routingu dialogowego:
+
+#### 1. Uwolnienie Ograniczeń Taksonomii w Prompcie Ekstrakcji (`preference_extract_prompt.py`)
+* Usunięto restrykcyjną regułę zabraniającą wprowadzania pożądanych marek do `hard_constraints` (która zezwalała na atrybut `brand` wyłącznie z operatorem `exclude`).
+* Wprowadzono pełne wsparcie dla deklaratywnych marek afirmatywnych (`operator: "equal"` lub `"include"` dla zapytań typu *"from LG"*, *"Apple laptop"*) obok wykluczeń (`operator: "exclude"` dla zapytań typu *"no HP"*).
+* Zaktualizowano definicję i przykłady w promptach systemowych oraz `schema_injection` w `preference_parser.py`.
+
+#### 2. Walidacja i Obsługa Schematu w Parserze Preferencji (`preference_parser.py`)
+* Zdefiniowano mapę dopuszczalnych operatorów `VALID_OPERATORS` oraz funkcję walidacji `validate_hard_constraint(constraint: Dict[str, Any]) -> bool`, która dopuszcza operatory `equal`, `include` i `exclude` dla atrybutu `brand`.
+* Zapewniono automatyczne parsowanie i sanitizację twardych ograniczeń marek afirmatywnych bez odrzucania ich do ograniczeń miękkich ani przekształcania w wykluczenia.
+
+#### 3. Czyszczenie Sprzecznych Kluczy Filtrów (`session_adapter.py`)
+* Zaktualizowano adapter `hard_constraints_to_structured_filters`: przy mapowaniu afirmatywnej marki (`brand`) automatycznie usuwane są przestarzałe klucze wykluczeń (`exclude_brand`, `brand_exclude`) i odwrotnie, eliminując sprzeczności logiczne w stanie sesji.
+
+#### 4. Immunizacja Routera Dialogowego (`AgentOrchestrator._decide_next_step`)
+* Zaimplementowano regułę immunizacji routera: w przypadku, gdy użytkownik podał zarówno kategorię produktu, jak i afirmatywną markę, system automatycznie kieruje akcję do `SEARCH`, zamiast wstrzymywać interakcję zbędnym przejściem do akcji `CLARIFY`.
+* Usunięto podatność na błąd typu `AttributeError` przy przetwarzaniu `item_attrs` w logice rerankingu i ewaluacji CriticAgenta.
+
+#### 5. Odporne Dopasowanie Marek w Cypherze (`GraphSearchTool._build_filters`)
+* Rozszerzono warunek filtru marki w Cypherze o niewrażliwe na wielkość liter wzajemne zawieranie ciągów (`toLower(b.name) = toLower($brand) OR toLower(b.name) CONTAINS toLower($brand) OR toLower($brand) CONTAINS toLower(b.name)`), co pozwala bezbłędnie łączyć zapytania ze sformalizowanymi węzłami korporacyjnymi w Neo4j (np. `Samsung Electronics` vs `Samsung`).
+
+#### 6. Weryfikacja i Testy
+* Utworzono dedykowany zestaw testów `tests/test_prompt_constraint_inversion.py` (5/5 testów zakończonych sukcesem), pokrywający kryteria akceptacji AC-004.1 do AC-004.5.
+* Przeprowadzono pełny zestaw testów regresyjnych (78/78 testów zaliczonych).
+
+

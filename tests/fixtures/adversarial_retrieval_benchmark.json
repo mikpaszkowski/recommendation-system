@@ -1,0 +1,34 @@
+[
+  {
+    "query_id": "stress_01_clarify",
+    "category": "General",
+    "mock_action": "CLARIFY",
+    "clarification_question": "Could you specify what kind of device you are looking for?",
+    "target_asin": "B000000001",
+    "ground_truth_asins": ["B000000001"],
+    "utterance": "I want something cool"
+  },
+  {
+    "query_id": "stress_02_empty_utterance",
+    "category": "Electronics",
+    "utterance": "",
+    "target_asin": "B000000002",
+    "ground_truth_asins": ["B000000002"]
+  },
+  {
+    "query_id": "stress_03_zero_candidates",
+    "category": "ObsoleteTech",
+    "mock_action": "CLARIFY",
+    "clarification_question": "Floppy disks are not in stock. Would you consider USB drives?",
+    "target_asin": "B000000003",
+    "ground_truth_asins": ["B000000003"],
+    "utterance": "3.5 inch floppy disk pack"
+  },
+  {
+    "query_id": "stress_04_sequential_valid",
+    "category": "Headphones",
+    "utterance": "Over-ear noise cancelling headphones",
+    "target_asin": "B000000004",
+    "ground_truth_asins": ["B000000004"]
+  }
+]

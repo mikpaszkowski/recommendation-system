@@ -39,7 +39,8 @@ Follow these steps when responding to users:
                                       user_profile: Optional[Dict[str, Any]] = None,
                                       conversation_history: Optional[List[Dict[str, str]]] = None,
                                       retrieved_items: Optional[List[Dict[str, Any]]] = None,
-                                      preferences: Optional[Dict[str, Any]] = None) -> List[BaseMessage]:
+                                      preferences: Optional[Dict[str, Any]] = None,
+                                      graph_reasoning_paths: Optional[List[Dict[str, Any]]] = None) -> List[BaseMessage]:
         """
         Construct a prompt for generating recommendations.
         
@@ -49,6 +50,7 @@ Follow these steps when responding to users:
             conversation_history: Optional conversation history
             retrieved_items: Optional list of retrieved items
             preferences: Optional weighted preferences (likes/dislikes/constraints)
+            graph_reasoning_paths: Optional list of graph evidence paths (Phase A3)
             
         Returns:
             List of LangChain message objects ready for the LLM
@@ -75,12 +77,17 @@ Follow these steps when responding to users:
         if retrieved_items:
             items_text = self._format_retrieved_items(retrieved_items)
             prompt_parts.append(f"[RETRIEVED ITEMS]\n{items_text}\n")
+            
+        # Add graph evidence if available
+        if graph_reasoning_paths:
+            evidence_text = self._format_graph_evidence(graph_reasoning_paths)
+            prompt_parts.append(f"[GRAPH EVIDENCE]\n{evidence_text}\n")
         
         # Add reasoning process
-        prompt_parts.append(self._get_reasoning_process())
+        prompt_parts.append(self._get_reasoning_process(has_graph_evidence=bool(graph_reasoning_paths)))
         
-        # Add current user query
-        prompt_parts.append(f"[CURRENT USER REQUEST]\n{user_query}\n")
+        # Add the current user query
+        prompt_parts.append(f"[CURRENT QUERY]\n{user_query}\n")
         
         # Combine all parts
         human_message_content = "\n".join(prompt_parts)
@@ -90,6 +97,7 @@ Follow these steps when responding to users:
             SystemMessage(content=self.system_instruction),
             HumanMessage(content=human_message_content)
         ]
+
     
     def _format_user_profile(self, user_profile: Dict[str, Any]) -> str:
         """
@@ -108,7 +116,8 @@ Follow these steps when responding to users:
             profile_parts.append("User preferences:")
             for category, values in prefs.items():
                 if isinstance(values, list):
-                    profile_parts.append(f"- {category}: {', '.join(values)}")
+                    str_values = [str(v) for v in values]
+                    profile_parts.append(f"- {category}: {', '.join(str_values)}")
                 else:
                     profile_parts.append(f"- {category}: {values}")
         
@@ -207,14 +216,27 @@ Follow these steps when responding to users:
         
         return "\n".join(items_parts)
     
-    def _get_reasoning_process(self) -> str:
+    def _get_reasoning_process(self, has_graph_evidence: bool = False) -> str:
         """
         Get the reasoning process section for the prompt.
         
+        Args:
+            has_graph_evidence: Whether the prompt includes graph reasoning paths
+            
         Returns:
             Reasoning process text
         """
-        return """[REASONING PROCESS]
+        if has_graph_evidence:
+            return """[REASONING PROCESS]
+Follow these steps to recommend:
+1. Identify Needs: Analyze the user's explicit preferences and constraints from the input and profile.
+2. Review Candidates: Analyze the provided candidate items.
+3. Synthesize Evidence (CRITICAL): You MUST justify your recommendation by connecting the User's Explicit Preferences directly to the [GRAPH EVIDENCE].
+   - Example: "Since you specifically asked for a durable cable [Preference], I recommend this Anker model because our data shows it is frequently reviewed as 'lasting for years' [Graph Evidence]."
+4. Do Not Hallucinate: Do not invent features or reasons that are not explicitly stated in the graph evidence or item details.
+"""
+        else:
+            return """[REASONING PROCESS]
 Follow these steps to recommend:
 1. Analyze the user's input to identify explicit preferences
    - What specific product attributes are they looking for?
@@ -237,6 +259,26 @@ Follow these steps to recommend:
    - Connect recommendations to specific user preferences
    - Highlight key features that match their requirements
 """
+    
+    def _format_graph_evidence(self, graph_reasoning_paths: List[Dict[str, Any]]) -> str:
+        """
+        Phase A3: Format graph reasoning paths into a human-readable prompt section.
+        """
+        if not graph_reasoning_paths:
+            return "No graph evidence available."
+            
+        evidence_parts = []
+        for i, path in enumerate(graph_reasoning_paths, 1):
+            target = path.get("target_item", "Unknown Item")
+            reasoning = path.get("reasoning_path", "")
+            
+            if reasoning:
+                evidence_parts.append(f"- Evidence for '{target}': {reasoning}")
+                
+        if not evidence_parts:
+            return "No structured reasoning paths found."
+            
+        return "\n".join(evidence_parts)
     
     def construct_explanation_prompt(self,
                                    user_id: str,

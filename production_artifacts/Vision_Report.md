@@ -25,9 +25,9 @@ The project moves away from rigid processing pipelines and pure Text-to-Cypher g
 ## 4. Key Architectural Decisions & Scope Definition
 To guarantee the successful execution and focus of the master's thesis, the project scope is rigorously defined:
 * **Abandoning Custom Model Training**: The project consciously avoids the extreme computational burden of training custom Relational Graph Convolutional Networks (R-GCN, KGAT, LoRA). It focuses entirely on Prompt Engineering, RAG architecture, and high-quality pre-trained LLM embedding models applied to enriched textual representations of graph nodes.
-* **Dual-Dataset Graph Construction (Scope Protection)**: The project utilizes a highly targeted, dual-dataset strategy. The modern **LLM-REDIAL dataset** will serve as the conversational and behavioral foundation, providing validated multi-turn dialogues. To construct the Knowledge Graph without unmanageable data engineering overhead, the system will use the **Amazon Reviews 2023 dataset** strictly as a metadata lookup. Only the items specifically present in the selected LLM-REDIAL domains will be extracted from the massive Amazon catalog to populate the graph's rich structural (Products, Brands, Categories) and lexical (Review Chunks) nodes.
+* **Single-Dataset Graph Construction & Unified Baseline Strategy**: The project utilizes the **Amazon Reviews 2023 dataset** exclusively. By dropping the LLM-REDIAL dependency, we ensure a perfect 1:1 comparison against classic recommendation baselines (Matrix Factorization, Content-Based, Sequential models) which will be trained and evaluated on the exact same Amazon dataset splits. The graph will be populated with rich structural (Products, Brands, Categories) and lexical (Review Chunks) nodes directly from Amazon data.
 * **Knowledge Graph as Grounding**: The system relies on the graph structure to completely prevent LLM hallucinations. The system cannot invent a product or its features.
-* **Primary Academic Contribution**: The thesis will academically demonstrate how the integration of Hybrid GraphRAG retrieval and Multi-Agent verification significantly enhances the groundedness and user-perceived explainability of conversational recommendations compared to baseline LLM retrieval methodologies.
+* **Primary Academic Contribution**: The thesis will academically demonstrate how the integration of Hybrid GraphRAG retrieval and Multi-Agent verification significantly enhances recommendation accuracy, groundedness, and user-perceived explainability compared to both baseline LLM retrieval methodologies (Vector-only, Cypher-only) AND classic recommendation models (Collaborative Filtering, Content-Based) evaluated on the exact same dataset splits.
 
 ## 5. Metrics and Evaluation (How do we measure success?)
 Evaluating conversational recommender systems (CRS) requires a dual-dimensional approach based on modern research standards:
@@ -46,6 +46,50 @@ We will use an advanced LLM model to evaluate the generated responses according 
 ---
 
 ## Decision Log
+
+### 📅 2026-10-06-002: Academic Target Item Sampling & Contrastive Distinguishing Feature Selection Framework
+**Context**: Following user directive (`ORIGINAL_REQUEST.md` § `2026-10-06T17:26:22Z`), the evaluation benchmark dataset (`live_eval_dataset.json`) is being redesigned. To avoid both the "trivial retrieval" trap (sampling isolated graph targets with zero competitors) and the "label-request contradiction" anomaly (generic or contradictory utterances identified by Suresh, 2026 and Wang et al., 2023), rigorous target selection criteria were investigated across 6 authoritative arXiv papers.
+**Decision**: Adopt a formal 3-pillar target sampling and utterance generation framework grounded in SOTA literature (REGEN/LUMEN, iEvaLM, Suresh 2026, SimpleUserSim, UNICORN, EAR):
+1. **Context Richness & Information Content**: Target items must possess $\ge 3$ verified reviews ($N_{rev} \ge 3$), $\ge 5$ structured technical attributes ($D_{attr} \ge 5$), valid 384-d dense embeddings, positive prices, and Semantic Information Content ($\operatorname{IC}$) in the upper 50th percentile of the category pool.
+2. **Graph Connectivity & Peer Density**: Target items must be sampled from a 50-candidate pool per category and embedded within dense competitor neighborhoods ($\overline{\operatorname{Sim}}_{peer} \ge 0.65$ over $k=5$ nearest peer candidates, $\min \operatorname{Sim} \ge 0.55$), guaranteeing that retrieval is non-trivial and tests multi-turn reasoning and constraint verification.
+3. **Contrastive Distinguishing Feature Selection**: Formulate the Contrastive Specificity Score ($\operatorname{CSS} \ge 0.80$) and Composite Target Suitability Index ($\operatorname{CSI}$) with technical attribute salience filtering, selecting the top 2-3 target products per category (14-21 total items across 7 categories) that possess clear differentiating features against their competitor clusters.
+4. **Contrast-Aware Utterance Generation Mandate**: User utterances must articulate category intent, contextual peer overlap, and the explicit distinguishing feature $a^*(t)$. Generic phrasing (e.g., "high rated keyboard") and target title/brand leakage are strictly prohibited, ensuring 100% catalog-resolved constraint satisfaction.
+**Rationale**: Guarantees benchmark integrity, eliminates synthetic evaluation artifacts, and ensures that recommendation accuracy reflects genuine intent-to-catalog entity resolution and multi-agent constraint verification for the Master's Thesis.
+**Impact on vision**: Establishes the definitive criteria for generating live-data evaluation benchmarks across the 7 core product categories.
+**Approved by**: User
+
+### 📅 2026-10-05-001: Zero-Mock Live-Data Evaluation Architecture & Multi-Stage Metric-to-Flow Mapping
+**Context**: Following authoritative user directive (`ORIGINAL_REQUEST.md` § `2026-10-05T21:40:27Z`), an empirical audit revealed that previous evaluation benchmarks relied on synthetic, disconnected mock fixtures (where only 16% of ASINs existed in Neo4j) and offline mock candidate generators (`ALT_...`, `VERIFIED_...`).
+**Decision**: 
+1. **Strict Zero-Mock Mandate**: Completely eliminate all mock candidate generation, fake scores, and synthetic benchmark fixtures. All evaluation scenarios, user contexts, and ground-truth targets must be sourced directly and exclusively from live Neo4j database nodes (specifically sampling from the 12,909 complete products with dense 384-d embeddings and positive prices, and the 72,538 users with $\ge 3$ reviews).
+2. **Multi-Stage Metric-to-Flow Architecture**: Deconstruct evaluation into five distinct algorithmic stages:
+   - *Stage 1 (Candidate Retrieval)*: `GraphSearchTool` evaluated on Recall@K, Hit Rate@K, MRR@K ($K \in \{20, 50\}$), MACS relaxation trigger rate, and latency.
+   - *Stage 2 (Re-ranking & Selection)*: Additive heuristic scoring evaluated on NDCG@K, Precision@K, MRR@K ($K \in \{3, 5, 10\}$).
+   - *Stage 3 (Semantic Verification)*: `CriticAgent` evaluated on Constraint Violation Elimination Rate (CVER), False Positive Pruning Accuracy (FPPA), Critic Acceptance Rate (CAR), and Critic Ranking Gain ($\Delta\text{NDCG@K}$).
+   - *Stage 4 (Topological Reasoning)*: `KECRTool` evaluated on Path Discovery Yield, Topological Path Density, and Subgraph Faithfulness.
+   - *Stage 5 (End-to-End Dialog)*: `AgentOrchestrator` evaluated on Catalog Validity Rate (100% verified live Neo4j nodes), Attribute Adherence, Inverted CoT Groundedness (with Hard Dilution Cap), Explainability Provenance ($F_1$ / Fake History penalty), Multi-Turn Coherence, and Recoverability.
+3. **Telemetry & `eval_trace` Enhancement**: Extend `AgentOrchestrator._execute_step()` with a non-invasive `eval_trace` payload exposing raw candidates, Critic fit scores, pruned items, and KECR reasoning paths to enable multi-stage evaluation during live conversational execution.
+4. **Real-Time Catalog Verification**: Enforce real-time Cypher validation on 100% of candidate and recommended ASINs (`MATCH (p:ParentProduct {parent_asin: asin}) RETURN count(p)`). Any hallucinated ASIN immediately flags a catalog integrity violation.
+**Rationale**: Eliminates synthetic test inflation, grounds empirical findings strictly in live database hits, isolates the specific contributions of hybrid retrieval, multi-agent critique, and graph reasoning, and ensures 100% publication-grade empirical integrity for the Master's Thesis.
+**Impact on vision**: Solidifies the live Knowledge Graph as the sole arbiter of truth for evaluation, aligning empirical metrics directly with the multi-agent GraphRAG architecture.
+**Approved by**: User
+
+### 📅 2026-10-03-008: Two-Tiered Evaluation Framework for CRS Master's Thesis
+**Context**: Design and formalization of the rigorous academic evaluation framework for the Master's Thesis ("Explainable Hybrid GraphRAG for Conversational Recommendation") covering both traditional recommendation algorithms and generative LLM quality.
+**Decision**: Adopt a publication-ready two-tiered evaluation architecture:
+1. **Tier 1 (Recommendation & Retrieval Engine)**: Offline conversational protocol evaluating NDCG@K, Hit Rate@K, MRR, Precision@K, Recall@K, and MAP@K across cutoff horizons K in {1, 3, 5, 10, 20} with dual binary and graded semantic relevance functions on the Amazon Reviews Knowledge Graph. Evaluates multi-stage candidate interception (raw GraphSearchTool vs. post-CriticAgent reranking vs. KECR orthogonal gating).
+2. **Tier 2 (Generative & Conversational Quality)**: Decomposed Multi-Criteria LLM-as-a-Judge architecture (grounded in Zheng et al., G-Eval, Ragas, and TruLens) measuring Groundedness (KG adherence and hallucination penalty), Explainability (topological path and KECR provenance verification), Coherence (multi-turn context retention), and Recoverability (adaptation to negative feedback and preference corrections) with formal 5-point Likert rubrics and bias mitigations.
+3. **Execution & Versioning**: Versioned directory structure (`evaluations/eval_YYYY-MM-DD_HHMM/`), raw JSON metrics, summary CSVs, and automated publication-grade plotting (matplotlib/seaborn at 300 DPI).
+**Rationale**: Traditional IR metrics cannot evaluate hallucination, dialogue flow, or explanation validity; conversely, n-gram metrics (BLEU/ROUGE) cannot evaluate ranking quality or Knowledge Graph adherence. This two-tiered framework rigorously validates thesis research questions RQ1 through RQ6.
+**Impact on vision**: Establishes the definitive empirical testing standard and versioned visualization framework for validating the thesis claims against classic baselines.
+**Approved by**: User
+
+### 📅 2026-09-29-007: Dynamic Domain Schema Extraction
+**Context**: Investigation via /teamwork-preview revealed that hardcoded `domain_schemas.json` (3 categories) severely limits the system's ability to serve the full Amazon Reviews dataset.
+**Decision**: Replace static JSON with an offline extraction script (`scripts/extract_domain_schemas.py`) that queries Neo4j to generate `dynamic_domain_schemas.json`. Modify `preference_parser.py` to selectively inject this schema based on user intent. Real-time chat querying of the schema was explicitly rejected.
+**Rationale**: Scales to thousands of Amazon categories, prevents property hallucination, maintains Data Provenance, and avoids introducing chat-time database latency.
+**Impact on vision**: Solidifies the Knowledge Graph as the dynamic source of truth for the LLM schema.
+**Approved by**: User
 
 ### Decision 2026-07-08-001: Strategic Data Foundation Reset
 **Date**: 2026-07-08
@@ -83,4 +127,71 @@ We will use an advanced LLM model to evaluate the generated responses according 
 - 20 well-reviewed products (292–519 reviews each) + 5 low-review products (1–2 reviews each)
 - Target database:  (separate from existing graph — existing data preserved)
 **Rationale**: Unblocks the entire development pipeline immediately. The curated subset is sufficient to test KECR, CriticAgent, hybrid search, evaluation scripts, and the full recommendation engine. REDIAL adds conversational dialogue data — important for evaluation quality but not required for building the recommendation engine.
+**Status**: ✅ Accepted
+
+### Decision 2026-09-23-005: Unified Baseline Strategy (Amazon Only)
+**Date**: 2026-09-23
+**Trigger**: Need for robust academic baselines (Matrix Factorization, Content-Based, Sequential) trained on the exact same dataset as the Knowledge Graph.
+**Decision**: 
+1. Abandon the LLM-REDIAL dataset dependency entirely. The project will use the Amazon Reviews dataset exclusively for both the Knowledge Graph and the classic baselines.
+2. Introduce **Meta-Phase C (Classic Baseline Comparison)** to the Implementation Plan. This phase will implement `scikit-surprise` (CF) and `lightfm` (Content-Based) models on the Amazon dataset.
+3. Schedule Meta-Phase C to occur *after* Meta-Phase A and B are fully implemented and validated, ensuring the custom Hybrid GraphRAG solution is completely finished before comparative evaluation begins.
+**Rationale**: Comparing a modern LLM-driven Knowledge Graph system against classic recommendation algorithms on the exact same dataset provides a bulletproof evaluation section for the thesis. Moving this to a post-implementation phase protects the core development timeline.
+**Status**: ✅ Accepted
+
+### Decision 2026-09-28-006: Robust GraphRAG Retrieval Architecture
+**Date**: 2026-09-28
+**Trigger**: /implement pipeline execution for Meta-Phase A1
+**Decision**: 
+1. Implement a **Multi-Index Semantic Search** traversing Products, Attributes, and Reviews concurrently (Lexical Review Proxy).
+2. Implement **Single-Pass Structured Query Generation** (HyDE and Query Expansion generated in one JSON payload) to solve asymmetric search without 3x latency.
+3. Introduce the **ResolverService (Waterfall Resolution Strategy)** to execute exact-match strings first, Lucene full-text second, and Vector Semantic search third, solving exact-match brittleness.
+4. Introduce **Schema Injection** and an **EAV Numeric Schema** to handle complex mathematical constraints without sparse node bloat.
+**Rationale**: Relying on zero-shot LLM translation directly to Cypher creates fatal "vocabulary impedance" leading to empty retrieval sets. This architecture deterministically bridges conversational intent to exact graph operations while preserving latency bounds and preventing hallucination.
+**Status**: ✅ Accepted
+
+### Decision 2026-10-07-009: Category Taxonomy Resolution & Hierarchical Graph Traversal (AFP-003)
+**Date**: 2026-10-07
+**Trigger**: Execution of AFP-003 (`production_artifacts/Proposed_Fix_Category_Resolution.md`) following failure analysis `eval_2026-10-07_0222` where 81% of catalog items failed category gatekeeping.
+**Decision**: 
+1. **Semantic Threshold Recalibration & Candidate Margin Check**: Lower `CATEGORY_CONFIDENCE` from 0.80 to 0.70 in `GraphSearchTool` and `ResolverService`. Enforce candidate margin check $\ge 0.05$ against cross-domain candidates on vector search to resolve morphological plurals/synonyms (`mouse` $\to$ `Mice` at 0.79655) while preserving raw strings on ambiguous cross-domain queries (`cord`, `adapter`).
+2. **Whole-Token / Word-Boundary Regex Category Matching**: Upgrade Tier 2 lexical matching in `ResolverService` and Cypher category filtering in `GraphSearchTool` from naive substring `CONTAINS` to whole-token word-boundary regex `(?i).*(^|[^a-z])<cat>(s)?([^a-z]|$).*`, preventing cross-domain pollution (e.g. `"phone"` matching `"Headphones"`).
+3. **Hierarchical Subcategory Traversal**: Upgrade Cypher filtering from strict 1-hop traversal to variable-length taxonomy traversal `(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)`.
+4. **Tokenized Title Conjunction Fallback**: For compound categories (`"mechanical keyboard"`, `"external ssd"`), replace contiguous substring matching with token conjunction `AND` in product titles to safeguard items with intermediate modifiers.
+**Rationale**: Resolves the four-part category gatekeeping impasse identified in failure mapping FM-3, restoring recall on benchmark items while preventing false-positive cross-domain drift.
+**Status**: ✅ Accepted
+
+### Decision 2026-10-07-010: Benchmark Dataset Grounding & Evaluation Alignment (AFP-001)
+**Date**: 2026-10-07
+**Trigger**: Execution of AFP-001 (`production_artifacts/Proposed_Fix_Benchmark_Alignment.md`) addressing evaluation collapse in `eval_2026-10-07_0222` caused by detached legacy benchmark `retrieval_benchmark.json` (96% ungrounded/corrupted target entities).
+**Decision**:
+1. **Default Benchmark Repointing**: Set CLI default in `scripts/evaluate_retrieval.py` to `live_eval_dataset.json`, guaranteeing evaluations run on 21 real, verified Neo4j catalog products.
+2. **Catalog Budget Ceiling Alignment**: In `live_eval_dataset.json`, align `live_eval_charger_01` `price_max` from `$50.0` to `$60.0` (and update user utterance) to accommodate the real catalog price ($55.99) and eliminate artificial filter exclusions.
+3. **Pre-Flight Graph Grounding Gate**: Implement mandatory verification gate `validate_benchmark_graph_grounding()` in `scripts/evaluate_retrieval.py` that fails fast (raising `ValueError`) before evaluation if target ASINs are absent, ghost nodes (`title == NULL`), disconnected (`degree == 0`), or violate price filters.
+4. **Multi-Ground-Truth & Graded Evaluation Metrics**: Upgrade `src/evaluation/metrics.py` and `scripts/evaluate_retrieval.py` to compute strict Hit@K, soft/peer Hit@K, strict NDCG@K, and graded NDCG@K with backward compatibility, accurately rewarding equivalent SKU substitutions without penalizing valid sibling recommendations.
+**Rationale**: Eliminates metric inversion and false evaluation failures by ensuring every benchmark scenario is grounded in the actual graph catalog while formally scoring sibling product equivalence.
+**Status**: ✅ Accepted
+
+### Decision 2026-10-09-011: Prompt Schema Realignment & Intent Inversion Elimination (AFP-004)
+**Date**: 2026-10-09
+**Trigger**: Execution of AFP-004 (`production_artifacts/Proposed_Fix_Prompt_Constraint_Inversion.md`) following failure analysis `eval_2026-10-07_0222` Query 16 (`ret_016`), where explicit affirmative brand constraints ("from LG") were hallucinated as `"exclude"` by LLM due to prompt negative-only restrictions, triggering Dialogue Router contradiction aborts to `CLARIFY` and 0% retrieval hit rates.
+**Decision**:
+1. **Prompt Taxonomy Realignment**: Remove negative-only brand restriction in `preference_extract_prompt.py`. Support both affirmative inclusion (`operator: "equal" | "include"`) and negative exclusion (`operator: "exclude"`).
+2. **Preference Parser & Schema Validation**: Define `VALID_OPERATORS` and `validate_hard_constraint()` in `preference_parser.py` accepting affirmative brand constraints (`equal`, `include`) alongside `exclude`. Update `schema_injection` to explicitly permit affirmative brands in hard constraints.
+3. **Session Adapter Contradictory Key Purging**: In `session_adapter.py`, ensure affirmative brand mappings clear contradictory `exclude_brand`/`brand_exclude` keys and vice versa.
+4. **Dialogue Router Affirmative Brand Immunization**: In `orchestrator.py` `_decide_next_step`, ensure presence of category and affirmative brand immunizes against spurious `CLARIFY` router loops, directing execution directly to `SEARCH`.
+5. **Cypher Brand Filter Robustness**: In `graph_search_tool.py`, expand Cypher brand matching from strict case-sensitive equality to case-insensitive mutual containment (`toLower(b.name) = toLower($brand) OR toLower(b.name) CONTAINS toLower($brand) OR toLower($brand) CONTAINS toLower(b.name)`), matching catalog entities with corporate/trade suffixes (e.g. `Samsung Electronics`).
+**Rationale**: Eliminates Tier 1 conversational intent corruption and dialogue aborts, ensuring explicit user brand allegiances translate into targeted graph retrieval without premature clarification interruptions.
+**Status**: ✅ Accepted
+
+
+
+
+### Decision 2026-10-09-012: Deterministic Cypher Ranking & EAV Typing (AFP-005)
+**Date**: 2026-10-09
+**Trigger**: Execution of AFP-005 (`production_artifacts/Proposed_Fix_Cypher_Ranking_and_Typing.md`).
+**Decision**:
+1. **Determinstic Cypher Search Ranking**: Replaced raw, unranked Cypher search with a Bayesian quality ranking algorithm heavily dampening volume outliers.
+2. **Robust EAV Numeric Parsing**: Introduced regex-based unit extraction during ingestion to populate `numeric_value` in Attribute nodes, and deployed a multi-stage string coercion Cypher fallback in `GraphSearchTool`.
+**Rationale**: Eliminates empty retrieval sets caused by strict Neo4j `toFloat` casting on unit-appended values (e.g. `144 Hz`) and prevents obscure accessories from displacing high-quality items in purely structured filter searches.
 **Status**: ✅ Accepted

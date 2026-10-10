@@ -1,7 +1,8 @@
 import logging
 import os
 import sys
-from typing import List, Dict, Optional, Tuple
+import re
+from typing import List, Dict, Optional
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 try:
@@ -10,10 +11,19 @@ try:
 except ImportError:
     from neo4j_connector import Neo4jConnector
     from embedding_service import EmbeddingService
+from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search_query
 
 logger = logging.getLogger(__name__)
 
+BRAND_CONFIDENCE = 0.85
+CATEGORY_CONFIDENCE = 0.70  # Lowered to 0.70 to reliably resolve plurals and inflections
+CATEGORY_MARGIN = 0.05      # Minimum margin between top-1 and runner-up candidate
+
 class ResolverService:
+    BRAND_CONFIDENCE = BRAND_CONFIDENCE
+    CATEGORY_CONFIDENCE = CATEGORY_CONFIDENCE
+    CATEGORY_MARGIN = CATEGORY_MARGIN
+
     def __init__(self, connector=None, embed_svc=None, min_score: float = 0.55):
         self.connector = connector or Neo4jConnector()
         if not connector:
@@ -21,115 +31,128 @@ class ResolverService:
         self.embed_svc = embed_svc or EmbeddingService()
         self.min_score = min_score
 
-    def resolve_brand(self, text: str, k: int = 1) -> List[Dict]:
+    def _execute_waterfall(self, text: str, node_label: str, property_name: str, index_name: str, k: int, return_props: List[str]) -> List[Dict]:
         """
-        Resolve a user brand query (e.g. "asus") to canonical Brand node name.
+        Executes a 3-tier waterfall resolution strategy.
+        Tier 1: Exact Match (case-insensitive)
+        Tier 2: Substring Match (CONTAINS) or Word-Boundary Regex (for Category)
+        Tier 3: Vector Semantic Search
         """
+        text = text.strip()
         if not text:
             return []
 
-        embedding = self.embed_svc.embed_query(text)
-
-        query = """
-        CALL db.index.vector.queryNodes('brand_embedding_index', $k, $embedding)
-        YIELD node, score
-        WHERE score >= $min_score
-        RETURN node.name as name, score
-        """
-
+        # Ensure return properties are formatted correctly for Cypher
+        ret_clause = ", ".join([f"node.{p} AS {p}" for p in return_props])
+        
         with self.connector.session() as session:
-            result = session.run(query, {
+            # Tier 1: Exact Match
+            t1_query = f"""
+            MATCH (node:{node_label})
+            WHERE toLower(node.{property_name}) = toLower($text)
+            RETURN {ret_clause}, 1.0 AS score LIMIT {k}
+            """
+            result = session.run(t1_query, {"text": text})
+            matches = [dict(record) for record in result]
+            if matches:
+                logger.info(f"[Resolver] Tier 1 (Exact) match found for '{text}' as {node_label}")
+                return matches
+            
+            # Tier 2: Substring / Word-Boundary Regex Match
+            if node_label == "Category":
+                # Whole-token / word-boundary regex matching to prevent cross-domain contamination
+                # (e.g. 'phone' matching 'Headphones')
+                text_clean = text.lower().strip()
+                if text_clean in ("smartphone", "smartphones", "smart phone", "smart phones", "cellphone", "cellphones", "cell phone", "cell phones", "mobile phone", "mobile phones"):
+                    pattern = "(?i).*(^|[^a-z])(smart|cell|mobile)?( )?phone(s)?([^a-z]|$).*"
+                else:
+                    pattern = f"(?i).*(^|[^a-z]){re.escape(text)}(s)?([^a-z]|$).*"
+                t2_query = f"""
+                MATCH (node:{node_label})
+                WHERE node.{property_name} =~ $pattern
+                RETURN {ret_clause}, 0.85 AS score LIMIT {k}
+                """
+                result = session.run(t2_query, {"pattern": pattern})
+            else:
+                t2_query = f"""
+                MATCH (node:{node_label})
+                WHERE toLower(node.{property_name}) CONTAINS toLower($text)
+                RETURN {ret_clause}, 0.85 AS score LIMIT {k}
+                """
+                result = session.run(t2_query, {"text": text})
+            matches = [dict(record) for record in result]
+            if matches:
+                logger.info(f"[Resolver] Tier 2 (Substring/Regex) match found for '{text}' as {node_label}")
+                return matches
+
+        # Tier 3: Vector Search (Fallback)
+        logger.info(f"[Resolver] Tiers 1 & 2 failed for '{text}'. Falling back to Tier 3 (Vector Semantic Search).")
+        try:
+            embedding = self.embed_svc.embed_query(text)
+        except Exception as e:
+            logger.error(f"[Resolver] Failed to generate embedding for '{text}': {e}")
+            return []
+
+        t3_query = build_vector_search_query(
+            index_name=index_name,
+            k=k,
+            where_clause="score >= $min_score",
+            return_clause=f"RETURN {ret_clause}, score"
+        )
+        
+        with self.connector.session() as session:
+            result = session.run(t3_query, {
                 "k": k,
-                "embedding": embedding,
+                "vector": embedding,
                 "min_score": self.min_score
             })
-
-            matches = []
-            for record in result:
-                matches.append({
-                    "name": record["name"],
-                    "score": record["score"]
-                })
-
+            matches = [dict(record) for record in result]
+            if matches:
+                logger.info(f"[Resolver] Tier 3 (Vector) match found for '{text}' as {node_label} with score {matches[0].get('score', 0):.3f}")
             return matches
+
+    def resolve_brand(self, text: str, k: int = 1) -> List[Dict]:
+        return self._execute_waterfall(text, "Brand", "name", "brand_embedding_index", k, ["name"])
 
     def resolve_attribute(self, text: str, k: int = 3) -> List[Dict]:
-        """
-        Resolve a user attribute query (e.g. "pulse reader") to graph attributes.
-        """
-        if not text:
-            return []
-            
-        embedding = self.embed_svc.embed_query(text)
-        
-        # Cypher for vector search
-        query = """
-        CALL db.index.vector.queryNodes('attribute_embedding_index', $k, $embedding)
-        YIELD node, score
-        WHERE score >= $min_score
-        RETURN node.attribute_name as name, node.attribute_value as value, node.normalized_value as norm, score
-        """
-        
-        with self.connector.session() as session:
-            result = session.run(query, {
-                "k": k, 
-                "embedding": embedding,
-                "min_score": self.min_score
-            })
-            
-            matches = []
-            for record in result:
-                matches.append({
-                    "name": record["name"],
-                    "value": record["value"],
-                    "normalized_value": record["norm"],
-                    "score": record["score"]
-                })
-            
-            return matches
+        # Attributes use attribute_name for lexical mapping, and have value/norm values to return
+        # Since waterfall expects a primary property to match against, we use attribute_name.
+        return self._execute_waterfall(text, "Attribute", "attribute_name", "attribute_embedding_index", k, ["attribute_name AS name", "attribute_value AS value", "normalized_value AS norm"])
 
     def resolve_category(self, text: str, k: int = 3) -> List[Dict]:
-        """
-        Resolve a user category query (e.g. "Video") to graph categories.
-        """
-        if not text:
-            return []
+        return self._execute_waterfall(text, "Category", "name", "category_embedding_index", k, ["name", "path"])
 
-        embedding = self.embed_svc.embed_query(text)
-        
-        query = """
-        CALL db.index.vector.queryNodes('category_embedding_index', $k, $embedding)
-        YIELD node, score
-        WHERE score >= $min_score
-        RETURN node.name as name, node.path as path, score
+    def validate_category_candidates(
+        self,
+        matches: List[Dict],
+        min_confidence: float = CATEGORY_CONFIDENCE,
+        min_margin: float = CATEGORY_MARGIN,
+    ) -> Optional[Dict]:
         """
-        
-        with self.connector.session() as session:
-            result = session.run(query, {
-                "k": k, 
-                "embedding": embedding,
-                "min_score": self.min_score
-            })
-            
-            matches = []
-            for record in result:
-                matches.append({
-                    "name": record["name"],
-                    "path": record["path"],
-                    "score": record["score"]
-                })
-            
-            return matches
+        Validates that the top category candidate meets min_confidence (0.70)
+        and min_margin (>= 0.05) against cross-domain runner-ups.
+        Returns the top candidate if valid, None if ambiguous or below confidence.
+        """
+        if not matches or matches[0].get("score", 0.0) < min_confidence:
+            return None
+        if matches[0].get("score", 0.0) < 0.85 and len(matches) > 1:
+            top = matches[0]
+            top_name = top.get("name", "").lower()
+            top_path = [p.lower() for p in (top.get("path") or [])]
+            for runner_up in matches[1:]:
+                ru_name = runner_up.get("name", "").lower()
+                ru_path = [p.lower() for p in (runner_up.get("path") or [])]
+                if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
+                    continue
+                if top.get("score", 0.0) - runner_up.get("score", 0.0) < min_margin:
+                    return None
+                break
+        return matches[0]
 
 if __name__ == "__main__":
-    # Test stub
     logging.basicConfig(level=logging.INFO)
     resolver = ResolverService()
-    print("Testing Resolver (expects indexes to exist)...")
-    try:
-        attrs = resolver.resolve_attribute("pulse reader")
-        print(f"Attributes: {attrs}")
-        cats = resolver.resolve_category("PC components")
-        print(f"Categories: {cats}")
-    except Exception as e:
-        print(f"Error (maybe index missing): {e}")
+    print("Testing Waterfall Resolver...")
+    print(f"Brand 'asus': {resolver.resolve_brand('asus')}")
+    print(f"Category 'monitor': {resolver.resolve_category('monitor')}")
+    print(f"Attribute 'refresh': {resolver.resolve_attribute('refresh')}")

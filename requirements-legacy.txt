@@ -1,0 +1,11 @@
+# Legacy packages — not currently imported in src/
+# Retained for reference; do not install unless specifically needed.
+lightfm>=1.16
+scikit-surprise>=1.1.3
+fastapi>=0.68.0
+uvicorn>=0.15.0
+streamlit>=1.20.0
+openpyxl>=3.0.0
+joblib>=1.0.0
+requests>=2.26.0
+pyabsa>=2.3.4

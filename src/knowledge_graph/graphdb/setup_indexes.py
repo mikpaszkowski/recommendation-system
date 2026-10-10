@@ -28,42 +28,40 @@ def setup_indexes():
     with open(cypher_file, "r") as f:
         content = f.read()
 
-    # robust parsing: find all CALL ... ;
-    # We use regex to extract the full command ending with ;
-    # This ignores comments because . matches anything but newline (usually) 
-    # but we want to capture multiline commands if needed.
-    # Actually, simplistic splitting by ; is fine if we strip comments *beforehand*.
-    
-    # 1. Remove single line comments
-    lines = content.split('\n')
-    cleaned_lines = [line for line in lines if not line.strip().startswith("//")]
-    cleaned_content = "\n".join(cleaned_lines)
-    
-    # 2. Split by semicolon
-    commands = [cmd.strip() for cmd in cleaned_content.split(";") if cmd.strip()]
-    
-    logger.info(f"Found {len(commands)} commands to execute.")
+    INDEX_SPECS = [
+        ("product_embedding_index", "ParentProduct", "embedding", 384, "cosine"),
+        ("brand_embedding_index", "Brand", "embedding", 384, "cosine"),
+        ("category_embedding_index", "Category", "embedding", 384, "cosine"),
+        ("attribute_embedding_index", "Attribute", "embedding", 384, "cosine"),
+        ("review_embedding_index", "Review", "embedding", 384, "cosine"),
+    ]
 
     with connector.session() as session:
-        for i, cmd in enumerate(commands):
-            logger.info(f"Executing command {i+1}/{len(commands)}...")
+        for idx_name, label, prop, dims, sim in INDEX_SPECS:
             try:
-                # Basic check if index exists to simulate IF NOT EXISTS behavior for procedures
-                match = re.search(r"createNodeIndex\('([^']+)'", cmd)
-                if match:
-                    idx_name = match.group(1)
-                    check = f"SHOW INDEXES WHERE name = '{idx_name}'"
-                    if session.run(check).peek() is not None:
-                        logger.info(f"Index '{idx_name}' already exists. Skipping.")
-                        continue
-                
-                session.run(cmd)
-                logger.info("Success.")
+                check = session.run("SHOW INDEXES YIELD name WHERE name = $name RETURN count(*) > 0 as exists", name=idx_name).single()
+                if check and check["exists"]:
+                    logger.info(f"Vector index '{idx_name}' already exists and is active.")
+                    continue
+
+                logger.info(f"Creating vector index '{idx_name}' on :{label}({prop})...")
+                try:
+                    # Neo4j 5.14 procedure syntax
+                    session.run(
+                        "CALL db.index.vector.createNodeIndex($name, $label, $prop, $dims, $sim)",
+                        name=idx_name, label=label, prop=prop, dims=dims, sim=sim
+                    )
+                    logger.info(f"Successfully created '{idx_name}' via procedure.")
+                except Exception:
+                    # Neo4j >= 5.15 DDL syntax fallback
+                    session.run(f"""
+                        CREATE VECTOR INDEX {idx_name} IF NOT EXISTS
+                        FOR (n:{label}) ON (n.{prop})
+                        OPTIONS {{indexConfig: {{`vector.dimensions`: {dims}, `vector.similarity_function`: '{sim}'}}}}
+                    """)
+                    logger.info(f"Successfully created '{idx_name}' via DDL.")
             except Exception as e:
-                if "already exists" in str(e):
-                    logger.info("Index already exists (caught exception).")
-                else:
-                    logger.error(f"Error executing command: {e}")
+                logger.error(f"Error checking/creating index '{idx_name}': {e}")
 
     logger.info("Index setup complete.")
 

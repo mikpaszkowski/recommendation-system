@@ -26,11 +26,30 @@ class BackfillService:
         self.embed_svc = EmbeddingService()
         self.connector.connect()
 
+    def backfill_reviews(self):
+        query_fetch = """
+        MATCH (r:Review)
+        WHERE elementId(r) IN $ids
+        RETURN elementId(r) as id, r.review_title as title, r.review_body as body
+        """
+
+        def generator(row):
+            title = row['title'] or ""
+            body = row['body'] or ""
+            text = f"{title}. {body}"
+            # Trim to ~500 chars to save tokens/embedding time for giant reviews
+            if len(text) > 800:
+                return text[:800]
+            return text
+
+        self._process_batch("Review", query_fetch, generator)
+
     def backfill_all(self):
         self.backfill_attributes()
         self.backfill_brands()
         self.backfill_categories()
         self.backfill_products()
+        self.backfill_reviews()
 
     def _process_batch(self, label, fetch_query, text_generator):
         logger.info(f"Processing {label}...")
@@ -111,12 +130,12 @@ class BackfillService:
         query_fetch = """
         MATCH (b:Brand)
         WHERE elementId(b) IN $ids
-        RETURN elementId(b) as id, b.name as name, b.domain_description as domain
+        RETURN elementId(b) as id, b.name as name
         """
 
         def generator(row):
             name = row['name']
-            domain = row['domain'] or "consumer electronics" # Default fallback
+            domain = "consumer electronics" # Default fallback since domain_description doesn't exist
             return f"Brand: {name}. Domain: {domain}"
 
         self._process_batch("Brand", query_fetch, generator)
@@ -144,9 +163,9 @@ class BackfillService:
         query_fetch = """
         MATCH (p:ParentProduct)
         WHERE elementId(p) IN $ids
-        OPTIONAL MATCH (p)-[:BELONGS_TO]->(c:Category)
+        OPTIONAL MATCH (p)-[:BELONGS_TO_CATEGORY]->(c:Category)
         OPTIONAL MATCH (p)-[:HAS_ATTRIBUTE]->(a:Attribute)
-        WITH p, c, collect(a.attribute_name + ': ' + a.normalized_value) as features
+        WITH p, c, collect(a.attribute_name + ': ' + coalesce(a.attribute_value, a.normalized_value, '')) as features
         RETURN elementId(p) as id, p.title as title, p.description as description, c.name as category, features
         """
 

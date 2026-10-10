@@ -41,13 +41,21 @@ class InMemoryUserProfileManager(AbstractProfileManager):
     def update_profile(self, user_id: str, preferences: Dict[str, Any]) -> None:
         """
         Update a user's profile with new preferences.
+        Performs clean key merging, unwrapping nested 'preferences' if passed as a single-key dict.
         
         Args:
             user_id: User identifier
             preferences: Dictionary of preferences to update
         """
         profile = self.get_profile(user_id)
-        for key, value in preferences.items():
+        
+        # Unwrap nested 'preferences' if passed as a single-key dictionary
+        if "preferences" in preferences and len(preferences) == 1 and isinstance(preferences["preferences"], dict):
+            target = preferences["preferences"]
+        else:
+            target = preferences
+
+        for key, value in target.items():
             profile["preferences"][key] = value
         
         logger.debug(f"Updated profile for user {user_id} with preferences: {preferences}")

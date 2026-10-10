@@ -1,8 +1,24 @@
-// 1. Index for Products (Crucial for recommendation)
-CALL db.index.vector.createNodeIndex('product_embedding_index', 'ParentProduct', 'embedding', 384, 'cosine');
+// 1. Index for Products
+CREATE VECTOR INDEX product_embedding_index IF NOT EXISTS
+  FOR (n:ParentProduct) ON (n.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
 
-// 2. Index for Brands (For grounding/disambiguation)
-CALL db.index.vector.createNodeIndex('brand_embedding_index', 'Brand', 'embedding', 384, 'cosine');
+// 2. Index for Brands
+CREATE VECTOR INDEX brand_embedding_index IF NOT EXISTS
+  FOR (n:Brand) ON (n.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
 
 // 3. Index for Categories
-CALL db.index.vector.createNodeIndex('category_embedding_index', 'Category', 'embedding', 384, 'cosine');
+CREATE VECTOR INDEX category_embedding_index IF NOT EXISTS
+  FOR (n:Category) ON (n.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+
+// 4. Index for Attributes
+CREATE VECTOR INDEX attribute_embedding_index IF NOT EXISTS
+  FOR (n:Attribute) ON (n.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
+
+// 5. Index for Reviews
+CREATE VECTOR INDEX review_embedding_index IF NOT EXISTS
+  FOR (n:Review) ON (n.embedding)
+  OPTIONS {indexConfig: {`vector.dimensions`: 384, `vector.similarity_function`: 'cosine'}};
