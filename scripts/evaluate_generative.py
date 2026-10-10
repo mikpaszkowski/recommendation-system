@@ -71,7 +71,7 @@ def run_generative_evaluation(
     judge_model: str = "gpt-4o-mini",
     metrics_list: Optional[List[str]] = None,
     sample_size: Optional[int] = None,
-    mode: str = "offline",
+    mode: str = "live",
     output_dir: Optional[str] = None,
 ) -> int:
     """Executes generative evaluation and persists artifacts."""
@@ -158,7 +158,7 @@ def run_generative_evaluation(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate CRS Generative Quality using LLM-as-a-Judge.")
-    parser.add_argument("--mode", choices=["live", "offline", "mock"], default="offline", help="Execution mode (default: offline)")
+    parser.add_argument("--mode", choices=["live", "offline", "mock"], default="live", help="Execution mode (default: live)")
     parser.add_argument("--offline", action="store_true", help="Shortcut for --mode offline")
     parser.add_argument(
         "--benchmark",

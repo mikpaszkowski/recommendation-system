@@ -298,7 +298,7 @@ def run_retrieval_evaluation(
     benchmark_path: Path,
     k_values: List[int],
     strategies: List[str],
-    mode: str = "offline",
+    mode: str = "live",
     output_dir: Optional[str] = None,
     sample_size: Optional[int] = None,
     orchestrator: Optional[Any] = None,
@@ -379,9 +379,11 @@ def run_retrieval_evaluation(
                 orchestrator = AgentOrchestrator()
                 logger.info("Initialized AgentOrchestrator for live end-to-end evaluation.")
             except Exception as e:
-                logger.error(f"Failed to initialize AgentOrchestrator: {e}. Falling back to offline mode.", exc_info=True)
-                orchestrator = None
-                mode = "offline"
+                logger.error(f"Failed to initialize AgentOrchestrator for live evaluation: {e}", exc_info=True)
+                raise RuntimeError(
+                    "Live evaluation requires a working AgentOrchestrator (Neo4j + OpenAI). "
+                    "Refusing to fall back to offline mock metrics; pass --mode offline explicitly if intended."
+                ) from e
 
         all_predictions: List[Dict[str, Any]] = []
         clarification_count = 0
@@ -725,7 +727,7 @@ def run_retrieval_evaluation(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate CRS Information Retrieval quality across strategies.")
-    parser.add_argument("--mode", choices=["live", "offline", "mock"], default="offline", help="Execution mode (default: offline)")
+    parser.add_argument("--mode", choices=["live", "offline", "mock"], default="live", help="Execution mode (default: live)")
     parser.add_argument("--offline", action="store_true", help="Shortcut for --mode offline")
     parser.add_argument(
         "--benchmark",

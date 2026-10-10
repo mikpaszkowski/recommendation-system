@@ -20,13 +20,13 @@ class SimpleLLMHandler(LLMHandlerInterface):
     with no template formatting functionality.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o-mini", provider: str = "openai"):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4o", provider: str = "openai"):
         """
         Initialize the LLM handler.
         
         Args:
             api_key: OpenAI API key. If None, will try to get from environment (only for openai)
-            model_name: Name of the model to use (default: gpt-4o-mini, or llama3.1 for ollama)
+            model_name: Name of the model to use (default: gpt-4o, or llama3.1 for ollama)
             provider: 'openai' or 'ollama'
         """
         self.provider = provider

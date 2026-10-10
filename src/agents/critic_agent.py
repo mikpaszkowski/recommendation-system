@@ -11,28 +11,28 @@ from src.llm.simple_llm_handler import SimpleLLMHandler
 logger = logging.getLogger(__name__)
 
 CRITIC_SYSTEM_PROMPT = """
-Jesteś Ekspertem ds. Weryfikacji Jakości Produktów. 
-Twoim zadaniem NIE jest sprzedaż, ale brutalnie szczera ocena, czy dany produkt pasuje do specyficznych potrzeb użytkownika.
+You are a Product Quality Verification Expert.
+Your job is NOT to sell, but to give a brutally honest assessment of whether this product fits the user's specific needs.
 
-PROFIL UŻYTKOWNIKA:
+USER PROFILE:
 {user_persona_description}
 
-PRODUKT DO OCENY:
-Nazwa: {product_name}
-Cechy: {features}
-Opinie/Wady/Zalety: {unstructured_data}
+PRODUCT TO EVALUATE:
+Name: {product_name}
+Features: {features}
+Reviews/Pros/Cons: {unstructured_data}
 
-ZADANIE:
-Przeanalizuj opinie o produkcie w kontekście potrzeb użytkownika.
-1. Czy produkt posiada ukryte wady dyskwalifikujące go dla TEGO konkretnego użytkownika?
-2. Przyznaj ocenę dopasowania (0-100).
-3. Napisz 1 zdanie uzasadnienia ("Reasoning").
+TASK:
+Analyze the product information and reviews in the context of the user's needs.
+1. Does the product have hidden flaws that disqualify it for THIS specific user?
+2. Assign a fit score (0-100).
+3. Write a one-sentence justification ("reasoning").
 
-FORMAT OUTPUTU (JSON):
-Zwróć TYLKO i WYŁĄCZNIE poprawny, parsowalny JSON o poniższej strukturze, bez pisania w Markdownie:
+OUTPUT FORMAT (JSON):
+Return ONLY a valid, parseable JSON object with the structure below, without Markdown formatting:
 {{
   "fit_score": 85,
-  "reasoning": "Krótkie uzasadnienie...",
+  "reasoning": "Short justification...",
   "is_recommended": true
 }}
 """
@@ -110,9 +110,9 @@ class CriticAgent:
         
         unstructured_text = "\n".join([f"- {a['name']}: {a['value']} (Source: {a['source']})" for a in attributes])
         if not unstructured_text:
-            unstructured_text = "Brak dodatkowych opinii i wad/zalet w bazie."
+            unstructured_text = "No additional reviews or pros/cons available in the database."
 
-        features = f"Cena: {product.get('price')} | Brand: {product.get('brand')} | Kategoria: {product.get('category')}"
+        features = f"Price: {product.get('price')} | Brand: {product.get('brand')} | Category: {product.get('category')}"
         
         prod_title = product.get("title") or product.get("asin") or "Unknown Product"
         prompt = CRITIC_SYSTEM_PROMPT.format(
@@ -142,7 +142,7 @@ class CriticAgent:
             title_display = str(prod_title)[:70]
             logger.error(f"[CriticAgent] Failed to evaluate product {title_display}: {e}")
             evaluated_product["semantic_score"] = product.get("score", 0) * 100
-            evaluated_product["reasoning"] = "Błąd ewaluacji."
+            evaluated_product["reasoning"] = "Evaluation error."
             evaluated_product["is_recommended"] = True
             logger.info(
                 f"[CriticAgent] ⚠️ FALLBACK APPROVED (Eval Error): '{title_display}'"
