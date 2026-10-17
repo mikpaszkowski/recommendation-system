@@ -25,7 +25,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
@@ -37,6 +37,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.evaluation.metrics import evaluate_retrieval_batch
 from src.evaluation.tracker import create_evaluation_run_dir, save_run_artifacts
 from src.evaluation.visualizer import plot_retrieval_metrics
+from src.tools.score_fusion import FUSION_ARMS, FusionConfig
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("evaluate_retrieval")
@@ -302,6 +303,7 @@ def run_retrieval_evaluation(
     output_dir: Optional[str] = None,
     sample_size: Optional[int] = None,
     orchestrator: Optional[Any] = None,
+    fusion_arms: Optional[List[str]] = None,
 ) -> int:
     """
     Executes retrieval evaluation aligned with the production Chainlit UI pipeline.
@@ -321,6 +323,11 @@ def run_retrieval_evaluation(
       - Intercepts all stdout, stderr, and logging to execution_trace.log
       - Demarcates each query with >>> [START QUERY ...] and <<< [END QUERY ...]
       - Emits human-readable Query Telemetry Summaries with constraints & Cypher
+
+    Fusion arms (live mode only):
+      - Each SEARCH query's eval_trace['search_request'] is replayed through
+        GraphSearchTool.search(..., fusion_config=FUSION_ARMS[arm]) and scored as
+        strategy 'hybrid@<arm>', so all arms share the same LLM-extracted request
     """
     logger.info(f"Loading retrieval benchmark from: {benchmark_path}")
     if not benchmark_path.exists():
@@ -338,6 +345,16 @@ def run_retrieval_evaluation(
         ground_truth = ground_truth[:sample_size]
 
     logger.info(f"Loaded {len(ground_truth)} benchmark queries. Running mode: {mode}")
+
+    fusion_arms = list(fusion_arms or [])
+    unknown_arms = [arm for arm in fusion_arms if arm not in FUSION_ARMS]
+    if unknown_arms:
+        logger.error(f"Unknown fusion arms {unknown_arms}. Valid arms: {sorted(FUSION_ARMS)}")
+        return 1
+    if fusion_arms and mode != "live":
+        logger.error("--fusion-arms replays live searches and requires --mode live.")
+        return 1
+    strategies = list(strategies) + [f"hybrid@{arm}" for arm in fusion_arms if f"hybrid@{arm}" not in strategies]
 
     # Layer 2: Pre-evaluation graph grounding verification gate in live mode
     if mode == "live":
@@ -389,6 +406,25 @@ def run_retrieval_evaluation(
         clarification_count = 0
         max_k = max(k_values) if k_values else 20
 
+        # Label-free metric inputs (R1): review-embedded products and per-query category matches
+        popular_asins: Optional[Set[str]] = None
+        type_match: Optional[Dict[str, Set[str]]] = None
+        catalog_popular_share: Optional[float] = None
+        graph_tool = getattr(orchestrator, "graph_tool", None) if mode == "live" else None
+        if graph_tool is not None:
+            popular_asins = set(graph_tool.fetch_review_embedded_asins() or [])
+            type_match = {}
+            try:
+                with graph_tool.db.session() as session:
+                    catalog_size = session.run("MATCH (p:ParentProduct) RETURN count(p) AS n").single()["n"]
+                catalog_popular_share = float(len(popular_asins) / catalog_size) if catalog_size else None
+            except Exception as e:
+                logger.warning(f"Could not count catalogue products for the popularity base rate: {e}")
+            logger.info(
+                f"Review-embedded products: {len(popular_asins)} "
+                f"(catalogue share: {catalog_popular_share if catalog_popular_share is not None else 'unknown'})"
+            )
+
         for idx, item in enumerate(ground_truth, 1):
             qid = str(item.get("query_id") or item.get("id") or f"query_{idx}")
             target_asins = item.get("ground_truth_asins") or ([item.get("target_asin")] if item.get("target_asin") else ["ITEM_TARGET"])
@@ -416,6 +452,7 @@ def run_retrieval_evaluation(
             trace_logger.log_demarcation(start_banner)
 
             strat_candidates_map: Dict[str, List[str]] = {}
+            strat_latency_map: Dict[str, float] = {}
             raw_candidates: List[Dict[str, Any]] = []
             critic_reranked: List[Dict[str, Any]] = []
             cypher_query = ""
@@ -488,8 +525,33 @@ def run_retrieval_evaluation(
                     raw_asins = [p.get("asin") for p in raw_candidates if isinstance(p, dict) and p.get("asin")]
                     critic_asins = [p.get("asin") for p in critic_reranked if isinstance(p, dict) and p.get("asin")]
 
+                    search_request = eval_trace.get("search_request")
+
+                    # Replay fusion arms first, rotating their order per query so no arm always
+                    # runs first (cold-start latency would otherwise bias one arm's p50)
+                    arm_strats = [s for s in strategies if s.startswith("hybrid@")]
+                    if arm_strats:
+                        shift = (idx - 1) % len(arm_strats)
+                        arm_strats = arm_strats[shift:] + arm_strats[:shift]
+                    for strat in arm_strats:
+                        arm = strat.split("@", 1)[1]
+                        if not search_request:
+                            logger.warning(f"No search_request in eval_trace for {qid}; arm '{arm}' scored as empty.")
+                            strat_candidates_map[strat] = []
+                            continue
+                        t_arm = time.perf_counter()
+                        try:
+                            a_res = orchestrator.graph_tool.search(**search_request, fusion_config=FUSION_ARMS[arm])
+                            strat_candidates_map[strat] = [p.get("asin") for p in a_res.get("items", []) if isinstance(p, dict) and p.get("asin")]
+                        except Exception as e:
+                            logger.warning(f"Failed fusion arm replay '{arm}' for {qid}: {e}")
+                            strat_candidates_map[strat] = []
+                        strat_latency_map[strat] = (time.perf_counter() - t_arm) * 1000.0
+
                     for strat in strategies:
-                        if "critic" in strat.lower():
+                        if strat.startswith("hybrid@"):
+                            continue
+                        elif "critic" in strat.lower():
                             strat_candidates_map[strat] = critic_asins or raw_asins
                         elif "hybrid" in strat.lower():
                             strat_candidates_map[strat] = raw_asins
@@ -569,6 +631,12 @@ def run_retrieval_evaluation(
                     ]
                     critic_reranked = raw_candidates[:3]
 
+            # Category matches for type-precision@K, judged against the benchmark's requested category
+            if type_match is not None:
+                requested_category = (item.get("structured_filters") or {}).get("category") or item.get("category")
+                union_asins = list(dict.fromkeys(a for cands in strat_candidates_map.values() for a in cands))
+                type_match[qid] = set(graph_tool.match_category(union_asins, requested_category) or []) if union_asins else set()
+
             # Populate predictions across requested strategies
             for strat in strategies:
                 cands = strat_candidates_map.get(strat, [])
@@ -576,7 +644,7 @@ def run_retrieval_evaluation(
                     "query_id": qid,
                     "strategy": strat,
                     "candidate_asins": cands,
-                    "latency_ms": latency,
+                    "latency_ms": strat_latency_map.get(strat, latency),
                     "status": status,
                     "action": action,
                 })
@@ -647,9 +715,16 @@ def run_retrieval_evaluation(
             )
 
         # Batch metric evaluation
-        batch_results = evaluate_retrieval_batch(all_predictions, ground_truth, k_values=k_values)
+        batch_results = evaluate_retrieval_batch(
+            all_predictions,
+            ground_truth,
+            k_values=k_values,
+            popular_asins=popular_asins,
+            type_match=type_match,
+        )
         aggregates = batch_results["aggregates"]
         per_query_results = batch_results["per_query_results"]
+        aggregates_by_strategy = batch_results.get("aggregates_by_strategy", {})
 
         aggregates["total_queries"] = len(ground_truth)
         aggregates["clarification_count"] = clarification_count
@@ -657,6 +732,7 @@ def run_retrieval_evaluation(
 
         logger.info(f"Evaluation complete. Evaluated {len(per_query_results)} prediction runs across {len(ground_truth)} queries.")
         logger.info(f"Clarification rate: {aggregates['clarification_rate']:.2%} ({clarification_count}/{len(ground_truth)})")
+        logger.info("Pooled aggregates below average over ALL strategies; see per-strategy aggregates for comparisons.")
         for k in k_values:
             logger.info(
                 f"NDCG@{k}: {aggregates.get(f'mean_ndcg@{k}', 0.0):.4f} "
@@ -664,6 +740,21 @@ def run_retrieval_evaluation(
                 f"HR@{k} (Strict): {aggregates.get(f'mean_strict_hr@{k}', aggregates.get(f'mean_hr@{k}', 0.0)):.4f} | "
                 f"HR@{k} (Soft/Peer): {aggregates.get(f'mean_soft_hr@{k}', 0.0):.4f}"
             )
+
+        def _fmt(value: Optional[float]) -> str:
+            return f"{value:.3f}" if isinstance(value, (int, float)) else "n/a"
+
+        for strat, agg in aggregates_by_strategy.items():
+            logger.info(
+                f"[{strat}] HR@1 {_fmt(agg.get('mean_strict_hr@1'))} | HR@5 {_fmt(agg.get('mean_strict_hr@5'))} | "
+                f"HR@10 {_fmt(agg.get('mean_strict_hr@10'))} | HR@20 {_fmt(agg.get('mean_strict_hr@20'))} | "
+                f"NDCG@5 {_fmt(agg.get('mean_strict_ndcg@5'))} | MRR {_fmt(agg.get('mean_mrr'))} | "
+                f"PopBias@5 {_fmt(agg.get('mean_popularity_bias@5'))} | PopBias@20 {_fmt(agg.get('mean_popularity_bias@20'))} | "
+                f"TypeP@5 {_fmt(agg.get('mean_type_precision@5'))} | TypeP@20 {_fmt(agg.get('mean_type_precision@20'))} | "
+                f"p50 {_fmt(agg.get('p50_latency_ms'))} ms"
+            )
+        aggregates["by_strategy"] = aggregates_by_strategy
+        default_fusion = getattr(graph_tool, "fusion_config", None)
 
         # Multi-strategy comparison plots
         metrics_by_strategy: Dict[str, Dict[str, float]] = {}
@@ -675,7 +766,7 @@ def run_retrieval_evaluation(
                     "vector_only": "Vector Only",
                     "cypher_only": "Cypher Only",
                     "hybrid_post_critic": "Hybrid Post-Critic",
-                }.get(strat, strat.replace("_", " ").title())
+                }.get(strat, f"Hybrid ({strat.split('@', 1)[1]})" if strat.startswith("hybrid@") else strat.replace("_", " ").title())
 
                 strat_metrics: Dict[str, float] = {}
                 for k in [k for k in k_values if k in (5, 10)]:
@@ -707,6 +798,10 @@ def run_retrieval_evaluation(
                 "query_count": len(ground_truth),
                 "clarification_count": clarification_count,
                 "clarification_rate": aggregates["clarification_rate"],
+                "fusion_default": default_fusion.to_dict() if isinstance(default_fusion, FusionConfig) else None,
+                "fusion_arms": {arm: FUSION_ARMS[arm].to_dict() for arm in fusion_arms},
+                "review_embedded_products": len(popular_asins) if popular_asins is not None else None,
+                "catalog_popular_share": catalog_popular_share,
             },
             "artifacts_generated": [
                 "manifest.json",
@@ -753,6 +848,12 @@ def main() -> None:
     parser.add_argument("--include-critic", action="store_true", help="Include post-critic reranking strategy")
     parser.add_argument("--sample-size", type=int, default=None, help="Subset of N benchmark queries to evaluate")
     parser.add_argument("--output-dir", default=None, help="Directory to save evaluation artifacts")
+    parser.add_argument(
+        "--fusion-arms",
+        nargs="*",
+        default=None,
+        help=f"Fusion arms to replay per SEARCH query as 'hybrid@<arm>' (live only). Choices: {', '.join(sorted(FUSION_ARMS))}",
+    )
 
     args = parser.parse_args()
     mode = "offline" if args.offline else args.mode
@@ -767,6 +868,7 @@ def main() -> None:
         mode=mode,
         output_dir=args.output_dir,
         sample_size=args.sample_size,
+        fusion_arms=[a for raw in (args.fusion_arms or []) for a in raw.replace(",", " ").split()],
     )
     sys.exit(exit_code)
 

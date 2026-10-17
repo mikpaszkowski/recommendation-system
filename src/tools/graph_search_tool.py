@@ -1,17 +1,39 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
 from src.knowledge_graph.graphdb.resolver_service import ResolverService
 from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search_query
+from src.tools.score_fusion import (
+    CHANNELS,
+    LEGACY_SOFT_BONUS_UNIT,
+    ChannelHit,
+    FusedCandidate,
+    FusionConfig,
+    fuse,
+)
 
 logger = logging.getLogger(__name__)
 
 BRAND_CONFIDENCE = 0.85
 CATEGORY_CONFIDENCE = 0.70
 CATEGORY_MARGIN = 0.05
+
+CHANNEL_INDEXES = {
+    "product": "product_embedding_index",
+    "attribute": "attribute_embedding_index",
+    "review": "review_embedding_index",
+}
+
+DETAIL_QUERY = """
+MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins
+OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
+RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
+       collect(DISTINCT c.name) AS category, elementId(node) AS id
+"""
 
 class GraphSearchTool:
     """
@@ -21,7 +43,7 @@ class GraphSearchTool:
     BRAND_CONFIDENCE = BRAND_CONFIDENCE
     CATEGORY_CONFIDENCE = CATEGORY_CONFIDENCE
     CATEGORY_MARGIN = CATEGORY_MARGIN
-    def __init__(self, db_connector: Optional[Neo4jConnector] = None, embedding_service: Optional[EmbeddingService] = None, resolver: Optional[ResolverService] = None):
+    def __init__(self, db_connector: Optional[Neo4jConnector] = None, embedding_service: Optional[EmbeddingService] = None, resolver: Optional[ResolverService] = None, fusion_config: Optional[FusionConfig] = None):
         try:
             self.db = db_connector or Neo4jConnector()
             # Ensure connection is open if not passed in
@@ -30,6 +52,10 @@ class GraphSearchTool:
         except Exception as e:
             logger.error(f"Failed to initialize Neo4jConnector: {e}")
             self.db = None
+
+        # Cross-channel fusion arm (R1): rrf3 by default, overridable per call for ablation replay.
+        # Read after Neo4jConnector, which loads .env, so RETRIEVAL_FUSION_ARM set there is honoured.
+        self.fusion_config = fusion_config or FusionConfig.from_env()
 
         try:
             self.embedder = embedding_service or EmbeddingService()
@@ -69,7 +95,8 @@ class GraphSearchTool:
                # Legacy/Fallback arguments to avoid breaking existing calls if any
                query: Optional[str] = None,
                preferences: Optional[Dict[str, Any]] = None,
-               soft_preferences: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+               soft_preferences: Optional[List[Dict[str, Any]]] = None,
+               fusion_config: Optional[FusionConfig] = None) -> Dict[str, Any]:
         """
         Executes a search using one of three strategies:
         1. Hybrid (Semantic + Filters) - PREFERRED
@@ -83,14 +110,16 @@ class GraphSearchTool:
             query: Alias for semantic_query (legacy support).
             preferences: Alias for structured_filters (legacy support).
             soft_preferences: List of flexible desires for additive scoring.
+            fusion_config: Fusion arm for this call; defaults to the tool's configured arm.
         """
         # Handle aliases/legacy args
         text = semantic_query or query
         raw_filters = structured_filters or preferences or {}
         filters = dict(raw_filters)
         soft_preferences = soft_preferences or []
+        config = fusion_config or self.fusion_config
         
-        logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}")
+        logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}, fusion='{config.name}'")
         
         # Normalize filters before searching
         if self._filters_present(filters):
@@ -106,7 +135,7 @@ class GraphSearchTool:
             # STRATEGY 1: HYBRID (Most common and desired)
             if text and self._filters_present(filters):
                 logger.info(f"[GST] Strategy: HYBRID (text + filters)")
-                result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
                 
                 # MACS Progressive Relaxation
                 relaxed_constraints = []
@@ -125,14 +154,14 @@ class GraphSearchTool:
                         relaxed = True
                         
                     if relaxed:
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
                     
                     # Pass 2: Drop Category constraint if still failing
                     if result.get("count", 0) < 3 and "category" in filters:
                         logger.warning(f"[GST] MACS Triggered: Yield still < 3. Dropping category constraint.")
                         del filters["category"]
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
                 
                 if relaxed_constraints:
                     result["relaxed_constraints"] = relaxed_constraints
@@ -140,7 +169,7 @@ class GraphSearchTool:
             # STRATEGY 2: VECTOR ONLY (No specific filters)
             elif text and not self._filters_present(filters):
                 logger.info(f"[GST] Strategy: VECTOR_ONLY (text only, no meaningful filters)")
-                result = self._execute_vector_search(text, limit)
+                result = self._execute_vector_search(text, limit, config)
 
             # STRATEGY 3: FILTER ONLY (Parametric query)
             elif self._filters_present(filters) and not text:
@@ -151,7 +180,13 @@ class GraphSearchTool:
                 
             # ADDITIVE SCORING (Pillar 1/2)
             if soft_preferences and result.get("items"):
-                logger.info(f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences.")
+                # Bonus per matched preference is scaled to the fused-score range so it can reorder
+                # close candidates but not override fusion; legacy sum and filter-only scores keep 0.2
+                if config.method == "sum" or result.get("strategy") == "filter_only":
+                    bonus_unit = LEGACY_SOFT_BONUS_UNIT
+                else:
+                    bonus_unit = config.soft_bonus_unit()
+                logger.info(f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences (unit={bonus_unit:.4f}).")
                 for item in result["items"]:
                     title_lower = (item.get("title") or "").lower()
                     brand_lower = (item.get("brand") or "").lower()
@@ -174,11 +209,12 @@ class GraphSearchTool:
                             # Require digit boundaries so numbers (e.g. 128, 256, 1) do not match
                             # as substrings of larger numbers (1280, 2560x1440, 2021)
                             if re.search(r"(?<!\d)" + re.escape(val) + r"(?!\d)", title_lower):
-                                bonus += (polarity * 0.2)
+                                bonus += (polarity * bonus_unit)
                         elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
-                            bonus += (polarity * 0.2)
+                            bonus += (polarity * bonus_unit)
                             
                     item["score"] = base_score + bonus
+                    item["soft_bonus"] = bonus
                 
                 # Re-sort after additive scoring
                 result["items"] = sorted(result["items"], key=lambda x: x.get("score", 0), reverse=True)
@@ -189,16 +225,166 @@ class GraphSearchTool:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "items": [], "metadata": {"cypher": "", "params": {}}}
 
-    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
+    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int, config: Optional[FusionConfig] = None) -> Dict[str, Any]:
+        """Vector retrieval over all enabled channels with hard filters applied before ranking."""
+        config = config or self.fusion_config
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Hybrid] Embedded query (dim={len(query_vector)})")
 
         where_clauses, params = self._build_filters(filters, raw_filters)
-        params["vector"] = query_vector
-        params["k"] = limit * 30
-        
         where_str = " AND ".join(where_clauses) if where_clauses else "1=1"
         logger.info(f"[GST:Hybrid] WHERE clauses: {where_str}")
+
+        if config.method == "sum":
+            return self._execute_legacy_sum_search(query_vector, where_str, params, limit, config, strategy="hybrid_multi_index")
+        return self._execute_fused_search(query_vector, where_str, params, limit, config, strategy="hybrid_multi_index")
+
+    def _execute_vector_search(self, text: str, limit: int, config: Optional[FusionConfig] = None) -> Dict[str, Any]:
+        """Vector retrieval over all enabled channels without filters."""
+        config = config or self.fusion_config
+        query_vector = self.embedder.embed_query(text)
+        logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
+
+        if config.method == "sum":
+            return self._execute_legacy_sum_search(query_vector, None, {}, limit, config, strategy="vector_only")
+        return self._execute_fused_search(query_vector, None, {}, limit, config, strategy="vector_only")
+
+    @staticmethod
+    def _build_channel_query(channel: str, where_str: Optional[str]) -> str:
+        """
+        Builds one channel's MaxP query: each ParentProduct once, with its best similarity
+        in the channel and the reason text of that best match, filtered before ranking.
+        """
+        where_line = f"WHERE {where_str}" if where_str else ""
+        if channel == "product":
+            query = build_vector_search_query(
+                CHANNEL_INDEXES["product"],
+                "$k",
+                yield_alias="node",
+                score_alias="score",
+                return_clause=f"""WITH node, score, 'Product Title Match' AS reason
+{where_line}
+RETURN node.parent_asin AS asin, score AS similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth""",
+            )
+            return "\n".join(line for line in query.splitlines() if line.strip())
+        if channel == "attribute":
+            match_clause = "MATCH (node:ParentProduct)-[:HAS_ATTRIBUTE]->(hit)"
+            reason_expr = "'Attribute Match: ' + coalesce(hit.attribute_name, '') + '=' + coalesce(hit.attribute_value, hit.normalized_value, '')"
+        elif channel == "review":
+            match_clause = "MATCH (hit)-[:ABOUT_PRODUCT]->(node:ParentProduct)"
+            reason_expr = "'Review Match: ' + coalesce(hit.review_title, '')"
+        else:
+            raise ValueError(f"Unknown retrieval channel '{channel}'. Valid channels: {list(CHANNELS)}")
+
+        query = build_vector_search_query(
+            CHANNEL_INDEXES[channel],
+            "$k",
+            yield_alias="hit",
+            score_alias="score",
+            return_clause=f"""{match_clause}
+{where_line}
+WITH node, score, {reason_expr} AS reason
+ORDER BY score DESC, reason ASC
+WITH node, max(score) AS similarity, head(collect(reason)) AS reason
+RETURN node.parent_asin AS asin, similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth""",
+        )
+        return "\n".join(line for line in query.splitlines() if line.strip())
+
+    def _execute_fused_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
+                              limit: int, config: FusionConfig, strategy: str) -> Dict[str, Any]:
+        """
+        Runs one MaxP query per enabled channel, fuses the ranked lists (RRF or CC) and
+        fetches display details for the fused top `limit`. Every item carries its
+        per-channel rank, similarity and reason under `fusion`.
+        """
+        tag = "Hybrid" if where_str else "Vector"
+        params: Dict[str, Any] = dict(filter_params)
+        params["vector"] = query_vector
+        params["k"] = limit * config.ann_k_per_limit
+        params["depth"] = config.channel_depth
+
+        channel_queries = {channel: self._build_channel_query(channel, where_str) for channel in config.channels}
+        channel_hits: Dict[str, List[ChannelHit]] = {}
+
+        with self.db.session() as session:
+            for channel, cypher in channel_queries.items():
+                rows = [dict(record) for record in session.run(cypher, params)]
+                channel_hits[channel] = [
+                    ChannelHit(asin=row["asin"], similarity=float(row["similarity"]), reason=row.get("reason") or "")
+                    for row in rows
+                    if row.get("asin") and row.get("similarity") is not None
+                ]
+                logger.info(f"[GST:{tag}] Channel '{channel}': {len(channel_hits[channel])} products")
+
+            fused: List[FusedCandidate] = fuse(channel_hits, config)[:limit]
+            details: Dict[str, Dict[str, Any]] = {}
+            if fused:
+                detail_rows = session.run(DETAIL_QUERY, {"asins": [fc.asin for fc in fused]})
+                details = {row["asin"]: row for row in (dict(record) for record in detail_rows)}
+
+        items: List[Dict[str, Any]] = []
+        for fc in fused:
+            detail = details.get(fc.asin)
+            if detail is None:
+                logger.warning(f"[GST:{tag}] Fused candidate {fc.asin} missing from detail query; dropped.")
+                continue
+            ordered_channels = [c for c in config.channels if c in fc.channels]
+            items.append({
+                "title": detail.get("title"),
+                "price": detail.get("price"),
+                "brand": detail.get("brand"),
+                "category": detail.get("category") or [],
+                "score": fc.score,
+                "fused_score": fc.score,
+                "soft_bonus": 0.0,
+                "id": detail.get("id"),
+                "asin": fc.asin,
+                "match_reasons": [fc.channels[c].reason for c in ordered_channels],
+                "fusion": {
+                    "method": config.name,
+                    "channels": {
+                        c: {"rank": fc.channels[c].rank, "similarity": fc.channels[c].similarity, "reason": fc.channels[c].reason}
+                        for c in ordered_channels
+                    },
+                },
+            })
+
+        logger.info(f"[GST:{tag}] Fused ({config.name}) results: {len(items)} items found")
+        for i, item in enumerate(items):
+            ranks = {c: ev["rank"] for c, ev in item["fusion"]["channels"].items()}
+            logger.info(f"  [{i+1}] score={item['score']:.4f} | ranks={ranks} | title={str(item.get('title', ''))[:50]}")
+
+        combined_cypher = "\n\n".join(f"// channel: {c}\n{q}" for c, q in channel_queries.items())
+        combined_cypher += f"\n\n// details\n{DETAIL_QUERY.strip()}"
+        clean_params = self._clean_params_for_metadata(params)
+        return {
+            "status": "success",
+            "items": items,
+            "count": len(items),
+            "strategy": strategy,
+            "metadata": {
+                "cypher": combined_cypher,
+                "params": clean_params,
+                "channel_queries": channel_queries,
+                "channel_counts": {c: len(h) for c, h in channel_hits.items()},
+                "fusion": config.to_dict(),
+            },
+        }
+
+    def _execute_legacy_sum_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
+                                   limit: int, config: FusionConfig, strategy: str) -> Dict[str, Any]:
+        """
+        Pre-R1 ranking kept as the `sum_legacy` ablation arm: UNION of the three indexes and
+        sum(score) over every matching node (weights 1.0 / 0.8 / 0.9), filtered after aggregation.
+        """
+        tag = "Hybrid" if where_str else "Vector"
+        params: Dict[str, Any] = dict(filter_params)
+        params["vector"] = query_vector
+        params["k"] = limit * config.ann_k_per_limit
 
         # GAP-003 Compliance: Use central helper to generate the vector search fragments
         prod_vector = build_vector_search_query(
@@ -225,6 +411,7 @@ class GraphSearchTool:
             return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
         )
 
+        where_line = f"WHERE {where_str}" if where_str else ""
         cypher = f"""
         CALL {{
             WITH $vector AS vector
@@ -241,7 +428,7 @@ class GraphSearchTool:
             {rev_vector.replace('$vector', 'vector')}
         }}
         WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
-        WHERE {where_str}
+        {where_line}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
@@ -252,77 +439,20 @@ class GraphSearchTool:
         """
         params["limit"] = limit
         
-        logger.info("[GST:Hybrid] Cypher:\n" + cypher)
+        logger.info(f"[GST:{tag}] Legacy sum(score) Cypher:\n" + cypher)
 
         with self.db.session() as session:
             result = session.run(cypher, params)
             items = [dict(record) for record in result]
         
-        logger.info(f"[GST:Hybrid] Results: {len(items)} items found")
+        logger.info(f"[GST:{tag}] Results: {len(items)} items found")
         clean_params = self._clean_params_for_metadata(params)
         return {
             "status": "success",
             "items": items,
             "count": len(items),
-            "strategy": "hybrid_multi_index",
-            "metadata": {"cypher": cypher, "params": clean_params},
-        }
-
-    def _execute_vector_search(self, text: str, limit: int) -> Dict[str, Any]:
-        query_vector = self.embedder.embed_query(text)
-        logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
-        
-        prod_vector = build_vector_search_query(
-            "product_embedding_index", "$k", yield_alias="node", score_alias="score", 
-            return_clause="RETURN node AS p, score, 'Product Title Match' AS match_reason"
-        )
-        attr_vector = build_vector_search_query(
-            "attribute_embedding_index", "$k", yield_alias="node", score_alias="score", 
-            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
-        )
-        rev_vector = build_vector_search_query(
-            "review_embedding_index", "$k", yield_alias="node", score_alias="score", 
-            return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
-        )
-
-        cypher = f"""
-        CALL {{
-            WITH $vector AS vector
-            {prod_vector.replace('$vector', 'vector')}
-            UNION
-            WITH $vector AS vector
-            {attr_vector.replace('$vector', 'vector')}
-            UNION
-            WITH $vector AS vector
-            {rev_vector.replace('$vector', 'vector')}
-        }}
-        WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
-        OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
-        OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
-        RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
-               match_reasons
-        ORDER BY score DESC
-        LIMIT $limit
-        """
-        
-        params = {"vector": query_vector, "k": limit * 30, "limit": limit}
-
-        with self.db.session() as session:
-            result = session.run(cypher, params)
-            items = [dict(record) for record in result]
-        
-        logger.info(f"[GST:Vector] Results: {len(items)} items found")
-        for i, item in enumerate(items):
-            logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | reasons={item.get('match_reasons', [])} | title={str(item.get('title', ''))[:50]}")
-            
-        clean_params = self._clean_params_for_metadata(params)
-        return {
-            "status": "success",
-            "items": items,
-            "count": len(items),
-            "strategy": "vector_only",
-            "metadata": {"cypher": cypher, "params": clean_params},
+            "strategy": strategy,
+            "metadata": {"cypher": cypher, "params": clean_params, "fusion": config.to_dict()},
         }
 
     def _execute_cypher_search(self, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
@@ -426,6 +556,49 @@ class GraphSearchTool:
         except Exception as e:
             logger.error(f"[GST:Attributes] Error fetching attributes/reviews: {e}", exc_info=True)
             return {}
+
+    def match_category(self, asins: List[str], category: Any) -> Set[str]:
+        """
+        Returns the subset of `asins` that satisfies the `_build_filters` category predicate
+        (taxonomy traversal or title match). Used by the type-precision@K evaluation metric.
+        """
+        if isinstance(category, (list, tuple)):
+            category = category[0] if category else None
+        if not self.db or not asins or not category:
+            return set()
+
+        where_clauses, params = self._build_filters({"category": str(category)}, {"category": str(category)})
+        params["asins"] = list(asins)
+        cypher = (
+            "MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins AND "
+            + " AND ".join(where_clauses)
+            + " RETURN node.parent_asin AS asin"
+        )
+        try:
+            with self.db.session() as session:
+                return {dict(record)["asin"] for record in session.run(cypher, params)}
+        except Exception as e:
+            logger.error(f"[GST:Category] Category match failed for '{category}' over {len(asins)} products: {e}", exc_info=True)
+            return set()
+
+    def fetch_review_embedded_asins(self) -> Set[str]:
+        """
+        Returns the products that have at least one embedded Review, i.e. the products the
+        review channel can retrieve. Used by the popularity-bias@K evaluation metric.
+        """
+        if not self.db:
+            return set()
+        cypher = """
+        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
+        WHERE r.embedding IS NOT NULL
+        RETURN DISTINCT p.parent_asin AS asin
+        """
+        try:
+            with self.db.session() as session:
+                return {dict(record)["asin"] for record in session.run(cypher) if dict(record).get("asin")}
+        except Exception as e:
+            logger.error(f"[GST] Failed to fetch review-embedded products: {e}", exc_info=True)
+            return set()
 
     def _build_filters(self, filters: Dict[str, Any], raw_filters: Dict[str, Any] = None):
         """Build WHERE clauses for filters. Uses EXISTS subqueries for relationship-based filters."""

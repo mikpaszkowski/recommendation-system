@@ -424,6 +424,8 @@ class AgentOrchestrator:
                     search_result = self.graph_tool.search(**search_kwargs)
                 else:
                     raise
+            # Exact search request, so evaluation can replay it through other fusion arms (R1)
+            search_request = dict(search_kwargs)
             items_found = search_result.get('items', [])
             logger.info(f"✅ Search successful! Found {len(items_found)} items.")
             for i, item in enumerate(items_found):
@@ -554,7 +556,8 @@ class AgentOrchestrator:
                     "critic_reranked": reranked_top,
                     "critic_verdict": critic_verdict,
                     "graph_evidence": graph_reasoning_paths,
-                    "search_metadata": search_result.get("metadata", {})
+                    "search_metadata": search_result.get("metadata", {}),
+                    "search_request": search_request
                 }
             }
 

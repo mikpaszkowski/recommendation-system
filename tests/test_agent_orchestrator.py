@@ -696,8 +696,12 @@ class TestAgentOrchestratorMultiTurnExecution:
         so 128 or 256 matches 128GB/256GB and isolated numbers, but NOT 1280 or 2560x1440.
         """
         from src.tools.graph_search_tool import GraphSearchTool
+        from src.tools.score_fusion import FUSION_ARMS
 
-        gst = GraphSearchTool(db_connector=MagicMock(), embedding_service=MagicMock(), resolver=MagicMock())
+        # sum_legacy keeps the 0.2 bonus unit this test was written against; the fused-scale unit is
+        # covered in tests/test_graph_search_tool.py
+        gst = GraphSearchTool(db_connector=MagicMock(), embedding_service=MagicMock(), resolver=MagicMock(),
+                              fusion_config=FUSION_ARMS["sum_legacy"])
         gst._execute_vector_search = MagicMock(return_value={
             "status": "success",
             "items": [
@@ -730,3 +734,52 @@ class TestAgentOrchestratorMultiTurnExecution:
         assert items_by_title["MacBook Pro 1TB SSD"] > 1.15
 
 
+
+    def test_eval_trace_records_search_request(self):
+        """
+        AC-012 (R1): eval_trace['search_request'] holds the exact kwargs passed to
+        GraphSearchTool.search, so the evaluation can replay them through other fusion arms.
+        """
+        async def _run():
+            mock_graph = MockGraphSearchTool()
+            mock_parser = MockPreferenceParser()
+            mock_parser.set_extraction("I want an Apple laptop under 1200", {
+                "current_session_context": {
+                    "session_intent": "initial_search",
+                    "extracted_parameters": {
+                        "hard_constraints": [
+                            {"attribute": "category", "operator": "include", "value": "laptop"},
+                            {"attribute": "brand", "operator": "include", "value": "Apple"}
+                        ],
+                        "soft_preferences": [
+                            {"category": "weight", "value": "lightweight", "polarity": 0.9, "confidence": 0.95, "evidence": "lightweight"}
+                        ]
+                    },
+                    "dialogue_state": {
+                        "ready_for_recommendation": True,
+                        "missing_critical_attributes": [],
+                        "suggested_system_action": "present_results"
+                    }
+                }
+            })
+
+            orchestrator = AgentOrchestrator(
+                graph_tool=mock_graph,
+                llm_handler=MockLLMHandler(),
+                critic_agent=MockCriticAgent(),
+                dialogue_manager=DialogueManager(),
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
+            )
+
+            result = await orchestrator.run(user_id="user_search_request", user_message="I want an Apple laptop under 1200")
+
+            assert result["action"] == "SEARCH"
+            request = result["eval_trace"]["search_request"]
+            call = mock_graph.search_calls[0]
+            assert request["semantic_query"] == call["semantic_query"]
+            assert dict(request["structured_filters"]) == call["structured_filters"]
+            assert list(request["soft_preferences"]) == call["soft_preferences"]
+            assert request["limit"] == call["limit"] == orchestrator.candidate_limit
+
+        asyncio.run(_run())

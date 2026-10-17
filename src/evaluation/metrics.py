@@ -8,6 +8,8 @@ Provides exact mathematical formulations for:
 - Precision at K (P@K)
 - Recall at K (R@K)
 - Average Precision at K (AP@K / MAP@K)
+- Popularity bias at K (share of top-K from the review-embedded product set)
+- Type precision at K (share of top-K satisfying the requested category)
 - Batch retrieval evaluation across cutoff horizons K with rank-preserving deduplication
 """
 from __future__ import annotations
@@ -228,10 +230,63 @@ def compute_average_precision_at_k(
     return float(min(1.0, max(0.0, running_sum / denominator)))
 
 
+def _share_in_set_at_k(retrieved_ids: Sequence[str], reference_ids: Set[str], k: int) -> Optional[float]:
+    """Share of the (deduplicated) top-K retrieved IDs that belong to `reference_ids`; None if nothing was retrieved."""
+    if k <= 0:
+        return None
+    top_k = list(dict.fromkeys(retrieved_ids))[:k]
+    if not top_k:
+        return None
+    return float(sum(1 for asin in top_k if asin in reference_ids) / len(top_k))
+
+
+def compute_popularity_bias_at_k(
+    retrieved_ids: Sequence[str],
+    popular_ids: Set[str],
+    k: int,
+) -> Optional[float]:
+    """
+    Computes popularity bias at K: the share of the top-K candidates that belong to the
+    popular set (products with embedded reviews, which the review channel can reach).
+
+    Formulation:
+        PopBias@K = |top-K ∩ POPULAR| / |top-K|
+
+    Compare against the catalogue base rate |POPULAR| / |CATALOGUE|. Returns None when
+    nothing was retrieved, so empty runs do not count as unbiased.
+    """
+    return _share_in_set_at_k(retrieved_ids, popular_ids, k)
+
+
+def compute_type_precision_at_k(
+    retrieved_ids: Sequence[str],
+    in_type_ids: Set[str],
+    k: int,
+) -> Optional[float]:
+    """
+    Computes type precision at K: the share of the top-K candidates that satisfy the
+    requested category / product type.
+
+    Formulation:
+        TypeP@K = |top-K ∩ IN_TYPE| / |top-K|
+
+    Returns None when nothing was retrieved.
+    """
+    return _share_in_set_at_k(retrieved_ids, in_type_ids, k)
+
+
+def _mean_skip_none(values: Sequence[Optional[float]]) -> Optional[float]:
+    """Mean over the non-None values; None if there are none."""
+    present = [v for v in values if v is not None]
+    return float(np.mean(present)) if present else None
+
+
 def evaluate_retrieval_batch(
     predictions: List[Dict[str, Any]],
     ground_truth: List[Dict[str, Any]],
     k_values: Sequence[int] = (1, 3, 5, 10, 20),
+    popular_asins: Optional[Set[str]] = None,
+    type_match: Optional[Dict[str, Set[str]]] = None,
 ) -> Dict[str, Any]:
     """
     Evaluates a batch of retrieval predictions against ground truth queries.
@@ -240,9 +295,11 @@ def evaluate_retrieval_batch(
         predictions: List of dicts with keys 'query_id' (or 'id'), 'candidate_asins', 'strategy', 'latency_ms'
         ground_truth: List of dicts with keys 'query_id' (or 'id'), 'ground_truth_asins', 'graded_relevance', 'utterance'
         k_values: Sequence of cutoff horizons K
+        popular_asins: Optional review-embedded product set; enables popularity_bias@K
+        type_match: Optional mapping query_id -> candidate ASINs satisfying the requested category; enables type_precision@K
 
     Returns:
-        Dict with 'aggregates' and 'per_query_results'.
+        Dict with 'aggregates' (pooled over all strategies), 'aggregates_by_strategy' and 'per_query_results'.
     """
     gt_by_id: Dict[str, Dict[str, Any]] = {}
     for item in ground_truth:
@@ -302,6 +359,11 @@ def evaluate_retrieval_batch(
             res_entry[f"recall@{k}"] = compute_recall_at_k(retrieved_asins, target_asins, k)
             res_entry[f"ap@{k}"] = compute_average_precision_at_k(retrieved_asins, target_asins, k)
 
+            if popular_asins is not None:
+                res_entry[f"popularity_bias@{k}"] = compute_popularity_bias_at_k(retrieved_asins, popular_asins, k)
+            if type_match is not None:
+                res_entry[f"type_precision@{k}"] = compute_type_precision_at_k(retrieved_asins, type_match.get(qid, set()), k)
+
         max_k = max(int(k) for k in k_values) if k_values else 10
         res_entry["mrr"] = compute_mrr_at_k(retrieved_asins, strict_targets, max_k)
         per_query_results.append(res_entry)
@@ -319,7 +381,30 @@ def evaluate_retrieval_batch(
             aggregates[f"mean_ap@{k}"] = float(np.mean([r[f"ap@{k}"] for r in per_query_results]))
         aggregates["mean_mrr"] = float(np.mean([r["mrr"] for r in per_query_results]))
 
-    return {"aggregates": aggregates, "per_query_results": per_query_results}
+    aggregates_by_strategy: Dict[str, Dict[str, Any]] = {}
+    for strategy in dict.fromkeys(r["strategy"] for r in per_query_results):
+        rows = [r for r in per_query_results if r["strategy"] == strategy]
+        strat_agg: Dict[str, Any] = {"query_count": len(rows)}
+        for k in k_values:
+            strat_agg[f"mean_strict_hr@{k}"] = float(np.mean([r[f"strict_hit@{k}"] for r in rows]))
+            strat_agg[f"mean_soft_hr@{k}"] = float(np.mean([r[f"soft_hit@{k}"] for r in rows]))
+            strat_agg[f"mean_strict_ndcg@{k}"] = float(np.mean([r[f"strict_ndcg@{k}"] for r in rows]))
+            strat_agg[f"mean_graded_ndcg@{k}"] = float(np.mean([r[f"graded_ndcg@{k}"] for r in rows]))
+            strat_agg[f"mean_recall@{k}"] = float(np.mean([r[f"recall@{k}"] for r in rows]))
+            if popular_asins is not None:
+                strat_agg[f"mean_popularity_bias@{k}"] = _mean_skip_none([r.get(f"popularity_bias@{k}") for r in rows])
+            if type_match is not None:
+                strat_agg[f"mean_type_precision@{k}"] = _mean_skip_none([r.get(f"type_precision@{k}") for r in rows])
+        strat_agg["mean_mrr"] = float(np.mean([r["mrr"] for r in rows]))
+        latencies = [r["latency_ms"] for r in rows if isinstance(r.get("latency_ms"), (int, float))]
+        strat_agg["p50_latency_ms"] = float(np.median(latencies)) if latencies else None
+        aggregates_by_strategy[strategy] = strat_agg
+
+    return {
+        "aggregates": aggregates,
+        "aggregates_by_strategy": aggregates_by_strategy,
+        "per_query_results": per_query_results,
+    }
 
 
 def compute_critic_gain(raw_ndcg: float, post_critic_ndcg: float) -> float:
