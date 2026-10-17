@@ -3,6 +3,7 @@
 > **Last restructured**: 2026-07-08 — Reorganised from linear Phase 0–3 into **Foundation → Meta-Phase A → Meta-Phase B**.
 > **Foundation revised**: 2026-07-11 — LLM-REDIAL dependency removed from Foundation. Amazon-curated subset strategy adopted for the initial graph build. REDIAL integration deferred to Meta-Phase B.
 > **Status audit**: 2026-10-10 — A4–A6 statuses corrected against the live graph. Open items tagged `AI-xx` reference `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md`.
+> **Retrieval redesign**: 2026-10-17 — Retrieval score redesign roadmap (releases R1–R5, work packages `RS-xx`) added under A1.1. Source: `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 
 ---
 
@@ -67,6 +68,7 @@ The system has two independent execution axes that share a common data foundatio
 * [ ] **GAP-001 — asyncio Refactor** (`src/agents/orchestrator.py`): Convert `run()`, `_initialize_state()`, `_decide_next_step()`, `_generate_search_params()`, and `_execute_step()` to `async def`. Replace `asyncio.get_event_loop().run_until_complete()` at line 220 with `await`. Update `src/ui/app.py` to call `await orchestrator.run()`. Add `pytest-asyncio` test confirming no `RuntimeError` is raised inside a running event loop.
 
 * [x] **GAP-003 — Neo4j Deprecated API Migration** (`src/tools/graph_search_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`): Replace all 8 occurrences of deprecated `CALL db.index.vector.queryNodes(...)` with Cypher 25 `VECTOR SEARCH` syntax. Replace `CALL db.index.vector.createNodeIndex(...)` in `create_vector_indexes.cypher` and `setup_indexes.py` with `CREATE VECTOR INDEX ... IF NOT EXISTS` DDL.
+  * _Note (2026-10-17)_: The live Neo4j is 5.14, which has no Cypher 25 `VECTOR SEARCH`. `src/knowledge_graph/graphdb/vector_search_helper.py` therefore still emits `db.index.vector.queryNodes`. Pending decision D-4 in the retrieval redesign roadmap.
 
 * [x] **GAP-011 — `requirements.txt` Hygiene**: Pin `openai>=1.0.0`. Add `langgraph>=1.0.0`. Add `pydantic>=2.0.0`. Move unused legacy packages (`lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`) to `requirements-legacy.txt`. Add `.env.example` documenting `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
 
@@ -256,9 +258,46 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] **MACS Progressive Relaxation**: If candidate yield $< 3$, trigger a deterministic relaxation cascade (widen budget by 15%, drop soft specs) and record `relaxed_constraints` for downstream transparency.
 * [x] **Multi-Index Semantic Search**: Parallel vector queries across product, attribute, and review indices (`CALL { ... } UNION`), returning candidates to be soft-scored.
 * [ ] Write integration tests: `tests/test_graph_search_tool.py` verifying MACS triggers on 0-result edge cases.
-* [ ] **AI-01** Implement AFP-002 bounded multi-index score fusion (`action_items/Proposed_Fix_Vector_Aggregation.md`): replace `sum(score)` in `GraphSearchTool._execute_hybrid_search` / `_execute_vector_search`, then re-run the live retrieval eval.
+* [ ] **AI-01** Implement AFP-002 bounded multi-index score fusion (`action_items/Proposed_Fix_Vector_Aggregation.md`): replace `sum(score)` in `GraphSearchTool._execute_hybrid_search` / `_execute_vector_search`, then re-run the live retrieval eval. **Revised 2026-10-17**: implemented as RRF, release R1 of A1.1 below.
 * [ ] **AI-02** Verify the catalog-safe attribute demotion live: `live_eval_phone_01` returns ≥ 5 candidates including `B08GNRGB67`, and the generated Cypher has no `storage` `EXISTS` clause.
 * [ ] **AI-11** Parameterise the category title filter Cypher in `GraphSearchTool._build_filters` (currently string-interpolated).
+
+### A1.1 — Retrieval Score Redesign (Roadmap R1–R5)
+**Status (2026-10-17): R1 in progress** on `feature/afp-002-vector-aggregation`. Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-22) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
+Goal: the retrieval score measures how well a product matches the request, not how many texts about it resemble the query. Ranking order: feature fit → channel agreement (RRF) → review experience. Unknown evidence is never scored as a mismatch.
+
+**R1 — RRF fusion (AFP-002, AI-01)**. Gate: live eval vs `eval_2026-10-09_1336`.
+* [ ] **RS-01** One ranked list per channel (product, attribute, review; each product once, by max similarity), fused by RRF (`k = 60`, configurable weights) in `_execute_hybrid_search` and `_execute_vector_search`.
+* [ ] **RS-05** Rescale the soft-preference bonus (`+0.2 × polarity`) to the RRF scale, or fuse it as its own list.
+* [ ] **RS-02** Ablation switch: RRF over 3 channels vs 2 (review channel off).
+* [ ] Per-channel ranks, similarities and RRF score in the result and `eval_trace` (seed of the RS-18 evidence ledger).
+* [ ] **RS-20 (part)** `popularity-bias@K` and `type-precision@K` in `scripts/evaluate_retrieval.py`.
+* [ ] Unit tests (fan-out gives no extra credit, deterministic RRF order, soft-bonus scale) and a live eval report for both arms.
+* [ ] Vision Report decision D-1 (AFP-002 implemented via RRF), via @pm-research.
+
+**R2 — Evaluation foundation** (before any weight tuning).
+* [ ] **RS-21** Stratified benchmark (no reviews, brand+model titles, accessory traps, many-feature trade-offs), tuning/test split, title-token leakage check.
+* [ ] **RS-20 (rest)** `constraint-satisfaction@K`.
+
+**R3 — Search order & query side**.
+* [ ] **RS-07** Adaptive order by filter selectivity: filter-first with exact scoring vs ANN-first with oversampling.
+* [ ] **RS-03** Attribute channel as a precise finder: IDF/rarity weighting, AND-matching inside the resolved category.
+* [ ] **RS-08** Query versions fused by RRF: raw message, HyDE on the merged AI-07 call (= AI-10 ablation), IS/HAS pieces, user profile.
+* [ ] **RS-10** Graded category distance (same leaf > sibling > cousin).
+
+**R4 — Feature fit & LLM judge**.
+* [ ] **RS-12** Full-text feature check (synonym sets, negation) → confirmed / contradicted / unknown.
+* [ ] **RS-04** Tiered ranking: feature fit → RRF agreement → review experience.
+* [ ] **RS-09** Product-type (head-noun) signal and "accessory for X" detection.
+* [ ] **RS-17** Batched LLM rerank (AI-08): may remove and reorder, cites a reason per change, deterministic fallback on error.
+* [ ] **RS-06** Absolute gate + relative rank; gate calibrated by masking targets; correct-abstention rate.
+
+**R5 — Offline graph enrichment**.
+* [ ] **RS-11** Typed canonical feature vocabulary; local-LLM labelling with quoted source spans; regex tier; label precision/recall audit (~200 products).
+* [ ] **RS-13** Review aspect pipeline: product vs noise sentences, opinion- vs complaint-driven aspects, minimum mentions + Bayesian share, category baselines, distilled classifier over 1.6M reviews. Requires decision D-2 (training).
+* [ ] **RS-18** Per-product evidence ledger driving contrastive, uncertainty-honest explanations.
+
+**Later (Meta-Phase B)**: RS-16 preference edges (B2), RS-19 two lanes and "we don't carry it" response (B3), RS-14 complement edges (with AI-03), RS-15 doc2query.
 
 ### A2 — Contextual Selection-then-Rerank via CriticAgent
 * [x] **CriticAgent Reranking**: Refactor `CriticAgent.evaluate_candidates` to accept top $N$ pre-ranked candidates from `GraphSearchTool`.
@@ -267,6 +306,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] Write unit tests: `tests/test_critic_agent.py` asserting accurate reranking and penalization of non-compliant items.
   * _Note (2026-10-10)_: The disclosure logic lives in `CriticAgent.evaluate_candidate_tradeoffs`, which the orchestrator does not call. It uses the legacy per-item `evaluate_candidates`, and `relaxed_constraints` never reaches the Critic.
 * [ ] **AI-08 (decision)** Choose the Critic design: per-item legacy vs batched A2 (≈ 20 → 1 LLM calls per turn, MACS disclosure). Decide fail-open vs fail-closed on LLM error.
+  * _Direction (2026-10-17)_: batched listwise rerank of the final 20–30 candidates. It may remove clear non-matches and reorder, must cite a reason per change, and falls back to the deterministic order on error. Scheduled as RS-17 in A1.1 R4.
 * [ ] **AI-06** Fetch reviews per product in `GraphSearchTool.fetch_product_attributes` (the current `LIMIT 20` is global across all candidates). Order by properties that exist on `Review`.
 
 ### A3 — PromptConstructor — Graph Path Injection Slots
@@ -295,6 +335,8 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] **AI-04** Make Tier 2 judge real system output: run `AgentOrchestrator` over the live benchmark, capture `answer` and `eval_trace`, then judge. Retire or regenerate `evaluations/benchmarks/generative_benchmark.json` (only 3 of 15 ASINs exist in the graph).
 * [ ] **AI-09 (decision)** Tier 2 judge model (currently `gpt-4o-mini` grading a `gpt-4o` system).
 * [ ] **AI-10 (decision)** After AI-01, evaluate the `ideas.txt` direction as an ablation: LLM-generated target-product description → pure vector retrieval.
+  * _Direction (2026-10-17)_: run as the HyDE query version in RS-08 (A1.1 R3), generated on the merged AI-07 call.
+* [ ] **RS-20 / RS-21** Label-free metrics (`popularity-bias@K`, `type-precision@K`, `constraint-satisfaction@K`) and a stratified benchmark with a tuning/test split. Scheduled in A1.1 R1–R2.
 * [ ] **AI-12** Stop `tests/test_challenger_distinguishing_features.py` from writing mock runs into `evaluations/`.
 
 ---
@@ -412,7 +454,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 |--------|-------|-------|--------|
 | GAP-001 | asyncio Event Loop Fix | Foundation F0 | ❌ Not done |
 | GAP-002 | MemoCRS Persistence | Meta-Phase B2 | ❌ Not done |
-| GAP-003 | Neo4j Deprecated API | Foundation F0 | ✅ Done |
+| GAP-003 | Neo4j Deprecated API | Foundation F0 | ✅ Done (see D-4 note: Neo4j 5.14 lacks `VECTOR SEARCH`) |
 | GAP-014 | Classic Baselines | Meta-Phase C | ❌ Not done |
 | GAP-005 | Lexical GraphRAG Layer | Foundation F3 | ❌ Not done |
 | GAP-006 | KECR Reasoning Paths | Meta-Phase A4 | ⚠️ Partial (AI-03, AI-05) |
@@ -424,6 +466,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 | GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
+| RS-01 … RS-22 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 in progress |
 
 ---
 

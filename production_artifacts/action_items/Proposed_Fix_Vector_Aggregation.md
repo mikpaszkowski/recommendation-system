@@ -7,7 +7,22 @@
 - `src/tools/graph_search_tool.py` (`_execute_hybrid_search:210-235`)  
 - `src/tools/graph_search_tool.py` (`_normalize_scores` and scoring configuration)  
 **Author**: Principal Solutions Architect (`worker_architectural_fixes_m3`)  
-**Status**: APPROVED BY CONSENSUS (Milestone 2 Debate Adjudication)  
+**Status**: APPROVED BY CONSENSUS (Milestone 2 Debate Adjudication). **Revised 2026-10-17**: the fusion method changes to RRF; see the revision note below.
+
+---
+
+## Revision 2026-10-17: RRF Supersedes Adaptive Late Fusion
+
+The diagnosis in §1–§2 stands: `sum(score)` over product-side fan-out causes hub bias. The **fusion method in §3.1–§3.2 is superseded**. Implementation follows the RRF option of §3.3, redesigned in `Retrieval_Score_Redesign_Roadmap.md` (release R1, work packages RS-01, RS-02, RS-05).
+
+Why the adaptive late fusion was dropped:
+1. **It is non-monotonic.** Normalising by the channels present means a product's score *drops* when it gains extra but weaker evidence. A title-only match at 0.80 scores 0.80; adding an attribute match at 0.50 gives (0.60·0.80 + 0.25·0.50) / 0.85 ≈ 0.71.
+2. **Cosine scales are not comparable across indexes.** RRF uses ranks only, so no calibration between indexes is needed.
+3. **Bounded scores expose the soft-preference bonus.** The `+0.2 × polarity` bonus per substring match dominates any score in [0, 1], so it must be rescaled together with the fusion change (RS-05).
+4. **Agreement is the desired signal.** The user decided that a product found by several channels outranks one found by a single channel when feature fit is equal. RRF does this by construction.
+5. **The review channel's role changes.** Reviews will verify fit rather than find candidates. Only 2.2% of products have embedded reviews, while 47% have review text. R1 runs the review channel as an ablation (3 vs 2 channels).
+
+Changes to the acceptance criteria: AC-002.1–AC-002.3 are replaced by the R1 acceptance in the roadmap §5. AC-002.4 (C920 in the top 5 for `ret_021`) and AC-002.5 (no hub runaway on `ret_001`) remain as regression checks.
 
 ---
 
