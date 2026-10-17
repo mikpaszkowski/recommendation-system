@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CRS Detailed Architecture</title>
+<!--
+  Source of diagrams/crs_detailed_architecture_2026-10-17.jpg.
+  Render (1600x900 at 2x):
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
+    --window-size=1600,900 --force-device-scale-factor=2 \
+    --screenshot=diagrams/crs_detailed_architecture.png file://$PWD/diagrams/crs_detailed_architecture.html
+-->
+<style>
+  :root {
+    --bg: #0c141d; --panel: #111c27; --line: #2b3b4b; --ink: #e6edf3; --soft: #93a4b4;
+    --teal: #3fd0c9; --violet: #a88bf0; --amber: #f2b84b; --grey: #5d6b78; --green: #5fd38d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1600px; height: 900px; background: var(--bg); color: var(--ink); overflow: hidden;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; }
+  .frame { padding: 28px 40px; display: grid; gap: 16px; height: 900px; grid-template-rows: auto auto 1fr; }
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+  h1 { font-size: 30px; white-space: nowrap; font-weight: 800; letter-spacing: -0.01em; }
+  .sub { color: var(--soft); font-size: 17px; margin-top: 4px; }
+  .legend { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--soft); }
+  .legend span { white-space: nowrap; display: flex; align-items: center; gap: 7px; }
+  .sw { width: 26px; height: 14px; border-radius: 3px; border: 2px solid var(--teal); }
+  .sw.r1 { border: 2px dashed var(--amber); }
+  .sw.off { border: 2px dotted var(--grey); }
+
+  .flow { display: grid; grid-template-columns: 70px 300px 30px 470px 30px 270px 30px 290px; align-items: stretch; }
+  .user { display: grid; place-items: center; align-content: center; gap: 6px; color: var(--teal); font-size: 13px; text-align: center; }
+  .user .head { width: 22px; height: 22px; border: 2px solid var(--teal); border-radius: 50%; }
+  .user .body { width: 36px; height: 16px; border: 2px solid var(--teal); border-bottom: none; border-radius: 18px 18px 0 0; margin-top: -4px; }
+  .arrow { display: grid; place-items: center; color: var(--teal); font-size: 24px; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .col h2 { font-size: 16px; font-weight: 700; text-align: center; }
+  .col .k { font-size: 11px; color: var(--soft); text-align: center; text-transform: uppercase; letter-spacing: .08em; }
+  .box { border: 2px solid var(--teal); border-radius: 7px; padding: 7px 9px; font-size: 14.5px; text-align: center; line-height: 1.25; }
+  .box small { display: block; color: var(--soft); font-size: 11.5px; margin-top: 2px; }
+  .box.v { border-color: var(--violet); }
+  .box.r1 { border: 2px dashed var(--amber); }
+  .box.off { border: 2px dotted var(--grey); color: var(--soft); }
+  .down { text-align: center; color: var(--violet); font-size: 14px; line-height: 1; }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; }
+  .inner { border: 1px solid var(--line); border-radius: 8px; padding: 7px; display: flex; flex-direction: column; gap: 5px; }
+  .inner .lbl { font-size: 12px; color: var(--soft); text-align: center; }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--bg); background: var(--amber); border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .card { border: 2px solid var(--teal); border-radius: 10px; padding: 12px 14px; font-size: 14.2px; line-height: 1.42; display: flex; flex-direction: column; gap: 6px; }
+  .card:nth-child(2) { border-color: var(--violet); }
+  .card:nth-child(3) { border-color: var(--violet); }
+  .card h3 { font-size: 16px; font-weight: 700; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .card b { color: var(--ink); }
+  .card p, .card li { color: #c9d4de; }
+  .card ul { padding-left: 16px; display: grid; gap: 2px; }
+  .r1t { color: var(--amber); font-weight: 700; }
+  .offt { color: var(--soft); }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="top">
+    <div>
+      <h1>AI Conversational Recommendation System — Technical Blueprint</h1>
+      <p class="sub">CRS 2.0 with Hybrid GraphRAG · flows as of 2026-10-17 · Neo4j 5.14 · gpt-4o</p>
+    </div>
+    <div class="legend">
+      <span><i class="sw"></i>implemented</span>
+      <span><i class="sw r1"></i>R1 · this branch (AFP-002)</span>
+      <span><i class="sw off"></i>inactive on live graph</span>
+    </div>
+  </div>
+
+  <div class="flow">
+    <div class="user"><span class="head"></span><span class="body"></span><span>User<br>message</span></div>
+
+    <div class="col">
+      <span class="k">Process flow</span><h2>Input &amp; Dialogue State</h2>
+      <div class="box">Preference Parser<small>hard constraints · soft preferences (polarity)</small></div>
+      <div class="down">▼</div>
+      <div class="box">Dialogue Manager<small>session state</small></div>
+      <div class="down">▼</div>
+      <div class="box v">Cognitive Router (LLM)<small>+ guardrail and brand/category override</small></div>
+      <div class="down">▼</div>
+      <div class="row"><div class="box v">Clarify</div><div class="box v">Search</div><div class="box v">Profile /<br>Answer</div></div>
+    </div>
+    <div class="arrow">➜</div>
+
+    <div class="col">
+      <span class="k">Process flow</span><h2>Hybrid GraphRAG Retrieval (Neo4j)</h2>
+      <div class="row">
+        <div class="box">Search-param LLM<small>catalog-safe filters</small></div>
+        <div class="box">Entity Resolver<small>exact → full-text → vector</small></div>
+      </div>
+      <div class="inner">
+        <span class="lbl">Multi-Index Vector Search</span>
+        <div class="row">
+          <div class="box">Product titles</div>
+          <div class="box">EAV attributes</div>
+          <div class="box">Reviews<small>2.2% embedded</small></div>
+        </div>
+        <div class="down">▼</div>
+        <div class="box r1">One list per channel, best match per product → RRF (k = 60)<span class="badge">R1</span><small>replaces sum(score) · 3 vs 2 channel ablation · per-channel ranks to eval_trace</small></div>
+      </div>
+      <div class="row">
+        <div class="box">Cypher constraints<small>price · category · brand</small></div>
+        <div class="box">MACS relaxation<small>if &lt; 3 results</small></div>
+      </div>
+      <div class="box r1">Soft-preference bonus<span class="badge">R1</span><small>scaled to the fused score</small></div>
+    </div>
+    <div class="arrow">➜</div>
+
+    <div class="col">
+      <span class="k">Process flow</span><h2>Critic &amp; Graph Reasoning</h2>
+      <div class="box v">Critic Agent<small>per-item LLM check · 20 candidates</small></div>
+      <div class="down">▼</div>
+      <div class="box">Top-3</div>
+      <div class="down">▼</div>
+      <div class="box">KECR reasoning paths<small>conversational match · sparse fallback</small></div>
+      <div class="box off">Historical &amp; co-purchase paths<small>schema mismatch · AI-03</small></div>
+    </div>
+    <div class="arrow">➜</div>
+
+    <div class="col">
+      <span class="k">Process flow</span><h2>Explainable Generation</h2>
+      <div class="box">Prompt Constructor<small>top-3 + [GRAPH EVIDENCE]</small></div>
+      <div class="down">▼</div>
+      <div class="box v">LLM (gpt-4o)</div>
+      <div class="down">▼</div>
+      <div class="box">Recommendation with graph evidence</div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>1. Preference Parser &amp; Router</h3>
+      <p><b>Hard constraints:</b> price, brand include / exclude, category. <b>Soft preferences:</b> value + polarity. Attributes the catalog cannot filter on are demoted to soft preferences.</p>
+      <p><b>Router actions:</b> SEARCH · CLARIFY · UPDATE_PROFILE · READ_PROFILE · ANSWER.</p>
+      <p><b>Guardrail:</b> category missing → CLARIFY. <b>Override:</b> category and brand given → SEARCH.</p>
+    </div>
+    <div class="card">
+      <h3>2. Multi-Index Search, Fusion &amp; MACS</h3>
+      <p><b>Before R1:</b> sum(score) over every matching node, weights 1.0 / 0.8 / 0.9, 600 nodes per index. Products with many reviews or attributes win (hub bias).</p>
+      <p><span class="r1t">R1:</span> each product once per channel by its best match, ranked after filters, fused by RRF (k = 60). Soft bonus scaled to the fused score.</p>
+      <p><b>MACS:</b> fewer than 3 results → widen the budget by 15%, then drop the category.</p>
+    </div>
+    <div class="card">
+      <h3>3. Critic &amp; KECR Reasoning</h3>
+      <p><b>Critic:</b> one LLM check per candidate (20 calls). A batched listwise rerank is planned (R4, AI-08).</p>
+      <p><b>KECR:</b> conversational-match and sparse-fallback paths for the top-3, with gating α (0–1).</p>
+      <p class="offt">Historical and co-purchase paths do not fire on the live graph: reviews link via ABOUT_PRODUCT without timestamps, and BOUGHT_TOGETHER does not exist (AI-03).</p>
+    </div>
+    <div class="card">
+      <h3>4. Explainable Synthesis</h3>
+      <p><b>Prompt construction:</b> the top-3 items and their KECR paths are injected as [GRAPH EVIDENCE]; the LLM must stay within graph facts.</p>
+      <p><span class="r1t">R1:</span> per-channel ranks and the fused score are recorded per candidate in eval_trace, the first column of the planned evidence ledger.</p>
+      <p><b>Roadmap:</b> R2 benchmark · R3 search order &amp; HyDE · R4 feature fit &amp; LLM judge · R5 labels &amp; review aspects.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

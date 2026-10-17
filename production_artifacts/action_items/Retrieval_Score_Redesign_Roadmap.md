@@ -21,11 +21,13 @@ The retrieval score should measure **how well a product matches what the user as
 - The additive soft-preference bonus (`+0.2 × polarity` per substring match) would dominate any bounded score.
 - AFP-002's adaptive late fusion (normalising by the channels present) is **non-monotonic**: extra but weaker evidence *lowers* a product's score.
 
-**Live baseline** `eval_2026-10-09_1336` (21 queries):
+**Live baseline** `eval_2026-10-09_1336` (21 queries, `hybrid` strategy only, recomputed from `retrieval_metrics.json`):
 
-| HR@1 | HR@5 | HR@20 | NDCG@5 | MRR |
-|---:|---:|---:|---:|---:|
-| 0.079 | 0.127 | 0.206 | 0.100 | 0.099 |
+| HR@1 | HR@5 | HR@10 | HR@20 | strict NDCG@5 | MRR |
+|---:|---:|---:|---:|---:|---:|
+| 0.048 | 0.190 | 0.238 | 0.381 | 0.110 | 0.100 |
+
+> **Correction (2026-10-17)**: an earlier version of this table (HR@1 0.079, HR@5 0.127, HR@20 0.206, NDCG@5 0.100, MRR 0.099) quoted `summary.json`, whose aggregates are pooled over the `hybrid`, `vector_only` and `cypher_only` strategies (63 rows). R1 adds per-strategy aggregates (Technical Specification FR-010).
 
 ### Live data facts (read-only queries, 2026-10-10 and 2026-10-14)
 
@@ -107,6 +109,8 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 | RS-20 | Label-free metrics: type-precision@K, constraint-satisfaction@K, popularity-bias@K | Evaluation | S–M | Idea | R1 (first two) / R2 | — |
 | RS-21 | Benchmark split into hard cases (no reviews, brand+model titles, accessory traps, many-feature trade-offs) + tuning/test split + title-token leakage check | Evaluation | M | Decided | R2 | — |
 | RS-22 | Ablation arms: each query version, 3 vs 2 channels, deterministic vs + LLM rerank, correct-abstention rate | Evaluation | with others | Idea | R1–R4 | AI-10 |
+| RS-23 | Spurious CLARIFY from missed category extraction: in `eval_2026-10-17_1846`, 4 of 21 queries (`live_eval_charger_01`, `mouse_02`, `keyboard_01`, `keyboard_02`) name the product type plainly, yet `LLMPreferenceParser` extracted no `category`, so the guardrail asked a clarifying question and every arm scored a miss. The 2026-10-09 run had none. Measure extraction recall per query; report retrieval metrics on SEARCH-only queries next to all queries; fix the extraction prompt or merge with AI-07 | Evaluation | S–M | Decided | R2 | AI-07 |
+| RS-24 | Domain-agnostic product-type matching, replacing the word-regex category filter: (1) text normalisation with a configurable language analyzer or lemmas on both sides (P-9); (2) catalogue-derived product-type vocabulary and synonym sets built at ingestion (with RS-11); (3) product type as a ranked signal with a hard filter only on confident matches (with RS-09, RS-17). Trigger: `ret_021`, where "Webcams" rejects the C920 (title "Webcam", category "Computers"; 22 vs 742 eligible products). A rule-based English plural fix was rejected 2026-10-17: it does not extend to fashion or cosmetics (glasses/glass, jeans, synonyms, compounds) | Retrieval | M–L | Decided | R3 | RS-07, RS-09, RS-11 |
 
 ---
 
@@ -115,8 +119,8 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 | Release | Scope | Depends on | Exit gate |
 |---|---|---|---|
 | **R1, this branch** | RS-01, RS-05, RS-02 (as ablation), RS-20 (popularity-bias@K, type-precision@K), per-channel ranks in `eval_trace` (seed of RS-18) | — | Live eval vs `eval_2026-10-09_1336` |
-| R2 | RS-21, RS-20 (constraint-satisfaction@K) | R1 metrics | Benchmark frozen **before** any weight tuning |
-| R3 | RS-07, RS-03, RS-08 (incl. AI-10 HyDE arm), RS-10 | R1 fuser, R2 benchmark | Per-arm ablation on the R2 test split |
+| R2 | RS-21, RS-20 (constraint-satisfaction@K), RS-23 (category extraction recall) | R1 metrics | Benchmark frozen **before** any weight tuning; no query lost to a spurious CLARIFY |
+| R3 | RS-07, RS-24, RS-03, RS-08 (incl. AI-10 HyDE arm), RS-10 | R1 fuser, R2 benchmark | Per-arm ablation on the R2 test split |
 | R4 | RS-12 → RS-04, RS-09, RS-17 (AI-08), RS-06 | R3 | type-precision@K, constraint-satisfaction@K, correct-abstention rate |
 | R5 | RS-11 (replaces RS-12 inputs), RS-13, RS-18 | R4; decision D-2 | Label precision/recall audit |
 | Later (Meta-Phase B) | RS-16, RS-19, RS-14, RS-15 | R4–R5 | — |
@@ -190,7 +194,7 @@ Feature labels, tiers, the gate, LLM rerank, query versions, review aspects.
 
 | ID | Decision | Why |
 |---|---|---|
-| D-1 | Record AFP-002 as **implemented via RRF** (not adaptive late fusion) | Adaptive late fusion is non-monotonic; RRF is scale-free and rewards cross-channel agreement |
+| D-1 | ✅ **Recorded 2026-10-17** as Vision decision 2026-10-17-013. AFP-002 implemented via RRF (not adaptive late fusion) | Adaptive late fusion is non-monotonic; RRF is scale-free and rewards cross-channel agreement |
 | D-2 | Relax "no custom model training" for small supervised or distilled models when they improve quality or speed | Needed for RS-13 (classifier over 1.6M reviews) |
 | D-3 | Correct decision 2026-09-28-006: HyDE is claimed but does not exist in `src/` or `scripts/` | Doc/code gap; HyDE arrives with RS-08 |
 | D-4 | Cypher 25 `VECTOR SEARCH` rule vs the live Neo4j **5.14** (no `VECTOR SEARCH`); GAP-003 is marked done, but `vector_search_helper.py` emits `db.index.vector.queryNodes` | The rule cannot be followed on the current database version |

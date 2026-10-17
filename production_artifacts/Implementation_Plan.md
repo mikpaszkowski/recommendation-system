@@ -258,29 +258,31 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] **MACS Progressive Relaxation**: If candidate yield $< 3$, trigger a deterministic relaxation cascade (widen budget by 15%, drop soft specs) and record `relaxed_constraints` for downstream transparency.
 * [x] **Multi-Index Semantic Search**: Parallel vector queries across product, attribute, and review indices (`CALL { ... } UNION`), returning candidates to be soft-scored.
 * [ ] Write integration tests: `tests/test_graph_search_tool.py` verifying MACS triggers on 0-result edge cases.
-* [ ] **AI-01** Implement AFP-002 bounded multi-index score fusion (`action_items/Proposed_Fix_Vector_Aggregation.md`): replace `sum(score)` in `GraphSearchTool._execute_hybrid_search` / `_execute_vector_search`, then re-run the live retrieval eval. **Revised 2026-10-17**: implemented as RRF, release R1 of A1.1 below.
+* [x] **AI-01** Implement AFP-002 bounded multi-index score fusion (`action_items/Proposed_Fix_Vector_Aggregation.md`): replace `sum(score)` in `GraphSearchTool._execute_hybrid_search` / `_execute_vector_search`, then re-run the live retrieval eval. **Revised 2026-10-17**: implemented as RRF, release R1 of A1.1 below.
 * [ ] **AI-02** Verify the catalog-safe attribute demotion live: `live_eval_phone_01` returns ≥ 5 candidates including `B08GNRGB67`, and the generated Cypher has no `storage` `EXISTS` clause.
 * [ ] **AI-11** Parameterise the category title filter Cypher in `GraphSearchTool._build_filters` (currently string-interpolated).
 
 ### A1.1 — Retrieval Score Redesign (Roadmap R1–R5)
-**Status (2026-10-17): R1 in progress** on `feature/afp-002-vector-aggregation`. Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-22) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
+**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-22) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 Goal: the retrieval score measures how well a product matches the request, not how many texts about it resemble the query. Ranking order: feature fit → channel agreement (RRF) → review experience. Unknown evidence is never scored as a mismatch.
 
 **R1 — RRF fusion (AFP-002, AI-01)**. Gate: live eval vs `eval_2026-10-09_1336`.
-* [ ] **RS-01** One ranked list per channel (product, attribute, review; each product once, by max similarity), fused by RRF (`k = 60`, configurable weights) in `_execute_hybrid_search` and `_execute_vector_search`.
-* [ ] **RS-05** Rescale the soft-preference bonus (`+0.2 × polarity`) to the RRF scale, or fuse it as its own list.
-* [ ] **RS-02** Ablation switch: RRF over 3 channels vs 2 (review channel off).
-* [ ] Per-channel ranks, similarities and RRF score in the result and `eval_trace` (seed of the RS-18 evidence ledger).
-* [ ] **RS-20 (part)** `popularity-bias@K` and `type-precision@K` in `scripts/evaluate_retrieval.py`.
-* [ ] Unit tests (fan-out gives no extra credit, deterministic RRF order, soft-bonus scale) and a live eval report for both arms.
-* [ ] Vision Report decision D-1 (AFP-002 implemented via RRF), via @pm-research.
+* [x] **RS-01** One ranked list per channel (product, attribute, review; each product once, by max similarity), fused by RRF (`k = 60`, configurable weights) in `_execute_hybrid_search` and `_execute_vector_search`.
+* [x] **RS-05** Rescale the soft-preference bonus (`+0.2 × polarity`) to the RRF scale, or fuse it as its own list.
+* [x] **RS-02** Ablation switch: RRF over 3 channels vs 2 (review channel off).
+* [x] Per-channel ranks, similarities and RRF score in the result and `eval_trace` (seed of the RS-18 evidence ledger).
+* [x] **RS-20 (part)** `popularity-bias@K` and `type-precision@K` in `scripts/evaluate_retrieval.py`.
+* [x] Unit tests (fan-out gives no extra credit, deterministic RRF order, soft-bonus scale) and a live eval report for both arms.
+* [x] Vision Report decision D-1 (AFP-002 implemented via RRF), via @pm-research. Recorded as 2026-10-17-013.
 
 **R2 — Evaluation foundation** (before any weight tuning).
 * [ ] **RS-21** Stratified benchmark (no reviews, brand+model titles, accessory traps, many-feature trade-offs), tuning/test split, title-token leakage check.
 * [ ] **RS-20 (rest)** `constraint-satisfaction@K`.
+* [ ] **RS-23** Spurious CLARIFY: the parser misses an explicit category on 4 of 21 live queries (`eval_2026-10-17_1846`: charger_01, mouse_02, keyboard_01, keyboard_02), so the guardrail clarifies and every arm scores a miss. Measure category-extraction recall, report SEARCH-only metrics alongside all queries, fix the prompt (or within AI-07).
 
 **R3 — Search order & query side**.
 * [ ] **RS-07** Adaptive order by filter selectivity: filter-first with exact scoring vs ANN-first with oversampling.
+* [ ] **RS-24** Domain-agnostic product-type matching instead of the word-regex category filter: language analyzer or lemmas on both sides, catalogue-derived type vocabulary and synonyms (with RS-11), type as a ranked signal with hard filtering only on confident matches (with RS-09 / RS-17). Trigger: "Webcams" rejects the C920 in `ret_021`.
 * [ ] **RS-03** Attribute channel as a precise finder: IDF/rarity weighting, AND-matching inside the resolved category.
 * [ ] **RS-08** Query versions fused by RRF: raw message, HyDE on the merged AI-07 call (= AI-10 ablation), IS/HAS pieces, user profile.
 * [ ] **RS-10** Graded category distance (same leaf > sibling > cousin).
