@@ -7,7 +7,7 @@
 - `src/tools/graph_search_tool.py` (`_execute_hybrid_search:210-235`)  
 - `src/tools/graph_search_tool.py` (`_normalize_scores` and scoring configuration)  
 **Author**: Principal Solutions Architect (`worker_architectural_fixes_m3`)  
-**Status**: APPROVED BY CONSENSUS (Milestone 2 Debate Adjudication). **Revised 2026-10-17**: the fusion method changes to RRF; see the revision note below.
+**Status**: APPROVED BY CONSENSUS (Milestone 2 Debate Adjudication). **Revised 2026-10-17**: the fusion method changes to RRF; see the revision note below. **Implemented 2026-10-17** as release R1 (`src/tools/score_fusion.py`, Vision decision 2026-10-17-013, `production_artifacts/Audit_Report.md`). AC-002.4 (C920) is a recorded diagnostic: the category filter rejects the C920 before fusion (RS-24).
 
 ---
 

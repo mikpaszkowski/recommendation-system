@@ -257,13 +257,14 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [x] **Soft Additive Scoring**: Remove all Cypher `WHERE` clauses for soft specifications/categories. Enforce ONLY hard boundaries in Cypher (e.g. `price IS NULL OR price <= $price_max`). Score soft preferences in Python memory additively: `Score = Score_vec + 0.3*Brand + 0.2*Cat + ...`.
 * [x] **MACS Progressive Relaxation**: If candidate yield $< 3$, trigger a deterministic relaxation cascade (widen budget by 15%, drop soft specs) and record `relaxed_constraints` for downstream transparency.
 * [x] **Multi-Index Semantic Search**: Parallel vector queries across product, attribute, and review indices (`CALL { ... } UNION`), returning candidates to be soft-scored.
+  * _Note (2026-10-17)_: Since R1 each index runs as its own channel query (one row per product, best match) and the channels are fused by RRF in `src/tools/score_fusion.py`. The `UNION` + `sum(score)` query survives only as the `sum_legacy` ablation arm.
 * [ ] Write integration tests: `tests/test_graph_search_tool.py` verifying MACS triggers on 0-result edge cases.
 * [x] **AI-01** Implement AFP-002 bounded multi-index score fusion (`action_items/Proposed_Fix_Vector_Aggregation.md`): replace `sum(score)` in `GraphSearchTool._execute_hybrid_search` / `_execute_vector_search`, then re-run the live retrieval eval. **Revised 2026-10-17**: implemented as RRF, release R1 of A1.1 below.
 * [ ] **AI-02** Verify the catalog-safe attribute demotion live: `live_eval_phone_01` returns ≥ 5 candidates including `B08GNRGB67`, and the generated Cypher has no `storage` `EXISTS` clause.
 * [ ] **AI-11** Parameterise the category title filter Cypher in `GraphSearchTool._build_filters` (currently string-interpolated).
 
 ### A1.1 — Retrieval Score Redesign (Roadmap R1–R5)
-**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-22) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
+**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-24) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 Goal: the retrieval score measures how well a product matches the request, not how many texts about it resemble the query. Ranking order: feature fit → channel agreement (RRF) → review experience. Unknown evidence is never scored as a mismatch.
 
 **R1 — RRF fusion (AFP-002, AI-01)**. Gate: live eval vs `eval_2026-10-09_1336`.
@@ -468,7 +469,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 | GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
-| RS-01 … RS-22 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 in progress |
+| RS-01 … RS-24 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 done, R2–R5 open |
 
 ---
 

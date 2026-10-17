@@ -2,7 +2,7 @@
 
 **Date**: 2026-10-17
 **Branch**: `feature/afp-002-vector-aggregation`
-**Status**: Roadmap agreed with the user. R1 is ready for the `/implement` pipeline.
+**Status**: Roadmap agreed with the user. **R1 implemented 2026-10-17** (audit PASS WITH FIXES, `production_artifacts/Audit_Report.md`; live eval `evaluations/eval_2026-10-17_1937`). Next: R2.
 **Source**: Brainstorm session 2026-10-10 → 2026-10-17. The full record is in `_bmad-output/brainstorming/brainstorm-retrieval-score-relevance-2026-10-10/.memlog.md` (192 entries).
 **Supersedes**: The fusion design in `Proposed_Fix_Vector_Aggregation.md` §3.1–3.2 (adaptive late fusion). See the revision note in that document.
 **Tracked in**: `production_artifacts/Implementation_Plan.md` (items tagged `RS-xx` and `R1`–`R5`).
@@ -87,11 +87,11 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 
 | ID | Change | Group | Size | Status | Release | Related |
 |---|---|---|---|---|---|---|
-| RS-01 | Replace `sum(score)` with one ranked list per channel (each product once) fused by **RRF** | Fusion | S | Decided | R1 | AI-01 |
-| RS-02 | Remove the review index from candidate finding (reviews verify only); run as ablation first | Fusion | S | Decided | R1 | AI-01 |
+| RS-01 | Replace `sum(score)` with one ranked list per channel (each product once) fused by **RRF** | Fusion | S | ✅ Done (R1) | R1 | AI-01 |
+| RS-02 | Remove the review index from candidate finding (reviews verify only); run as ablation first | Fusion | S | ✅ Ablation done (R1: `rrf2`); removal decided in R2 | R1 | AI-01 |
 | RS-03 | Attribute channel as a precise finder: IDF/rarity weighting, AND-matching inside the resolved category | Fusion | M | Decided role; method is an idea | R3 | — |
 | RS-04 | Tiered ranking: feature fit → RRF agreement → review experience | Fusion | M–L | Decided | R4 | — |
-| RS-05 | Rescale the soft-preference bonus to the RRF scale, or fuse it as its own list | Fusion | S | Required by RS-01 | R1 | — |
+| RS-05 | Rescale the soft-preference bonus to the RRF scale, or fuse it as its own list | Fusion | S | ✅ Done (R1) | R1 | — |
 | RS-06 | Two scores (absolute gate, relative rank); calibrate the gate by hiding targets; metric: correct-abstention rate | Fusion | M | Decided | R4 | — |
 | RS-07 | Adaptive order: filter-first with exact scoring vs ANN-first with oversampling, chosen by filter selectivity | Query side | M | Decided | R3 | — |
 | RS-08 | Query versions in parallel: raw message, HyDE (LLM-written ideal product, on the merged AI-07 call), IS/HAS pieces, user profile | Query side | M | Decided | R3 | AI-07, AI-10 |
@@ -106,7 +106,7 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 | RS-17 | Batched LLM listwise rerank (`evaluate_candidate_tradeoffs`) with the powers in P-5 | Rerank | M | Decided | R4 | AI-08 |
 | RS-18 | Per-product evidence ledger written during ranking; used for contrastive ("why this, not that") and uncertainty-honest explanations | Explanation | M | Idea | R5 (seeded in R1) | A5 |
 | RS-19 | Two lanes ("what you asked for" / "you might also want"), alternatives that each trade off a different requirement, "we don't carry it" response | Conversation | M | Decided | Later | B3 |
-| RS-20 | Label-free metrics: type-precision@K, constraint-satisfaction@K, popularity-bias@K | Evaluation | S–M | Idea | R1 (first two) / R2 | — |
+| RS-20 | Label-free metrics: type-precision@K, constraint-satisfaction@K, popularity-bias@K | Evaluation | S–M | ✅ R1: popularity-bias@K, type-precision@K; R2: constraint-satisfaction@K | R1 / R2 | — |
 | RS-21 | Benchmark split into hard cases (no reviews, brand+model titles, accessory traps, many-feature trade-offs) + tuning/test split + title-token leakage check | Evaluation | M | Decided | R2 | — |
 | RS-22 | Ablation arms: each query version, 3 vs 2 channels, deterministic vs + LLM rerank, correct-abstention rate | Evaluation | with others | Idea | R1–R4 | AI-10 |
 | RS-23 | Spurious CLARIFY from missed category extraction: in `eval_2026-10-17_1846`, 4 of 21 queries (`live_eval_charger_01`, `mouse_02`, `keyboard_01`, `keyboard_02`) name the product type plainly, yet `LLMPreferenceParser` extracted no `category`, so the guardrail asked a clarifying question and every arm scored a miss. The 2026-10-09 run had none. Measure extraction recall per query; report retrieval metrics on SEARCH-only queries next to all queries; fix the extraction prompt or merge with AI-07 | Evaluation | S–M | Decided | R2 | AI-07 |

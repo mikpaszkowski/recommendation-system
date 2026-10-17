@@ -25,7 +25,7 @@
   .legend { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--soft); }
   .legend span { white-space: nowrap; display: flex; align-items: center; gap: 7px; }
   .sw { width: 26px; height: 14px; border-radius: 3px; border: 2px solid var(--teal); }
-  .sw.r1 { border: 2px dashed var(--amber); }
+  .sw.r1 { border: 2px solid var(--amber); }
   .sw.off { border: 2px dotted var(--grey); }
 
   .flow { display: grid; grid-template-columns: 70px 300px 30px 470px 30px 270px 30px 290px; align-items: stretch; }
@@ -39,7 +39,7 @@
   .box { border: 2px solid var(--teal); border-radius: 7px; padding: 7px 9px; font-size: 14.5px; text-align: center; line-height: 1.25; }
   .box small { display: block; color: var(--soft); font-size: 11.5px; margin-top: 2px; }
   .box.v { border-color: var(--violet); }
-  .box.r1 { border: 2px dashed var(--amber); }
+  .box.r1 { border: 2px solid var(--amber); }
   .box.off { border: 2px dotted var(--grey); color: var(--soft); }
   .down { text-align: center; color: var(--violet); font-size: 14px; line-height: 1; }
   .row { display: flex; gap: 6px; }
@@ -69,7 +69,7 @@
     </div>
     <div class="legend">
       <span><i class="sw"></i>implemented</span>
-      <span><i class="sw r1"></i>R1 · this branch (AFP-002)</span>
+      <span><i class="sw r1"></i>new in R1 (AFP-002 via RRF)</span>
       <span><i class="sw off"></i>inactive on live graph</span>
     </div>
   </div>
@@ -93,7 +93,7 @@
       <span class="k">Process flow</span><h2>Hybrid GraphRAG Retrieval (Neo4j)</h2>
       <div class="row">
         <div class="box">Search-param LLM<small>catalog-safe filters</small></div>
-        <div class="box">Entity Resolver<small>exact → full-text → vector</small></div>
+        <div class="box">Entity Resolver<small>exact → substring / regex → vector</small></div>
       </div>
       <div class="inner">
         <span class="lbl">Multi-Index Vector Search</span>
@@ -103,7 +103,7 @@
           <div class="box">Reviews<small>2.2% embedded</small></div>
         </div>
         <div class="down">▼</div>
-        <div class="box r1">One list per channel, best match per product → RRF (k = 60)<span class="badge">R1</span><small>replaces sum(score) · 3 vs 2 channel ablation · per-channel ranks to eval_trace</small></div>
+        <div class="box r1">One list per channel, best match per product → RRF (k = 60)<span class="badge">R1</span><small>replaces sum(score) · arms rrf2 / wrrf3 / cc3 / sum_legacy · per-channel ranks to eval_trace</small></div>
       </div>
       <div class="row">
         <div class="box">Cypher constraints<small>price · category · brand</small></div>

@@ -5,6 +5,85 @@
 
 ---
 
+## 📅 2026-10-17 (R1 — fuzja rankingowa, AFP-002 przez RRF)
+
+### Changelog (względem stanu z 2026-10-09, po wdrożeniu AFP-005)
+
+> **Kontekst**: Realizacja wydania R1 z mapy drogowej `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` (pipeline `/implement`, gałąź `feature/afp-002-vector-aggregation`). Wynik wyszukiwania ma mierzyć, jak dobrze produkt pasuje do prośby użytkownika, a nie ile tekstów o produkcie przypomina zapytanie. Zgodnie z decyzją Vision Report **2026-10-17-013** propozycja AFP-002 została zrealizowana przez Reciprocal Rank Fusion zamiast pierwotnej adaptacyjnej fuzji późnej (niemonotonicznej). Kierunek wynika z sesji burzy mózgów (`_bmad-output/brainstorming/brainstorm-retrieval-score-relevance-2026-10-10/`) i raportu badawczego `production_artifacts/Research_Report.md`.
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Moduł fuzji wyników (`src/tools/score_fusion.py`):**
+    *   Czysty moduł Pythona bez I/O: `ChannelHit`, `ChannelEvidence`, `FusedCandidate`, `FusionConfig`, `competition_ranks()`, `fuse()`.
+    *   Ranking konkurencyjny w obrębie kanału (remisy dzielą najlepszą pozycję: 1, 2, 2, 4), deduplikacja produktu do jego najlepszego dopasowania (MaxP).
+    *   Fuzja RRF `Σ w_c / (k + rank_c)` z `k = 60` oraz alternatywna kombinacja wypukła (CC) znormalizowanych min-max podobieństw.
+    *   Warianty ablacyjne `FUSION_ARMS`: `rrf3` (domyślny), `rrf2` (bez kanału recenzji), `wrrf3` (wagi 0.60 / 0.25 / 0.15 z AFP-002), `cc3`, `sum_legacy`. Wybór przez zmienną `RETRIEVAL_FUSION_ARM` (udokumentowaną w `.env.example`).
+    *   Znaczenie: każdy produkt liczy się raz na kanał, więc liczba recenzji lub atrybutów nie zawyża już wyniku (koniec „efektu huba”).
+
+2.  **Nowe testy:**
+    *   `tests/test_score_fusion.py` (17 testów): brak premii za liczbę dopasowań, wzór RRF, przykład `ret_021` z burzy mózgów, remisy, niezależność od kolejności, warianty, ograniczenie maksymalnego wyniku, konfiguracja środowiskowa.
+    *   `tests/test_retrieval_metrics_r1.py` (7 testów): nowe metryki i agregaty per strategia.
+    *   `tests/integration/test_fusion_live_regression.py` (2 testy na żywej bazie, uruchamiane przy `RUN_LIVE_TESTS=1`): brak dominacji słuchawek Senso w `ret_001` i ograniczony wynik fuzji; pozycja Logitech C920 w `ret_021` zapisywana jako diagnostyka.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`GraphSearchTool` (`src/tools/graph_search_tool.py`):**
+    *   `_execute_hybrid_search` i `_execute_vector_search` wykonują teraz jedno zapytanie MaxP na kanał (`_build_channel_query`: `max(score)` na produkt, filtry twarde przed rankingiem, deterministyczne obcięcie `ORDER BY similarity DESC, asin ASC LIMIT $depth`) oraz jedno zapytanie szczegółów (`DETAIL_QUERY`), a następnie fuzję w Pythonie (`_execute_fused_search`).
+    *   Dawne zapytanie `UNION` + `sum(score)` zachowano bez zmian jako wariant porównawczy `sum_legacy` (`_execute_legacy_sum_search`).
+    *   Każdy wynik zawiera `fused_score`, `soft_bonus` i `fusion.channels` (pozycja, podobieństwo i powód w każdym kanale), co jest pierwszą kolumną planowanego rejestru dowodów (RS-18).
+    *   Premia za miękkie preferencje skalowana do zakresu fuzji (`β × max_fused_score`, `β = 0.25`); ścieżka filtrów (`_execute_cypher_search`) i `sum_legacy` zachowują jednostkę 0.2.
+    *   Nowe metody `match_category()` i `fetch_review_embedded_asins()` na potrzeby metryk.
+    *   Konfiguracja fuzji odczytywana po utworzeniu `Neo4jConnector`, który ładuje `.env` (poprawka z audytu QA).
+    *   MACS, Critic, KECR i router pozostały bez zmian.
+2.  **`AgentOrchestrator` (`src/agents/orchestrator.py`)** — `eval_trace["search_request"]` zapisuje dokładne argumenty `GraphSearchTool.search`, aby ewaluacja mogła odtworzyć to samo zapytanie w każdym wariancie.
+3.  **Metryki (`src/evaluation/metrics.py`)** — nowe `compute_popularity_bias_at_k` i `compute_type_precision_at_k`; `evaluate_retrieval_batch` zwraca `aggregates_by_strategy`. Dotychczasowe agregaty w `summary.json` uśredniały wszystkie strategie razem; bazowy wynik `eval_2026-10-09_1336` przeliczono dla samej strategii hybrid (HR@1 0.048, HR@5 0.190, HR@20 0.381).
+4.  **`scripts/evaluate_retrieval.py`** — opcja `--fusion-arms` (tylko tryb live) odtwarza zapisane zapytanie przez każdy wariant jako strategię `hybrid@<wariant>`, w rotowanej kolejności (eliminacja zniekształcenia latencji); manifest zawiera konfigurację fuzji i udział produktów z recenzjami w katalogu.
+5.  **Wcześniejsza poprawka na tej gałęzi (commit `f7bbf81`)** — pomijanie pustych miękkich preferencji, obsługa filtrów listowych marki i kategorii, dopasowanie cyfr na granicach liczb.
+6.  **Testy istniejące** — `test_graph_search_tool_digit_lookaround_boundaries` używa wariantu `sum_legacy` (sprawdza dopasowanie liczb przy jednostce 0.2). Pełny zestaw: **453 testy zaliczone, 2 pominięte (live)**.
+
+#### 📊 Wyniki ewaluacji (live, `eval_2026-10-17_1937`, 21 zapytań)
+
+| Wariant | HR@1 | HR@5 | HR@20 | NDCG@5 | PopBias@5 | p50 wyszukiwania |
+|---|---:|---:|---:|---:|---:|---:|
+| `sum_legacy` | 0.238 | 0.286 | 0.286 | 0.259 | 0.337 | 727 ms |
+| `rrf3` | 0.238 | 0.286 | 0.286 | 0.262 | 0.212 | 757 ms |
+| `rrf2` | 0.238 | 0.286 | 0.333 | 0.262 | 0.062 | 642 ms |
+| `wrrf3` | 0.238 | 0.286 | 0.333 | 0.268 | 0.050 | 716 ms |
+| `cc3` | 0.238 | 0.286 | 0.333 | 0.268 | 0.088 | 707 ms |
+
+*   Fuzja wyraźnie obniża stronniczość popularności (produkty z recenzjami to 2.15% katalogu). Trafność nie zmienia się mierzalnie: warianty różnią się w 2 z 21 zapytań. `rrf3` pozostaje domyślny do czasu podziału tuning/test w R2.
+*   Wzrost HR@1 względem 2026-10-09 (0.048 → 0.238) **nie wynika z fuzji**: `sum_legacy` osiąga ten sam wynik w tym samym przebiegu.
+*   Audyt QA: **PASS WITH FIXES** (`production_artifacts/Audit_Report.md`).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   `CriticAgent`, `KnowledgePathExtractor` (KECR), router dialogowy, `PromptConstructor`, MACS, indeksy wektorowe i schemat grafu.
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **RS-24 (R3)** — dopasowanie typu produktu niezależne od domeny. Filtr kategorii oparty na wyrażeniach regularnych odrzuca Logitech C920 dla „Webcams” (tytuł „Webcam”, kategoria „Computers”). Regułowa obsługa liczby mnogiej dla języka angielskiego została zaimplementowana, odrzucona przez użytkownika (nie przenosi się na modę czy kosmetyki) i wycofana.
+*   **RS-23 (R2)** — 4–5 z 21 zapytań traci kategorię podczas ekstrakcji LLM i kończy się akcją CLARIFY.
+*   **D-2 … D-4** — decyzje Vision Report: trenowanie małych modeli, korekta HyDE, Cypher 25 vs Neo4j 5.14.
+*   Wydania R2–R5 mapy drogowej.
+
+### Zaktualizowana Architektura
+
+```mermaid
+flowchart LR
+    Q[semantic_query + filtry] --> E[EmbeddingService]
+    E --> P[kanał produktu<br/>MaxP + WHERE]
+    E --> A[kanał atrybutów<br/>MaxP + WHERE]
+    E --> R[kanał recenzji<br/>MaxP + WHERE]
+    P --> F[score_fusion.fuse<br/>RRF / CC]
+    A --> F
+    R -. wyłączony w rrf2 .-> F
+    F --> D[zapytanie szczegółów]
+    D --> S[premia miękkich preferencji<br/>β × max_fused]
+    S --> O[kandydaci + dowody kanałów<br/>→ MACS / Critic / eval_trace]
+```
+
+---
+
 ## 📅 2026-10-09 (AFP-005)
 
 ### Changelog (względem stanu po wdrożeniu AFP-004)

@@ -39,4 +39,6 @@ The system addresses the fundamental limitations of pure LLM implementations (ha
 4. Run the Retrieval Evaluation suite:
    ```bash
    python scripts/evaluate_retrieval.py
+   # compare fusion arms on the same requests (live mode)
+   python scripts/evaluate_retrieval.py --fusion-arms rrf3 rrf2 wrrf3 cc3 sum_legacy
    ```
