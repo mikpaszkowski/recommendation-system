@@ -624,3 +624,109 @@ class TestAgentOrchestratorMultiTurnExecution:
 
         asyncio.run(_run())
 
+    def test_orchestrator_handles_brand_list_and_filters_none_soft_prefs(self):
+        """
+        Adversarial check: Orchestrator normalizes list of brands/categories properly,
+        and filters out None soft preferences from Critic persona.
+        """
+        async def _run():
+            mock_llm = MockLLMHandler()
+            mock_llm.search_param_responses = [
+                json.dumps({
+                    "thought": "Searching for products",
+                    "structured_filters": {
+                        "brands": ["Samsung", "Apple"],
+                        "categories": ["Smartphones", "Cell Phones"],
+                    },
+                    "semantic_query": "phones"
+                })
+            ]
+            mock_graph = MockGraphSearchTool()
+            mock_critic = MockCriticAgent()
+            mock_parser = MockPreferenceParser()
+
+            mock_parser.set_extraction("Show me Samsung or Apple phones", {
+                "current_session_context": {
+                    "session_intent": "initial_search",
+                    "extracted_parameters": {
+                        "hard_constraints": [
+                            {"attribute": "brand", "operator": "include", "value": "Samsung"},
+                            {"attribute": "category", "operator": "include", "value": "Smartphones"},
+                        ],
+                        "soft_preferences": [
+                            {"category": "brand", "value": None, "polarity": 1.0},
+                            {"category": "screen", "value": "OLED display", "polarity": 0.9},
+                        ]
+                    },
+                    "dialogue_state": {
+                        "ready_for_recommendation": True,
+                        "missing_critical_attributes": [],
+                        "suggested_system_action": "present_results"
+                    }
+                }
+            })
+
+            orchestrator = AgentOrchestrator(
+                graph_tool=mock_graph,
+                llm_handler=mock_llm,
+                critic_agent=mock_critic,
+                dialogue_manager=DialogueManager(),
+                preference_parser=mock_parser,
+                kecr_tool=MagicMock()
+            )
+
+            await orchestrator.run(user_id="user_list_test", user_message="Show me Samsung or Apple phones")
+
+            call = mock_graph.search_calls[0]
+            filters = call.get("structured_filters", {})
+            assert filters.get("brands") == ["Samsung", "Apple"]
+            assert filters.get("categories") == ["Smartphones", "Cell Phones"]
+
+            # Critic persona should contain OLED display but NO None
+            critic_profile = mock_critic.eval_calls[0]["profile"]
+            preferred = critic_profile.get("preferences", {}).get("preferred_qualities", [])
+            assert any("OLED display" in p for p in preferred)
+            assert not any("None (" in p for p in preferred)
+
+        asyncio.run(_run())
+
+    def test_graph_search_tool_digit_lookaround_boundaries(self):
+        """
+        Adversarial check: GraphSearchTool additive scoring uses digit lookarounds
+        so 128 or 256 matches 128GB/256GB and isolated numbers, but NOT 1280 or 2560x1440.
+        """
+        from src.tools.graph_search_tool import GraphSearchTool
+
+        gst = GraphSearchTool(db_connector=MagicMock(), embedding_service=MagicMock(), resolver=MagicMock())
+        gst._execute_vector_search = MagicMock(return_value={
+            "status": "success",
+            "items": [
+                {"title": "Samsung Galaxy S20+ 128GB", "score": 1.0},
+                {"title": "Dell Inspiron 1280 Laptop", "score": 1.0},
+                {"title": "Gaming Monitor 2560x1440", "score": 1.0},
+                {"title": "MacBook Pro 1TB SSD", "score": 1.0},
+            ],
+            "metadata": {}
+        })
+
+        res = gst.search(
+            semantic_query="laptop",
+            soft_preferences=[
+                {"category": "storage", "value": "128", "polarity": 1.0},
+                {"category": "storage", "value": "256", "polarity": 1.0},
+                {"category": "storage", "value": "1", "polarity": 1.0},
+                {"category": "test", "value": None, "polarity": 1.0},
+            ]
+        )
+
+        items_by_title = {item["title"]: item["score"] for item in res["items"]}
+        # Samsung 128GB got bonus from 128 (+0.2)
+        assert items_by_title["Samsung Galaxy S20+ 128GB"] > 1.15
+        # Dell Inspiron 1280 should NOT receive bonus for 128 (1280 is not 128)
+        assert items_by_title["Dell Inspiron 1280 Laptop"] == 1.0
+        # Monitor 2560x1440 should NOT receive bonus for 256 (2560 is not 256)
+        assert items_by_title["Gaming Monitor 2560x1440"] == 1.0
+        # MacBook Pro 1TB should receive bonus for 1 in 1TB (+0.2)
+        assert items_by_title["MacBook Pro 1TB SSD"] > 1.15
+
+

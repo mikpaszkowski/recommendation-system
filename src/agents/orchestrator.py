@@ -318,7 +318,10 @@ class AgentOrchestrator:
                     if num is not None:
                         catalog_filters["price_max"] = num
                 elif k_lower in ("brand", "make", "manufacturer", "store"):
-                    catalog_filters["brand"] = str(v).strip()
+                    if isinstance(v, list):
+                        catalog_filters["brands"] = [str(x).strip() for x in v]
+                    else:
+                        catalog_filters["brand"] = str(v).strip()
                 elif k_lower in ("brands",):
                     if isinstance(v, list):
                         catalog_filters["brands"] = [str(x).strip() for x in v]
@@ -327,7 +330,10 @@ class AgentOrchestrator:
                 elif k_lower in ("exclude_brand", "exclude_brands", "brand_exclude", "excluded_brand"):
                     catalog_filters["exclude_brand"] = str(v).strip()
                 elif k_lower in ("category", "product_category", "product_type", "type"):
-                    catalog_filters["category"] = str(v).strip()
+                    if isinstance(v, list):
+                        catalog_filters["categories"] = [str(x).strip() for x in v]
+                    else:
+                        catalog_filters["category"] = str(v).strip()
                 elif k_lower in ("categories",):
                     if isinstance(v, list):
                         catalog_filters["categories"] = [str(x).strip() for x in v]
@@ -345,6 +351,8 @@ class AgentOrchestrator:
                             break
                     polarity = -1.0 if "exclude" in k_lower else 1.0
                     val_str = str(int(v)) if isinstance(v, (int, float)) and float(v).is_integer() else str(v).strip()
+                    if not val_str or val_str.lower() == "none":
+                        continue
                     demoted_from_filters.append({
                         "category": attr_name,
                         "value": val_str,
@@ -483,13 +491,15 @@ class AgentOrchestrator:
 
                 for sp in soft_preferences:
                     val = sp.get("value")
+                    if val is None or val == "" or str(val).lower() == "none":
+                        continue
                     cat = sp.get("category", "")
                     pol = float(sp.get("polarity", 1.0))
-                    if val and pol > 0:
+                    if pol > 0:
                         desc = f"{val} (category: {cat}, polarity: {pol:+.1f})"
                         if not _has_quality(prefs_dict.get("preferred_qualities", []), str(val)):
                             prefs_dict.setdefault("preferred_qualities", []).append(desc)
-                    elif val and pol < 0:
+                    elif pol < 0:
                         desc = f"{val} (category: {cat}, polarity: {pol:+.1f})"
                         if not _has_quality(prefs_dict.get("disliked_qualities", []), str(val)):
                             prefs_dict.setdefault("disliked_qualities", []).append(desc)

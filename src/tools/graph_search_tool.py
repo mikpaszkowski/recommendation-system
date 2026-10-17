@@ -160,19 +160,23 @@ class GraphSearchTool:
                     base_score = item.get("score", 0.0)
                     bonus = 0.0
                     for sp in soft_preferences:
-                        val = str(sp.get("value", "")).lower()
-                        cat = str(sp.get("category", "")).lower()
+                        raw_val = sp.get("value")
+                        if raw_val is None or raw_val == "":
+                            continue
+                        val = str(raw_val).lower().strip()
+                        if not val or val == "none":
+                            continue
+                        cat = str(sp.get("category", "") or "").lower().strip()
                         polarity = float(sp.get("polarity", 0.5))
                         
                         # Add heuristic bonus if value appears in title, brand or match reasons
-                        if val:
-                            if val.isdigit() and len(val) <= 2:
-                                # For short bare digits (e.g. 1, 2, 8), require whole word boundary
-                                # to prevent false positives on years (2021) or model numbers (Inspiron 15, S20)
-                                if re.search(r"\b" + re.escape(val) + r"\b", title_lower):
-                                    bonus += (polarity * 0.2)
-                            elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
+                        if val.isdigit():
+                            # Require digit boundaries so numbers (e.g. 128, 256, 1) do not match
+                            # as substrings of larger numbers (1280, 2560x1440, 2021)
+                            if re.search(r"(?<!\d)" + re.escape(val) + r"(?!\d)", title_lower):
                                 bonus += (polarity * 0.2)
+                        elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
+                            bonus += (polarity * 0.2)
                             
                     item["score"] = base_score + bonus
                 

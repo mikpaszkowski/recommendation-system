@@ -336,12 +336,12 @@ def generate_attribute_unit_variations(attr: str, val: Any) -> List[str]:
     attr_clean = str(attr).lower().strip()
     variations: List[str] = []
 
-    m = re.match(r"^(\d+(?:\.\d+)?)\s*([a-zA-Z\"\-]*)$", val_clean)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*([a-zA-Z\"\-]+)?", val_clean)
     if not m:
         return variations
 
     num_str = m.group(1)
-    unit_str = m.group(2).lower().replace("-", "").strip()
+    unit_str = (m.group(2) or "").lower().replace("-", "").strip()
 
     # Normalize integer representations (e.g., 128.0 -> 128)
     if num_str.endswith(".0"):
@@ -350,7 +350,7 @@ def generate_attribute_unit_variations(attr: str, val: Any) -> List[str]:
         num_clean = num_str
 
     is_storage = (
-        attr_clean in ("storage", "ram", "memory", "rom", "internal_storage", "hard_drive", "ssd", "disk")
+        attr_clean in ("storage", "ram", "memory", "rom", "vram", "video_memory", "gpu_memory", "internal_storage", "hard_drive", "ssd", "disk")
         or unit_str in ("gb", "tb", "mb")
     )
     is_camera = (
@@ -545,8 +545,13 @@ def session_context_to_soft_preferences(
     seen = set()
 
     for sp in raw_soft:
-        val = str(_get_field(sp, "value", "")).strip()
-        cat = str(_get_field(sp, "category", "")).strip()
+        raw_val = _get_field(sp, "value")
+        if raw_val is None or raw_val == "":
+            continue
+        val = str(raw_val).strip()
+        if not val or val.lower() == "none":
+            continue
+        cat = str(_get_field(sp, "category", "") or "").strip()
         polarity = _coerce_numeric(_get_field(sp, "polarity", 1.0))
         if polarity is None:
             polarity = 1.0
@@ -554,19 +559,18 @@ def session_context_to_soft_preferences(
         confidence = _coerce_numeric(_get_field(sp, "confidence", 1.0))
         if confidence is None:
             confidence = 1.0
-        evidence = str(_get_field(sp, "evidence", "")).strip()
+        evidence = str(_get_field(sp, "evidence", "") or "").strip()
 
-        if val:
-            key = (cat.lower(), val.lower())
-            if key not in seen:
-                seen.add(key)
-                soft_list.append({
-                    "category": cat,
-                    "value": val,
-                    "polarity": polarity,
-                    "confidence": confidence,
-                    "evidence": evidence,
-                })
+        key = (cat.lower(), val.lower())
+        if key not in seen:
+            seen.add(key)
+            soft_list.append({
+                "category": cat,
+                "value": val,
+                "polarity": polarity,
+                "confidence": confidence,
+                "evidence": evidence,
+            })
 
     if include_demoted:
         hard_constraints = extracted.get("hard_constraints") or ctx.get("hard_constraints", [])
@@ -623,8 +627,16 @@ def session_context_to_legacy_preferences(session_context: Any) -> Dict[str, Any
     elif not isinstance(extracted, dict):
         extracted = {}
 
-    hard_constraints = extracted.get("hard_constraints", [])
-    soft_preferences = extracted.get("soft_preferences", [])
+    hard_constraints = (
+        getattr(extracted, "hard_constraints", None)
+        or (extracted.get("hard_constraints") if isinstance(extracted, dict) else None)
+        or ctx.get("hard_constraints", [])
+    )
+    soft_preferences = (
+        getattr(extracted, "soft_preferences", None)
+        or (extracted.get("soft_preferences") if isinstance(extracted, dict) else None)
+        or ctx.get("soft_preferences", [])
+    )
 
     # Process soft preferences into likes / dislikes and weighted entries
     likes: List[str] = []
@@ -633,8 +645,13 @@ def session_context_to_legacy_preferences(session_context: Any) -> Dict[str, Any
     weighted_dislikes: List[Dict[str, Any]] = []
 
     for sp in soft_preferences:
-        val = str(_get_field(sp, "value", "")).strip()
-        cat = str(_get_field(sp, "category", "")).strip()
+        raw_val = _get_field(sp, "value")
+        if raw_val is None or raw_val == "":
+            continue
+        val = str(raw_val).strip()
+        if not val or val.lower() == "none":
+            continue
+        cat = str(_get_field(sp, "category", "") or "").strip()
         polarity = _coerce_numeric(_get_field(sp, "polarity", 1.0))
         if polarity is None:
             polarity = 1.0
@@ -645,10 +662,7 @@ def session_context_to_legacy_preferences(session_context: Any) -> Dict[str, Any
             confidence = 1.0
         confidence = _clamp(confidence, 0.0, 1.0)
 
-        evidence = str(_get_field(sp, "evidence", "")).strip()
-
-        if not val:
-            continue
+        evidence = str(_get_field(sp, "evidence", "") or "").strip()
 
         weight = round(polarity * confidence, 2)
         entry = {
@@ -754,8 +768,16 @@ def session_context_to_user_persona(
     elif not isinstance(extracted, dict):
         extracted = {}
 
-    hard_constraints = extracted.get("hard_constraints", [])
-    soft_preferences = extracted.get("soft_preferences", [])
+    hard_constraints = (
+        getattr(extracted, "hard_constraints", None)
+        or (extracted.get("hard_constraints") if isinstance(extracted, dict) else None)
+        or ctx.get("hard_constraints", [])
+    )
+    soft_preferences = (
+        getattr(extracted, "soft_preferences", None)
+        or (extracted.get("soft_preferences") if isinstance(extracted, dict) else None)
+        or ctx.get("soft_preferences", [])
+    )
 
     must_have: List[str] = []
     must_avoid: List[str] = []
@@ -764,13 +786,25 @@ def session_context_to_user_persona(
         attr = _get_field(hc, "attribute", "")
         op = _get_field(hc, "operator", "")
         val = _get_field(hc, "value", "")
+        if val is None or val == "":
+            continue
         if hasattr(op, "value"):
             op = str(op.value)
 
         attr_lower = str(attr).lower().strip()
         op_lower = str(op).lower().strip()
 
-        if op_lower == "exclude":
+        if attr_lower in ("excluded_asins", "exclude_asins", "exclude_asin"):
+            if isinstance(val, list):
+                for a_val in val:
+                    must_avoid.append(f"asin != {a_val}")
+            else:
+                must_avoid.append(f"asin != {val}")
+        elif attr_lower in ("exclude_brand", "excluded_brand", "brand_exclude"):
+            must_avoid.append(f"brand != {val}")
+        elif attr_lower in ("exclude_category", "excluded_category", "category_exclude"):
+            must_avoid.append(f"category != {val}")
+        elif op_lower == "exclude":
             must_avoid.append(f"{attr} != {val}")
         elif attr_lower not in CATALOG_SAFE_ATTRIBUTES:
             # Non-catalog attribute: demoted to soft preference (preferred qualities)
@@ -789,12 +823,17 @@ def session_context_to_user_persona(
     disliked: List[str] = []
 
     for sp in soft_preferences:
-        val = _get_field(sp, "value", "")
-        cat = _get_field(sp, "category", "")
+        raw_val = _get_field(sp, "value")
+        if raw_val is None or raw_val == "":
+            continue
+        val = str(raw_val).strip()
+        if not val or val.lower() == "none":
+            continue
+        cat = str(_get_field(sp, "category", "") or "").strip()
         polarity = _coerce_numeric(_get_field(sp, "polarity", 1.0))
         if polarity is None:
             polarity = 1.0
-        evidence = _get_field(sp, "evidence", "")
+        evidence = str(_get_field(sp, "evidence", "") or "").strip()
 
         desc = f"{val} (category: {cat}, polarity: {polarity:+.1f}"
         if evidence:
@@ -1056,22 +1095,40 @@ def extract_semantic_query(
     Build a dense semantic query string for GraphSearchTool from situational context
     and positive soft preferences.
     """
-    if isinstance(context, CurrentSessionContextWrapper):
-        ctx = context.current_session_context
-    elif isinstance(context, SessionContext):
-        ctx = context
-    elif isinstance(context, dict):
-        ctx_data = context.get("current_session_context", context)
-        ctx = SessionContext.model_validate(ctx_data)
-    else:
+    if context is None:
+        return ""
+    ctx = _unwrap_session_context(context)
+    if not ctx:
         return ""
 
     tokens: List[str] = []
-    if ctx.situational_context:
-        tokens.append(ctx.situational_context.strip())
+    situational = _get_field(ctx, "situational_context", "")
+    if situational:
+        tokens.append(str(situational).strip())
 
-    for sp in ctx.extracted_parameters.soft_preferences:
-        if sp.polarity > 0.0:
-            tokens.append(sp.value.strip())
+    extracted = _get_field(ctx, "extracted_parameters", {})
+    if hasattr(extracted, "model_dump"):
+        extracted = extracted.model_dump()
+    elif not isinstance(extracted, dict):
+        extracted = {}
+
+    soft_prefs = (
+        getattr(extracted, "soft_preferences", None)
+        or (extracted.get("soft_preferences") if isinstance(extracted, dict) else None)
+        or _get_field(ctx, "soft_preferences", [])
+    )
+    if isinstance(soft_prefs, list):
+        for sp in soft_prefs:
+            raw_val = _get_field(sp, "value")
+            if raw_val is None or raw_val == "":
+                continue
+            val = str(raw_val).strip()
+            if not val or val.lower() == "none":
+                continue
+            pol = _coerce_numeric(_get_field(sp, "polarity", 1.0))
+            if pol is None:
+                pol = 1.0
+            if pol > 0.0:
+                tokens.append(val)
 
     return " ".join(tokens)
