@@ -1,0 +1,18 @@
+{
+  "run_id": "eval_2026-10-17_1937",
+  "archived_at": "2026-10-18T14:48:05",
+  "archived_from_commit": "9cbf42699db4a197efdd10f2315bc5a56df60f1a",
+  "legacy": true,
+  "note": "Pre-R2 manifest: `git_commit` 989c1cd does not identify the evaluated code; R1 ran uncommitted (with audit fixes M-1, M-2) and was committed later as 99b8506. R1 audit run, 5 CLARIFY. Not citable as exact-code evidence.",
+  "files": {
+    "manifest.json": "72e0cc2880acd59ac17630335bd8a75ce70b325f667ea360cbed34faccc8c8e7",
+    "summary.json": "593bb49e32f533ff3a881cb7c1a41e9b3cf5715c064f68ae916cc9e17d0ae9d7",
+    "retrieval_metrics.csv": "7c58fd99fd0dd09073d05c048063582f32d91bae0fa2f25ad020fc59f0751fa6",
+    "per_query.jsonl": "be29b60e3b82d920c69b1ac72d2f42678016c7ec40b101669805577043ba862b"
+  },
+  "execution_trace": {
+    "sha256": "4d6d8d19df41c06be91fd219e79e43421d97cbe8ede65214362fe05e71f74a18",
+    "bytes": 8144285,
+    "lines": 48161
+  }
+}

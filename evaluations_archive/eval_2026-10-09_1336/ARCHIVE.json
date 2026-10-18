@@ -1,0 +1,18 @@
+{
+  "run_id": "eval_2026-10-09_1336",
+  "archived_at": "2026-10-18T14:48:04",
+  "archived_from_commit": "9cbf42699db4a197efdd10f2315bc5a56df60f1a",
+  "legacy": true,
+  "note": "Pre-R2 manifest: `git_commit` (2fdf251) records HEAD only; the working-tree state is unknown. Pre-R1 hybrid-only baseline (0 CLARIFY). Not citable as exact-code evidence.",
+  "files": {
+    "manifest.json": "e70e4eaddb3ae32aac4e10d0b87ebaeb532566288dee5634483bac803542f331",
+    "summary.json": "664e5acd14c64b26674c6d00b2d290a24f1d68c3d71e048e04969e38869a5757",
+    "retrieval_metrics.csv": "0fb4b4ff8306fb9690663458d4a4b900a14b9add50239ef67dcb1f40cd84ce0a",
+    "per_query.jsonl": "934f9dc3aa9f3661e8f6b182e51b28a865f945a1ecac8168df06d309cb29b827"
+  },
+  "execution_trace": {
+    "sha256": "768849b7f865eeb405b530b975c6601b650169f9d211664891ab5f173c13175e",
+    "bytes": 3139438,
+    "lines": 19790
+  }
+}

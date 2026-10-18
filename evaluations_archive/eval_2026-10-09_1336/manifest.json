@@ -1,0 +1,43 @@
+{
+  "run_id": "eval_2026-10-09_1336",
+  "timestamp": "2026-10-09T13:44:10.252880",
+  "git_commit": "2fdf251abeefcd0dad20dc9679b48be9a6609f06",
+  "evaluation_types": [
+    "retrieval"
+  ],
+  "configuration": {
+    "mode": "live",
+    "benchmark": "live_eval_dataset.json",
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "strategies": [
+      "hybrid",
+      "vector_only",
+      "cypher_only"
+    ],
+    "query_count": 21,
+    "clarification_count": 0,
+    "clarification_rate": 0.0
+  },
+  "artifacts_generated": [
+    "manifest.json",
+    "summary.json",
+    "retrieval_metrics.json",
+    "retrieval_metrics.csv",
+    "execution_trace.log",
+    "plots/retrieval_ranking_comparison.png",
+    "plots/retrieval_ranking_comparison.jpg",
+    "plots/retrieval_metrics_comparison.png"
+  ],
+  "citable": false,
+  "archive": {
+    "legacy": true,
+    "note": "Pre-R2 manifest: `git_commit` (2fdf251) records HEAD only; the working-tree state is unknown. Pre-R1 hybrid-only baseline (0 CLARIFY). Not citable as exact-code evidence.",
+    "archived_at": "2026-10-18T14:48:04"
+  }
+}
