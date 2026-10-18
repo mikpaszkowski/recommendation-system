@@ -445,3 +445,156 @@ Run everything from the repository root with `PY=/opt/homebrew/anaconda3/bin/pyt
     - the gold-vs-target pre-flight;
     - CS@K coverage per kind;
     - the primary comparisons (n = 21 cannot separate the arms, R2-D3).
+
+---
+
+## R2a exit gate (2026-10-18)
+
+**Commit**: `88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29` (`88cdbdf`, branch `feature/afp-002-vector-aggregation`). `git status --porcelain --untracked-files=all -- src scripts tests live_eval_dataset.json` was empty before step 2 and before each gate run. QA changed no file under `src/`, `scripts/`, `tests/` or `live_eval_dataset.json` and made no commit. Interpreter: `/opt/homebrew/anaconda3/bin/python` (3.11.7). LLM: `gpt-4o` → `gpt-4o-2024-08-06`. Neo4j 5.14.0 community.
+**Runs at this commit**: exactly three evaluation runs (`eval_2026-10-18_2340`, `_2349`, `_2358`), all reported. No earlier run in `evaluations/` carries commit `88cdbdf`. No run was repeated.
+**API errors**: none. 0 `Error querying LLM` lines in any eval stdout or `execution_trace.log`, 0 `search_params_fallback: true`, and no `error` recovery outcome in AC-039 or the smoke checks.
+**Result**: **gate PASS.**
+
+### Gate table
+
+| Gate | Result | Evidence |
+|---|---|---|
+| G-1 | PASS | `pytest tests/ -q --tb=short`: **654 passed, 5 skipped** (122 s). L-12 (`test_live_eval_phone_01_candidate_recovery`) passes now that credits are back. The 5 skipped are the `RUN_LIVE_TESTS` tests |
+| AC-039 | PASS | (i) fresh vague set: `undecided` 3/3 for all 8 utterances. (ii) type-explicit: `found` 3/3 with the expected token for all 8. Tables below |
+| G-2 | PASS | `test_fusion_live_regression.py`: 2 passed (`ret_021` C920 diagnostic, `ret_001` no hub runaway) |
+| G-3 | PASS | 3 runs, each `citable: true` with `citable_reasons == []` and `citable_warnings == []`. All have the same `git_commit` (`88cdbdf…`) and the same benchmark SHA-256 (`cbbf3621bdfc64f5…`) |
+| G-4 | PASS | spurious CLARIFY 0/21 in every run (`by_reason` is empty) |
+| G-5 | PASS | `type_explicit_non_search` 0/21. All 21 `per_query.jsonl` lines are SEARCH with `clarify_reason == null`, in every run |
+| G-6 | PASS | `hybrid == hybrid@rrf3` on 21/21 SEARCH queries per run, and all five arms are present in `by_strategy` |
+| `check_eval_gate.py --max-spurious-clarify 0` | **RESULT: PASS**, exit 0 | Cross-run SEARCH intersection: 21 queries |
+| G-7 | Archived, **not committed** (left to the user) | `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`. Each holds `ARCHIVE.json` (`legacy: false`, `archived_from_commit 88cdbdf`), `manifest.json`, `summary.json`, `retrieval_metrics.csv`, `per_query.jsonl`, and the trace SHA-256. `index.json` is updated |
+| G-8 | PASS (already satisfied) | `eval_2026-10-09_1336`, `_1846`, `_1937`: `citable: false`, `legacy: true`, with notes |
+
+### AC-039 (first and only uncontaminated run; `N_PASSES = 3`)
+
+Set (i): fresh vague utterances. Expected `undecided` 3/3.
+
+| id | k/3 | outcome (p1 / p2 / p3) | flag | discarded |
+|---|---:|---|---|---|
+| `vague_cooking_sister` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_cozy_bedroom` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_camping_trip` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_coworker_30` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_dry_skin` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_sharper_at_work` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_science_kid_40` | 3/3 | undecided ×3 | `false` ×3 | none |
+| `vague_new_puppy` | 3/3 | undecided ×3 | `false` ×3 | none |
+
+In all 24 rows the model returned `category: null` and a raw flag of `false`, so no guess was blocked and `discarded_category` is always null.
+
+Set (ii): type-explicit legacy items. Expected `found` 3/3.
+
+| id | k/3 | category (all passes) | flag |
+|---|---:|---|---|
+| `live_eval_charger_01` | 3/3 | `charger` | `true` ×3 |
+| `live_eval_mouse_02` | 3/3 | `mouse` | `true` ×3 |
+| `live_eval_keyboard_01` | 3/3 | `keyboard` | `true` ×3 |
+| `live_eval_keyboard_02` | 3/3 | `keyboard` | `true` ×3 |
+| `live_eval_camera_01` | 3/3 | `webcam` | `true` ×3 |
+| `live_eval_headphone_01` | 3/3 | `headphones` | `true` ×3 |
+| `live_eval_laptop_03` | 3/3 | `laptop` | `true` ×3 |
+| `live_eval_charger_03` | 3/3 | `adapter` | `true` ×3 |
+
+### Ambiguous smoke check (§7.4, diagnostic), once after each gate run
+
+| After run | Recovery on | Recovery off | Utterance 1 ("gift … gadgets, around $50"), on / off | `recovery_discarded_category` |
+|---|---:|---:|---|---|
+| R_a `_2340` | CLARIFY 5/5 | 5/5 | `recovery_failed` (undecided) / `parser_missing_category` | none |
+| R_b `_2349` | CLARIFY 5/5 | 5/5 | `recovery_failed` (undecided) / `parser_missing_category` | none |
+| R_c `_2358` | CLARIFY 5/5 | 5/5 | `recovery_failed` (undecided) / `parser_missing_category` | none |
+
+Utterances 2–5 are router CLARIFYs in every pass. The H-1 symptom (SEARCH on `'gadget'`) did not recur in 3 of 3 passes; before FR-007a it occurred in 2 of 3 QA passes.
+
+### Dialogue per run (legacy-21; all 21 queries are type-explicit SEARCH)
+
+| Run | Spurious CLARIFY | Type-explicit non-SEARCH | CER parser | CER pipeline | Recovery calls / outcomes | `category_source_counts` | Target-admitting category |
+|---|---:|---:|---:|---:|---|---|---:|
+| R_a `eval_2026-10-18_2340` | 0/21 | 0/21 | 21/21 | 21/21 | 0 / none | parser 21 | 20/21 |
+| R_b `eval_2026-10-18_2349` | 0/21 | 0/21 | 21/21 | 21/21 | 0 / none | parser 21 | 20/21 |
+| R_c `eval_2026-10-18_2358` | 0/21 | 0/21 | 21/21 | 21/21 | 0 / none | parser 21 | 20/21 |
+
+- The target-admitting miss is `live_eval_camera_02` in every run. The applied category was "smart home security bundle", and MACS dropped it ("Dropped explicit category constraint (relying purely on vector search)"). This is the same miss as in the dev runs.
+- The parser produced every category, so recovery never ran on legacy-21. The recovery path is shown live only by AC-039 and the smoke check.
+- Gold-vs-target pre-flight (FR-026), identical in all three manifests: 17 targets checked, 38 constraints, 0 violations, 19 unknown (all numeric).
+
+### Retrieval per arm (strict target hit; SEARCH-only n = 21 = all queries in every run)
+
+The run columns give R_a / R_b / R_c. Mean = cross-run mean over the 21-query intersection. HR Wilson 95% CIs are for the per-run hit counts; HR@10 and HR@20 hit counts are the same in all three runs for every arm.
+
+| Arm | HR@10 (hits, Wilson 95%) | HR@20 (hits, Wilson 95%) | MRR R_a / R_b / R_c (mean) | NDCG@10 R_a / R_b / R_c (mean) |
+|---|---|---|---|---|
+| `rrf3` (= `hybrid`) | 0.381 (8/21) [0.208, 0.591] | 0.429 (9/21) [0.245, 0.635] | 0.234 / 0.234 / 0.210 (0.226) | 0.264 / 0.264 / 0.247 (0.259) |
+| `rrf2` | 0.429 (9/21) [0.245, 0.635] | 0.429 (9/21) [0.245, 0.635] | 0.237 / 0.237 / 0.237 (0.237) | 0.280 / 0.280 / 0.280 (0.280) |
+| `wrrf3` | 0.524 (11/21) [0.324, 0.717] | 0.571 (12/21) [0.365, 0.755] | 0.361 / 0.337 / 0.337 (0.345) | 0.398 / 0.381 / 0.381 (0.387) |
+| `cc3` | 0.476 (10/21) [0.283, 0.676] | 0.476 (10/21) [0.283, 0.676] | 0.298 / 0.298 / 0.298 (0.298) | 0.340 / 0.340 / 0.340 (0.340) |
+| `sum_legacy` | 0.333 (7/21) [0.172, 0.546] | 0.429 (9/21) [0.245, 0.635] | 0.182 / 0.174 / 0.174 (0.176) | 0.212 / 0.206 / 0.206 (0.208) |
+| `vector_only` (context) | 0.238 (5/21) | 0.333 (7/21) | 0.162 (all runs) | 0.174 |
+| `cypher_only` (context) | 0.190 (4/21) | 0.190 (4/21) | 0.148 (all runs) | 0.157 |
+
+- The runs are almost deterministic. Across runs only three target ranks change: `phone_03` under `rrf3` (1 → 2 in R_c), `laptop_02` under `sum_legacy` (2 → 3), and `keyboard_02` under `wrrf3` (1 → 2).
+- `target_review_embedded` slice: n = 1 true (`charger_02`, rank 1 in every arm) and n = 20 false. For `rrf3` on the false slice: HR@5 0.25, HR@20 0.40, MRR 0.195 / 0.195 / 0.170.
+
+### Constraint satisfaction CS@20 (gold constraints; `hybrid` = `rrf3`)
+
+| Kind | Coverage R_a / R_b / R_c | Satisfied / violated / unknown (R_a) | Note |
+|---|---|---|---|
+| Price | 0.539 / 0.541 / 0.528 | 124 / 0 / 106 | Unknowns are null prices |
+| Brand | 1.000 / 1.000 / 1.000 | 130 / 0 / 0 | |
+| Numeric | 0.000 / 0.000 / 0.000 | 0 / 0 / 370 | No `Attribute.numeric_value` in the graph (option 1; RS-11) |
+
+- `mean_cs_known@20 = 1.0` (n = 15) for every hybrid arm in every run (n = 14 for `wrrf3` and `cc3`).
+- `mean_cs_viol@20 = 0.0` (n = 17) and `violation_free@20 = 1.0` (n = 17) for every arm in every run. On the extracted request, `cs_req_known@20 = 1.0` and `cs_req_violation_free@20 = 1.0` (n = 15).
+- Price coverage of the other arms in R_a: `rrf2` 0.513, `cc3` 0.474, `sum_legacy` 0.474, `wrrf3` 0.439.
+
+### Primary comparisons (R2-D3; SEARCH-only n = 21, exact paired randomization, seed 20261018)
+
+| Comparison | Run | RR diff (95% CI) | p (RR) | NDCG@10 diff (95% CI) | p (NDCG@10) | HR@5 discordant (a only – b only), McNemar p | HR@20 discordant, McNemar p |
+|---|---|---|---:|---|---:|---|---|
+| `rrf3` vs `sum_legacy` | R_a | +0.052 [−0.099, +0.196] | 0.500 | +0.053 [−0.099, +0.197] | 0.516 | 1–1, 1.0 | 1–1, 1.0 |
+| `rrf3` vs `sum_legacy` | R_b | +0.060 [−0.094, +0.209] | 0.469 | +0.059 [−0.095, +0.206] | 0.492 | 1–1, 1.0 | 1–1, 1.0 |
+| `rrf3` vs `sum_legacy` | R_c | +0.036 [−0.109, +0.179] | 0.688 | +0.041 [−0.106, +0.185] | 0.625 | 1–1, 1.0 | 1–1, 1.0 |
+| `rrf2` vs `rrf3` | R_a | +0.003 [0.000, +0.006] | 0.250 | +0.016 [0.000, +0.045] | 0.250 | 0–0, 1.0 | 0–0, 1.0 |
+| `rrf2` vs `rrf3` | R_b | +0.003 [0.000, +0.006] | 0.250 | +0.016 [0.000, +0.045] | 0.250 | 0–0, 1.0 | 0–0, 1.0 |
+| `rrf2` vs `rrf3` | R_c | +0.027 [+0.000, +0.075] | 0.125 | +0.034 [+0.001, +0.081] | 0.125 | 0–0, 1.0 | 0–0, 1.0 |
+
+- **Neither primary comparison is significant in any run.** Cross-run mean RR diff: `rrf3 − sum_legacy` = +0.050; `rrf2 − rrf3` = +0.011.
+- The HR@20 discordant pair for `rrf3` vs `sum_legacy` is the same in every run: `keyboard_03` is found only by `rrf3`, and `laptop_01` only by `sum_legacy`.
+- `rrf2` vs `rrf3`: ΔHR@20 = 0 in every run (0 discordant queries). This is tuning-side evidence only. The RS-02 rule is decided on benchmark v2 (R2b) and confirmed on the test split (R3).
+- n = 21 cannot separate the arms (R2-D3).
+
+**Secondary family (RR, Holm across 8 tests)**:
+- `wrrf3` vs `sum_legacy` is rejected in all three runs (diff +0.180 / +0.164 / +0.164, p = 0.0039, p_holm = 0.031).
+- In R_c only, `wrrf3` also beats `rrf3` (p_holm 0.031) and `rrf2` (p_holm 0.047). In R_a and R_b these two comparisons have p_holm 0.055.
+- No other secondary test is rejected.
+- The weighted arm (`wrrf3`, the AFP-002 weights) leads on every retrieval metric in every run. Weights were not tuned before the R2 split, so the gap is a hypothesis for R2b, not a thesis claim.
+
+### Review-coverage bias (`review-coverage-bias@K`, not popularity)
+
+Base rates (manifest): **2.15%** of all `ParentProduct` nodes and **0.52%** of titled products have an embedded review.
+
+| Arm | RCB@5 mean (× all-node / × titled base rate) | RCB@20 mean (× all-node / × titled) |
+|---|---|---|
+| `sum_legacy` | 0.502 (23× / 96×) | 0.239 (11× / 46×) |
+| `rrf3` | 0.216 (10× / 41×) | 0.192 (9× / 37×) |
+| `cc3` | 0.143 (7× / 27×) | 0.140 (7× / 27×) |
+| `rrf2` | 0.054 (2.5× / 10×) | 0.051 (2.4× / 10×) |
+| `wrrf3` | 0.038 (1.8× / 7×) | 0.021 (1.0× / 4×) |
+
+- RRF over 3 channels cuts the review-coverage bias at 5 by more than half compared with `sum_legacy`. Dropping the review channel (`rrf2`) or down-weighting it (`wrrf3`) brings it close to the all-node base rate.
+- Against the titled base rate, every arm still over-represents review-embedded products. Compare against 0.52%, or state both rates (amendment 10).
+
+### Observations (no action taken)
+
+- **L-14: `git_describe` reads `88cdbdf-dirty` in all three manifests**, while `git_dirty: false`, `git_dirty_paths: []` and `citable: true`.
+  - Cause: `git describe --dirty` looks at the whole repository. The only tracked modification is the out-of-scope `_bmad-output/brainstorming/brainstorm-kg-attribute-problems-2026-10-18/brainstorm-intent.md`; `git_scope` is `[src, scripts]`.
+  - The runs are correctly citable under FR-029, but a thesis reader may misread the suffix. Recommendation (for @pm-specs, R2b): scope `git describe` to the same paths, or document the difference in `evaluations_archive/README.md`.
+- `scripts/archive_eval_run.py` takes a run ID, not a path. A first attempt with `evaluations/<run>` resolved to `evaluations/evaluations/<run>` and failed cleanly: it logged an error, exited 1 and wrote nothing. The ID form was then used. No action is needed.
+
+### Verdict (R2a exit gate)
+
+**Gate PASS.** G-1 … G-6 and G-8 pass, AC-039 passes, and G-7 is archived but awaits the user's commit of `evaluations_archive/`. AC-031 and AC-032 are met. The three citable R2a runs are `eval_2026-10-18_2340`, `eval_2026-10-18_2349` and `eval_2026-10-18_2358` at `88cdbdf`.
