@@ -32,11 +32,13 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 | 7 | [`7-doc-evaluation-framework.md`](./7-doc-evaluation-framework.md) | `evaluation-framework` | $\mathbf{RQ_7}$: Decoupled two-tiered evaluation of GraphRAG candidate retrieval (Tier 1 IR ranking) vs. LLM generative explanation (Tier 2 with Hard Dilution Cap) for failure mode detection and benchmark reproducibility | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
 | 8 | [`8-doc-catalog-stratification.md`](./8-doc-catalog-stratification.md) | `catalog-stratification` | $\mathbf{RQ_8}$: To what extent does retrieval accuracy degrade on long-tail items? | Chapter 4: Experimental Methodology | ✅ Documented |
 | 9 | [`9-doc-pipeline-alignment.md`](./9-doc-pipeline-alignment.md) | `pipeline-alignment` | $\mathbf{RQ_9}$: To what extent does aligning the evaluation execution pipeline with the live multi-agent conversational architecture improve metric integrity and edge-case telemetry compared to bypassed single-turn IR evaluation? | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
+| 10 | [`10-doc-fusion-ablation.md`](./10-doc-fusion-ablation.md) | `fusion-ablation` | $\mathbf{RQ_{10}}$: In multi-index GraphRAG retrieval with graph-node fan-out, to what extent do per-channel MaxP and rank-based fusion reduce hub bias in the top-K, and does ranking quality change when the LLM-extracted request is held fixed? (Methodological Artifact; coverage bias reduced, no measurable hit-rate change on n = 21) | Chapter 4: Hybrid Semantic-Structural Retrieval; Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
 
 ## Evaluation Summary
-- **Total Thesis Documents**: 9
-- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$, $\mathbf{RQ_5}$, $\mathbf{RQ_6}$, $\mathbf{RQ_7}$, $\mathbf{RQ_8}$, $\mathbf{RQ_9}$
-- **Latest Evaluated Scope**: Pipeline Alignment and Conversational Edge-Case Telemetry
+- **Total Thesis Documents**: 10
+- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$, $\mathbf{RQ_5}$, $\mathbf{RQ_6}$, $\mathbf{RQ_7}$, $\mathbf{RQ_8}$, $\mathbf{RQ_9}$, $\mathbf{RQ_{10}}$
+- **Latest Evaluated Scope**: Retrieval Score Redesign R1 — fan-out-invariant multi-channel fusion (MaxP + RRF, AFP-002) and same-request fusion ablation
+- **Note on contribution 4**: The unbounded vector term $S_{vec}$ (multi-index `sum(score)`) described in `4-doc-hybrid-scoring.md` is superseded by the bounded fused score of contribution 10. It survives only as the `sum_legacy` control arm.
 
 ---
 
@@ -56,7 +58,9 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
   * Dense vector embedding of graph nodes + dynamic Cypher structural constraints.
   * Critic Agent & Knowledge-Enhanced Conversational Reasoning (KECR).
   * Path-based explainability & data provenance.
+  * Fan-out-invariant multi-channel fusion (per-channel MaxP, Reciprocal Rank Fusion, bounded soft-preference bonus) and channel-level retrieval provenance (`score_fusion.py`).
 * **Chapter 5: Empirical Evaluation & Comparative Analysis**
+  * Same-request fusion arm replay (`eval_trace.search_request`) and the label-free coverage-bias@K metric with catalogue base rate.
   * Two-Tiered Evaluation Architecture (`src/evaluation/`, `scripts/evaluate_*.py`).
   * Full pipeline alignment and edge-case telemetry (telemetry capture of conversational actions without artificially corrupting IR ranking metrics).
   * Tier 1 Recommendation & Retrieval Quality ($NDCG@K$, $HitRate@K$, $MRR@K$, $MAP@K$ across $K \in \{1, 3, 5, 10, 20\}$).

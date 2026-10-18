@@ -47,6 +47,82 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-10-18-017: Correction Note — Dynamic Domain Schemas (2026-09-29-007) Not Implemented; Lucene Tier (2026-09-28-006) Superseded
+**Context**: The R2 research report (`production_artifacts/Research_Report.md`, 2026-10-18) checked two earlier decisions against the code.
+**Decision**:
+1. **2026-09-29-007 is recorded as not implemented.** `scripts/extract_domain_schemas.py` and `dynamic_domain_schemas.json` do not exist. `LLMPreferenceParser._default_system_prompt` (`src/llm_interface/preference_parser.py`) still injects the static 3-domain `src/llm_interface/domain_schemas.json` (monitor, laptop, headphones). The decision stays valid as a target. It is not scheduled in R2.
+2. **The "Lucene full-text second" tier of 2026-09-28-006 (ResolverService waterfall) is superseded** by the word-boundary regex tier of 2026-10-07-009. `ResolverService` uses substring `CONTAINS` (brand) and regex (category) as Tier 2, and the live Neo4j 5.14 graph has no full-text indexes.
+**Rationale**: The Decision Log must describe the system that actually produced the thesis results. This follows the D-3 precedent (HyDE claimed but absent).
+**Impact on vision**: None on the vision itself. It removes two claims the thesis could not support.
+**Approved by**: User (2026-10-18, `/implement` R2 Gate #1)
+
+### 📅 2026-10-18-016: Spurious CLARIFY Fix via Head-Noun Extraction Rule and Category Recovery (RS-23)
+**Context**: 4–5 of 21 live queries name the product type plainly but end as CLARIFY (`eval_2026-10-17_1846`, `eval_2026-10-17_1937`; Audit M-3), so every arm scores a miss on them. The cause has three layers:
+- `LLMPreferenceParser` drops the category when the product noun is the head of a long modified phrase ("compact 65W GaN wall charger").
+- `DialogueManager._evaluate_dialogue_state` then recomputes readiness with `category` as the critical attribute.
+- The guardrail in `AgentOrchestrator._decide_next_step` switches the router's SEARCH to CLARIFY. It ignores `has_category`, and it runs before `_generate_search_params`, which would have found the category.
+**Decision**:
+1. **Prompt fix** (`src/llm_interface/prompts/preference_extract_prompt.py`): the head noun of the requested product is a `category` hard constraint, and its modifiers are soft preferences. Add one example with a long modified noun phrase. Remove the `operating_system` hard constraint that contradicts the taxonomy rule. Add a consistency rule between `missing_critical_attributes` and the extracted constraints.
+2. **Category recovery before clarifying**: when the guardrail would switch SEARCH to CLARIFY, it first takes a category from any source (`has_category`, then `_generate_search_params`, which may return `category: null` when the user has not decided). It clarifies only if no source has a product type. The reason is recorded as `clarify_reason` in `eval_trace`.
+3. **Deferred**: a deterministic fallback against the catalogue category vocabulary waits for RS-24 (R3); a string matcher now would repeat the English-plural rule rejected on 2026-10-17. Merging the parser and `_generate_search_params` stays in AI-07, and the R2 category-extraction metrics become its regression gate.
+4. **Gate**: zero spurious CLARIFY on legacy-21 and the tuning split across 3 repeated runs. Clarification recall on the ambiguous stratum must not fall below its pre-fix value.
+**Rationale**: Both changes are LLM-based and need no vocabulary, so they work for any domain. Recovery adds no LLM call on SEARCH turns. The ambiguous-stratum gate keeps legitimate clarification (precedent: clarification-need prediction in ClariQ, Aliannejadi et al., 2020).
+**Impact on vision**: Strengthens §2 Active Clarification. The system asks only when the request is actually underspecified, not when extraction fails. Router, Critic and KECR are otherwise unchanged.
+**Approved by**: User (2026-10-18, `/implement` R2 Gate #1)
+
+### 📅 2026-10-18-015: R2 Evaluation Protocol — Frozen Split, Paired Statistics, Constraint Satisfaction, RS-02 Rule, Citable Runs
+**Context**: R1 arms differed on 2 of 21 queries. With so few discordant queries, no paired test can reach significance (an exact sign test needs at least 6 discordant queries all favouring one arm). Run-to-run LLM extraction noise (CLARIFY counts 0 / 4 / 5) is as large as the effects being measured. Both R1 manifests record `git_commit 989c1cd`, but the evaluated code ran uncommitted and was committed later as `99b8506`. `evaluations/` is git-ignored.
+**Decision**:
+1. **Split**: hashed, grouped and stratified (`sha256(salt + parent_asin) mod 100 < 60` → test, within each stratum). Legacy-21 goes to tuning. The benchmark SHA-256 and salt are committed. `--split test` requires explicit confirmation and is logged. All tuning, prompt iteration and arm selection happen on the tuning split. The test split runs once per release.
+2. **Statistics**:
+   - The primary metrics are per-query reciprocal rank and NDCG@10, compared with a paired randomization test or paired bootstrap.
+   - HR@K is reported with Wilson CIs and an exact McNemar test.
+   - The primary comparisons are pre-registered, with Holm correction across the remaining arms.
+   - End-to-end claims use r = 3 repeated runs.
+   - Every aggregate states its denominator (all queries / SEARCH-only / cross-run intersection).
+3. **constraint-satisfaction@K**:
+   - Checked against `gold_constraints` taken from the utterance, never from the target. The current target-derived `structured_filters` are not gold.
+   - Price, brand and numeric-attribute verdicts are satisfied / violated / unknown, and unknown is never counted as violated (P-2).
+   - Reported as `cs_sat`, `cs_viol`, `cs_unk`, `cs_known` (judged-only) and `violation_free@K`, against both the gold constraints and the extracted request.
+   - Category stays in `type-precision@K`.
+   - `popularity-bias@K` is reported as `review-coverage-bias@K`, with a `target_review_embedded` slice.
+4. **RS-02 rule** (tuning split): `rrf2` becomes the default if the lower bound of the ΔHR@20 CI (`rrf2 − rrf3`) is at least −0.05 and the review channel alone finds the target in at most 2% of queries. The result is confirmed once on test in R3. The decision holds only for the current 4.7% review-embedding coverage.
+5. **Citable runs**:
+   - The manifest records `git describe --dirty`, a diff hash of `src/` and `scripts/`, the benchmark hash and split, the resolved LLM model ID, and the Neo4j version and graph counts.
+   - Uncommitted changes produce a warning and `citable: false`; `--require-clean` refuses to run.
+   - Citable live runs are copied to a git-tracked `evaluations_archive/<run_id>/` (manifest, summaries, per-query JSONL, trace SHA-256).
+   - Only archived runs may be cited in the thesis. The R1 runs are archived with their commit field marked unreliable.
+**Rationale**: A frozen holdout prevents adaptive overfitting (Dwork et al., Science 2015). Continuous paired tests are the most reliable choice for IR comparisons (Smucker, Allan & Carterette, CIKM 2007; Urbano et al., SIGIR 2019). Multiple-testing control follows Carterette (TOIS 2012). Three-valued constraint verdicts follow judged-only evaluation (Buckley & Voorhees, SIGIR 2004).
+**Impact on vision**: Strengthens §5. Claims about retrieval quality become statistically defensible and reproducible, and constraint adherence is measured without inventing evidence. Extends 2026-10-03-008 (versioned runs) and 2026-10-05-001 (live-only) without changing them. Order: R2a (metrics, RS-23, archive), then R2b (benchmark v2, RS-02 evidence).
+**Approved by**: User (2026-10-18, `/implement` R2 Gate #1)
+
+### 📅 2026-10-18-014: Stratified Benchmark v2 — Amendment of 2026-10-06-002
+**Context**: The R2 research report found four problems with the current benchmark (`live_eval_dataset.json`, 21 queries, 7 categories):
+- Targets come only from the 50 most-reviewed products per category, so cold products (53% of the catalogue) cannot appear.
+- The CSS/CSI and IC selection metrics of 2026-10-06-002 were never computed; the targets are hand-picked in `scripts/extract_live_eval_dataset.py`.
+- 7 of 21 utterances name the target brand or model, despite pillar 4.
+- 21 queries cannot statistically separate fusion arms that disagree on 5–10% of queries.
+**Decision**: Amend 2026-10-06-002 as follows.
+1. **Pillars 1–2 are retained for stratum S0 (control) only**: at least 3 reviews, at least 5 attributes, embedding, positive price, IC upper half, and peer density over k = 5 (mean similarity ≥ 0.65, minimum ≥ 0.55).
+2. **New hard strata with their own inclusion rules**, computed on the live graph:
+   - **S1 cold**: no reviews, priced, embedded.
+   - **S2 sparse title**: at most 2 content tokens besides brand and model codes, at least 3 attributes.
+   - **S3 accessory trap**: at least 30% of products whose title contains the type's head noun sit in another leaf category.
+   - **S4 many-feature trade-off**: at least 4 requirements, no product meets all of them on known values.
+   - **A ambiguous**: gold action is CLARIFY.
+   - Slices: `brand_anchored`, `budget_stated`, `target_review_embedded`.
+3. **Pillar 3 (CSS ≥ 0.80, CSI) is superseded** as a selection gate. It is replaced by a graph-verified distinguishing feature: present on a target attribute, absent on peers whose value is known.
+4. **Pillar 4 is retained in part.** Contrast-aware, non-generic utterances remain required. The absolute ban on brand and title leakage is superseded by measured leakage:
+   - Utterances are generated title-blind and return their gold constraints.
+   - The budget is the target price × U(1.1, 1.5), rounded.
+   - Test-split queries must have no model-code leak, no brand mention outside the `brand_anchored` slice, title-token overlap ≤ 0.3, and must not be lexically trivial (the target is not first in a TF-IDF ranking of the category pool's titles).
+   - The user reviews every test-split utterance.
+5. **The size of "14–21 items across 7 categories" is superseded**: about 200 retrieval queries (40 per stratum S0–S4, at least 30) plus 30 ambiguous queries, drawn from at least 12 of the 71 live categories. Legacy-21 is kept as a continuity set on the tuning side.
+6. **Relevance**: strict target-hit metrics are primary. Embedding-similarity peer grades (2026-10-07-010) become a secondary metric, flagged as biased toward the product channel. An ESCI-style judged pool (Reddy et al., 2022) is optional (R2c).
+**Rationale**: Hard cases that are excluded by construction cannot be measured. Leakage inflates CRS evaluation (Zhu, Huang & Sang, 2024). Synthetic queries preserve system rankings but overstate absolute scores (Rahmani et al., SIGIR 2024), so claims are relative. Topic-set size determines error rates (Voorhees & Buckley, SIGIR 2002; Webber, Moffat & Zobel, CIKM 2008; Sakai, IRJ 2016).
+**Impact on vision**: Strengthens §5 and §4 "Primary Academic Contribution": hybrid retrieval is evaluated on the catalogue's normal cases (no reviews, sparse titles), not only on popular products. The live graph is Electronics-only, so domain-agnosticism remains a design property and is not tested empirically. The zero-mock mandate (2026-10-05-001) is unchanged.
+**Approved by**: User (2026-10-18, `/implement` R2 Gate #1)
+
 ### 📅 2026-10-17-013: AFP-002 Implemented via Reciprocal Rank Fusion (Retrieval Score Redesign R1)
 **Context**: `GraphSearchTool._execute_hybrid_search` and `_execute_vector_search` (`src/tools/graph_search_tool.py`) union the product, attribute and review vector indexes and rank by `sum(score)` over every matching node (weights 1.0 / 0.8 / 0.9, `k = limit × 30`). A product matched by many attribute or review nodes therefore collects many small scores (hub bias): in `ret_021` the Logitech C920 (`B006JH8T3S`) ranked 253rd. AFP-002 (`production_artifacts/action_items/Proposed_Fix_Vector_Aggregation.md`) was approved with adaptive late fusion, which is non-monotonic: weaker extra evidence lowers a product's score. A brainstorm (`_bmad-output/brainstorming/brainstorm-retrieval-score-relevance-2026-10-10/`) and the R1 research report (`production_artifacts/Research_Report.md`, 2026-10-17) re-examined the method.
 **Decision**:
