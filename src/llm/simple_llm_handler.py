@@ -1,7 +1,7 @@
 import json
 import os
 import logging
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Set, Union
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_openai import ChatOpenAI
@@ -30,6 +30,9 @@ class SimpleLLMHandler(LLMHandlerInterface):
             provider: 'openai' or 'ollama'
         """
         self.provider = provider
+        # Provenance (R2a, FR-031): the requested alias and the model IDs the API actually reported
+        self.model_name = model_name
+        self.resolved_model_ids: Set[str] = set()
         
         if self.provider == "openai":
             # Set up API key
@@ -52,6 +55,7 @@ class SimpleLLMHandler(LLMHandlerInterface):
             # Default for ollama if user passed an OpenAI default
             if model_name.startswith("gpt-"):
                 model_name = "llama3.1"
+                self.model_name = model_name
                 
             self.llm = ChatOpenAI(
                 openai_api_key="ollama", # Key is required but ignored by Ollama
@@ -64,6 +68,18 @@ class SimpleLLMHandler(LLMHandlerInterface):
         else:
             raise ValueError(f"Unknown provider: {provider}")
     
+    def record_response_model(self, response: Any) -> None:
+        """
+        Records the model ID reported in a LangChain response's `response_metadata["model_name"]`
+        (e.g. a dated gpt-4o snapshot). Responses without that metadata are ignored.
+        """
+        metadata = getattr(response, "response_metadata", None)
+        if not isinstance(metadata, dict):
+            return
+        model_id = metadata.get("model_name")
+        if isinstance(model_id, str) and model_id.strip():
+            self.resolved_model_ids.add(model_id.strip())
+
     def query(self, messages: List[BaseMessage]) -> str:
         """
         Submit a list of LangChain messages to the LLM.
@@ -77,6 +93,7 @@ class SimpleLLMHandler(LLMHandlerInterface):
         try:
             # Use invoke() instead of direct call
             response = self.llm.invoke(messages)
+            self.record_response_model(response)
             result = response.content
             
             # Ollama sometimes returns parsed JSON if format="json" is used, 
@@ -99,6 +116,7 @@ class SimpleLLMHandler(LLMHandlerInterface):
         """
         try:
             response = await self.llm.ainvoke(messages)
+            self.record_response_model(response)
             result = response.content
             return result if isinstance(result, str) else str(result)
             

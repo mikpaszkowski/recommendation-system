@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional, Sequence, Set
 
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
@@ -33,6 +33,22 @@ OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
 OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
 RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
        collect(DISTINCT c.name) AS category, elementId(node) AS id
+"""
+
+# Constraint-satisfaction@K facts (R2a, FR-025): one batched, parameterised read per query.
+# Attribute.numeric_value is never set by the current full ingest (batch_ingest.py reads
+# processed_metadata.csv, which keeps only brand/material/color/style/size details), so the
+# numeric list is empty on the live graph and Neo4j logs an unknown-property notice.
+CONSTRAINT_FACTS_QUERY = """
+UNWIND $asins AS asin
+MATCH (p:ParentProduct {parent_asin: asin})
+RETURN p.parent_asin AS asin,
+       p.price AS price,
+       p.title AS title,
+       [(p)-[:HAS_BRAND]->(b:Brand) | b.name] AS brands,
+       [(p)-[:HAS_ATTRIBUTE]->(a:Attribute)
+          WHERE a.numeric_value IS NOT NULL AND toLower(a.attribute_name) IN $attribute_names
+        | {name: toLower(a.attribute_name), value: a.numeric_value}] AS numeric_attributes
 """
 
 class GraphSearchTool:
@@ -126,6 +142,8 @@ class GraphSearchTool:
             logger.info(f"[GST] Normalizing filters...")
             filters = self._normalize_filters(filters)
             logger.info(f"[GST] Normalized filters: {filters}")
+        # Applied-filter telemetry (R2a, FR-016): the filters after normalisation, before MACS relaxation
+        normalized_filters = dict(filters)
         
         if not self.db or not self.embedder:
              return {"status": "error", "message": "Database or Embedder not initialized.", "items": [], "metadata": {"cypher": "", "params": {}}}
@@ -218,7 +236,10 @@ class GraphSearchTool:
                 
                 # Re-sort after additive scoring
                 result["items"] = sorted(result["items"], key=lambda x: x.get("score", 0), reverse=True)
-                
+
+            if not isinstance(result.get("metadata"), dict):
+                result["metadata"] = {}
+            result["metadata"]["normalized_filters"] = normalized_filters
             return result
 
         except Exception as e:
@@ -557,17 +578,23 @@ LIMIT $depth""",
             logger.error(f"[GST:Attributes] Error fetching attributes/reviews: {e}", exc_info=True)
             return {}
 
-    def match_category(self, asins: List[str], category: Any) -> Set[str]:
+    def match_category(self, asins: List[str], category: Any, raw_category: Optional[str] = None) -> Set[str]:
         """
         Returns the subset of `asins` that satisfies the `_build_filters` category predicate
         (taxonomy traversal or title match). Used by the type-precision@K evaluation metric.
+
+        `category` is the (normalised) category value; `raw_category` is the value as requested,
+        which `_build_filters` uses for the title condition, exactly as `search` applies it
+        (target-admitting category rate, FR-015). Without it both use `category` (unchanged).
         """
         if isinstance(category, (list, tuple)):
             category = category[0] if category else None
+        if isinstance(raw_category, (list, tuple)):
+            raw_category = raw_category[0] if raw_category else None
         if not self.db or not asins or not category:
             return set()
 
-        where_clauses, params = self._build_filters({"category": str(category)}, {"category": str(category)})
+        where_clauses, params = self._build_filters({"category": str(category)}, {"category": str(raw_category or category)})
         params["asins"] = list(asins)
         cypher = (
             "MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins AND "
@@ -580,6 +607,41 @@ LIMIT $depth""",
         except Exception as e:
             logger.error(f"[GST:Category] Category match failed for '{category}' over {len(asins)} products: {e}", exc_info=True)
             return set()
+
+    def fetch_constraint_facts(self, asins: List[str], attribute_names: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, Any]]:
+        """
+        Facts for constraint-satisfaction@K verdicts, fetched with one parameterised query.
+
+        Returns:
+            {asin: {"price": Optional[float], "title": str, "brands": List[str],
+                    "numeric_attributes": List[{"name": str, "value": float}]}};
+            ASINs missing from the graph are absent; {} on error (logged) or empty input.
+        """
+        unique_asins = [a for a in dict.fromkeys(asins or []) if a]
+        if not self.db or not unique_asins:
+            return {}
+        names = list(dict.fromkeys(str(n).strip().lower() for n in (attribute_names or []) if str(n).strip()))
+        try:
+            with self.db.session() as session:
+                rows = [dict(record) for record in session.run(CONSTRAINT_FACTS_QUERY, {"asins": unique_asins, "attribute_names": names})]
+        except Exception as e:
+            logger.error(f"[GST:Facts] Constraint fact fetch failed for {len(unique_asins)} products: {e}", exc_info=True)
+            return {}
+        facts: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            asin = row.get("asin")
+            if not asin:
+                continue
+            facts[asin] = {
+                "price": row.get("price"),
+                "title": row.get("title") or "",
+                "brands": [b for b in (row.get("brands") or []) if isinstance(b, str)],
+                "numeric_attributes": [
+                    {"name": str(a.get("name")), "value": a.get("value")}
+                    for a in (row.get("numeric_attributes") or []) if isinstance(a, dict)
+                ],
+            }
+        return facts
 
     def fetch_review_embedded_asins(self) -> Set[str]:
         """

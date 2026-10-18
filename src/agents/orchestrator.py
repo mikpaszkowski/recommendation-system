@@ -2,7 +2,8 @@ import json
 import logging
 import asyncio
 import inspect
-from typing import Dict, Any, List, Optional
+import os
+from typing import Dict, Any, FrozenSet, List, Optional, Tuple
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
@@ -32,6 +33,22 @@ from src.tools.kecr_tool import KnowledgePathExtractor
 
 logger = logging.getLogger(__name__)
 
+# RS-23 (R2a): filter keys that carry the requested product type, values that mean "no category",
+# and the attributable reasons for a CLARIFY action (recorded as eval_trace["clarify_reason"])
+CATEGORY_FILTER_KEYS: Tuple[str, ...] = ("category", "product_category", "product_type", "type", "categories")
+NULL_CATEGORY_VALUES: FrozenSet[str] = frozenset({"", "none", "null", "unknown", "n/a", "any"})
+CLARIFY_REASONS: FrozenSet[str] = frozenset({"router", "router_fallback", "parser_missing_category",
+                                             "recovery_failed", "recovery_error"})
+
+# Audit H-1 / FR-007a (spec §13 A-11): category recovery uses a recovered category only when the same
+# search-params call reports product_type_decided == true. Verbatim spec text; no examples by design.
+PRODUCT_TYPE_DECIDED_RULE = """- `product_type_decided` is true only if the user has named, or has committed to, one specific kind of
+  product, in the current message, the conversation history or the active filters.
+  Set it to false when the request names only who the product is for, an occasion or an interest, when it
+  names a broad class that covers unrelated kinds of products, or when the user is still choosing between
+  different kinds of products. When `product_type_decided` is false, `category` MUST be null.
+"""
+
 SEARCH_GENERATION_PROMPT = """
 YOUR GOAL: Help the user find the perfect product by translating their request into search arguments.
 
@@ -45,17 +62,23 @@ You are given the user's CURRENT MESSAGE, the CONVERSATION HISTORY, and the curr
 [OUTPUT FORMAT (JSON)]
 {
   "thought": "Reasoning about what changed.",
+  "product_type_decided": true,  // false if the user has not committed to one specific kind of product
   "structured_filters": { 
      "brand": "Samsung",  // specific constraint
      "price_max": 2000, 
-     "category": "laptop"
+     "category": "laptop"  // the product type the user asked for, or null if undecided
   },
   "semantic_query": "high performance gaming...", // abstract visualization of the product
   "_thinking": "Detailed step-by-step reasoning"
 }
 
 [RULES]
-- If user says "actually under 1500", UPDATE `price_max` to 150.
+- `category` is the kind of product the user is asking for, in the user's own words (the head noun of the
+  product phrase, without its modifiers). If the user has not decided what kind of product they want
+  (e.g. they are choosing between kinds of products or only describe a need), set `category` to null.
+  Never guess a category.
+""" + PRODUCT_TYPE_DECIDED_RULE + """- Copy numbers exactly as the user states them; never rescale, round or convert units.
+- If user says "actually under 1500", UPDATE `price_max` to 1500.
 - If user says "show me Dell instead", UPDATE `brand` to "Dell".
 - If user says "what about that one?", use context to identify "that one".
 """
@@ -75,7 +98,15 @@ class AgentOrchestrator:
                  dialogue_manager: Optional[DialogueManager] = None,
                  preference_parser: Optional[LLMPreferenceParser] = None,
                  kecr_tool: Optional[KnowledgePathExtractor] = None,
-                 candidate_limit: int = 20):
+                 candidate_limit: int = 20,
+                 category_recovery: Optional[bool] = None):
+        """
+        Args:
+            category_recovery: RS-23 option C. When the guardrail would switch a router SEARCH to
+                CLARIFY because the category is missing, first try to recover it from one
+                `_generate_search_params` call. None reads ORCH_CATEGORY_RECOVERY (default on;
+                "0", "false" or "no" disable it, reproducing the pre-R2 guardrail exactly).
+        """
         
         self.graph_tool = graph_tool or GraphSearchTool()
         self.profile_tool = profile_tool or ProfileTool()
@@ -87,6 +118,15 @@ class AgentOrchestrator:
         self.preference_parser = preference_parser or LLMPreferenceParser(llm_handler=self.llm_handler)
         self.kecr_tool = kecr_tool or KnowledgePathExtractor(db_connector=self.graph_tool.db)
         self.candidate_limit = candidate_limit
+        self.category_recovery = self._resolve_category_recovery(category_recovery)
+
+    @staticmethod
+    def _resolve_category_recovery(flag: Optional[bool]) -> bool:
+        """Explicit flag wins; otherwise ORCH_CATEGORY_RECOVERY (default "1") decides."""
+        if flag is not None:
+            return bool(flag)
+        raw = os.getenv("ORCH_CATEGORY_RECOVERY", "1")
+        return str(raw).strip().lower() not in ("0", "false", "no")
         
     async def run(self, user_id: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -183,7 +223,10 @@ class AgentOrchestrator:
             "next_step": None,
             "current_context": session_context.to_dict(),
             "user_profile": profile,
-            "active_filters": active_filters
+            "active_filters": active_filters,
+            "search_params": None,
+            "category_resolution": None,
+            "clarify_reason": None,
         }
 
     async def _decide_next_step(self, state: ConversationState) -> tuple[str, str]:
@@ -201,7 +244,25 @@ class AgentOrchestrator:
         history_text = "\n".join([f"{type(m).__name__}: {m.content}" for m in recent_history])
         if not history_text:
             history_text = "No recent history."
-        
+
+        # RS-23 (R2a): per-turn category attribution, reset every turn
+        state["search_params"] = None
+        extracted_hard = current_context.get("extracted_parameters", {}).get("hard_constraints", []) if isinstance(current_context, dict) else []
+        parser_category = self._category_from_hard_constraints(extracted_hard)
+        present_category, present_source = self._present_category(active_filters, current_context, parser_category)
+        has_category = present_category is not None
+        resolution: Dict[str, Any] = {
+            "parser_category": parser_category,
+            "category": None,
+            "source": None,
+            "guardrail_triggered": False,
+            "recovery_attempted": False,
+            "recovery_outcome": None,
+            "recovery_product_type_decided": None,
+            "recovery_discarded_category": None,
+        }
+        clarify_reason: Optional[str] = None
+
         try:
             profile_prefs = profile.get("preferences", {}) if isinstance(profile, dict) else {}
             if profile_prefs is None:
@@ -228,15 +289,6 @@ class AgentOrchestrator:
             ready = dialogue_state.get("ready_for_recommendation", True)
             missing = dialogue_state.get("missing_critical_attributes", [])
 
-            extracted_hard = current_context.get("extracted_parameters", {}).get("hard_constraints", []) if isinstance(current_context, dict) else []
-            has_category = bool(
-                active_filters.get("category")
-                or current_context.get("category")
-                or any(
-                    isinstance(c, dict) and c.get("attribute") == "category"
-                    for c in extracted_hard
-                )
-            )
             has_brand = bool(
                 active_filters.get("brand")
                 or any(
@@ -249,16 +301,57 @@ class AgentOrchestrator:
                 logger.info("Immunization: User has specified category and brand. Overriding CLARIFY -> SEARCH.")
                 action = "SEARCH"
                 reasoning = "Category and preferred brand provided; initiating targeted graph search."
-            elif action == "SEARCH" and not ready and missing:
-                # Only clarify if truly critical attributes (e.g. completely missing category) are absent
-                if "category" in missing:
-                    logger.info(f"Guardrail: Critical category missing. Switching SEARCH -> CLARIFY.")
-                    action = "CLARIFY"
+            elif action == "SEARCH" and not ready and missing and "category" in missing:
+                # RS-23: clarify only when no source has a product type (has_category, then recovery)
+                resolution["guardrail_triggered"] = True
+                if has_category:
+                    resolution.update(category=present_category, source=present_source)
+                    logger.info(f"Guardrail: category '{present_category}' present via {present_source}; keeping SEARCH.")
+                elif not self.category_recovery:
+                    logger.info("Guardrail: Critical category missing (recovery disabled). Switching SEARCH -> CLARIFY.")
+                    action, clarify_reason = "CLARIFY", "parser_missing_category"
                     reasoning = f"Missing critical category ({', '.join(missing)}). Clarification required before searching."
+                else:
+                    resolution["recovery_attempted"] = True
+                    rec = await self._recover_category(state)
+                    resolution["recovery_outcome"] = rec["outcome"]
+                    resolution["recovery_product_type_decided"] = rec.get("product_type_decided")
+                    resolution["recovery_discarded_category"] = rec.get("discarded_category")
+                    logger.info("[STEP 2] Category recovery: outcome=%s category=%r product_type_decided=%r discarded=%r",
+                                rec["outcome"], rec["category"], rec.get("product_type_decided"),
+                                rec.get("discarded_category"))
+                    if rec["outcome"] == "found":
+                        resolution.update(category=rec["category"], source="search_params")
+                        reasoning = f"{reasoning} (category '{rec['category']}' recovered from search parameters)"
+                    elif rec["outcome"] == "error":
+                        action, clarify_reason = "CLARIFY", "recovery_error"
+                        reasoning = "Category recovery failed with an LLM error; clarification required before searching."
+                    else:
+                        # "undecided" (H-1 gate) and "null_category" both clarify as recovery_failed
+                        action, clarify_reason = "CLARIFY", "recovery_failed"
+                        reasoning = f"Missing critical category ({', '.join(missing)}). Clarification required before searching."
 
+            # SEARCH turns that never reached the guardrail (incl. brand immunisation) rely on the present category
+            if action == "SEARCH" and resolution["category"] is None and has_category:
+                resolution.update(category=present_category, source=present_source)
+            if action == "CLARIFY" and clarify_reason is None:
+                clarify_reason = "router"
+            if action == "CLARIFY":
+                resolution["category"] = None
+                resolution["source"] = None
+
+            state["category_resolution"] = resolution
+            state["clarify_reason"] = clarify_reason
             return action, reasoning
         except Exception as e:
             logger.error(f"Router JSON parse error: {e}. Falling back to dialogue action '{suggested_action}'.")
+            if suggested_action == "CLARIFY":
+                resolution["category"] = None
+                resolution["source"] = None
+            elif suggested_action == "SEARCH" and has_category and resolution.get("category") is None:
+                resolution.update(category=present_category, source=present_source)
+            state["category_resolution"] = resolution
+            state["clarify_reason"] = "router_fallback" if suggested_action == "CLARIFY" else None
             return suggested_action, f"Fallback to dialogue action due to error: {e}"
 
     async def _execute_step(self, user_id: str, state: ConversationState, session_context: Optional[SessionContext] = None) -> Dict[str, Any]:
@@ -268,23 +361,27 @@ class AgentOrchestrator:
         profile = state.get("user_profile", {})
         active_filters = state.get("active_filters", {})
         
-        # Helper to get history text
-        history_msgs = state["messages"][:-1]
-        history_text = "\n".join([f"{type(m).__name__}: {m.content}" for m in history_msgs[-6:]])
-        
         result = {}
         
         if action == "SEARCH":
-            # 3a. Generate Hybrid Search Parameters (Merging with Active Filters)
-            logger.info(f"[STEP 3a] Generating search params via LLM...")
-            updates = await self._generate_search_params(user_message, active_filters, history_text)
+            # 3a. Generate Hybrid Search Parameters (Merging with Active Filters).
+            # RS-23 (FR-008): a category-recovery turn already made this call; reuse its result.
+            reused_params = state.get("search_params")
+            if reused_params is not None:
+                logger.info(f"[STEP 3a] Reusing search params from category recovery (no second LLM call).")
+                updates = reused_params
+                search_params_source = "recovery"
+            else:
+                logger.info(f"[STEP 3a] Generating search params via LLM...")
+                updates = await self._generate_search_params(user_message, active_filters, self._search_history_text(state))
+                search_params_source = "search_branch"
             logger.info(f"[STEP 3a] LLM returned:")
             logger.info(f"  - semantic_query: '{updates.get('semantic_query', '')}'")
             logger.info(f"  - structured_filters: {updates.get('structured_filters', {})}")
             logger.info(f"  - thought: {updates.get('thought', 'N/A')}")
             
             # 3b. Merge updates into active_filters
-            new_filters = updates.get("structured_filters", {})
+            new_filters = updates.get("structured_filters") or {}
             for k, v in new_filters.items():
                 active_filters[k] = v
                 
@@ -557,7 +654,13 @@ class AgentOrchestrator:
                     "critic_verdict": critic_verdict,
                     "graph_evidence": graph_reasoning_paths,
                     "search_metadata": search_result.get("metadata", {}),
-                    "search_request": search_request
+                    "search_request": search_request,
+                    # RS-23 attribution (FR-009)
+                    "category_resolution": self._resolution_for_trace(state),
+                    "clarify_reason": None,
+                    "search_params_source": search_params_source,
+                    "search_params_fallback": updates.get("param_source") == "fallback",
+                    "relaxed_constraints": list(search_result.get("relaxed_constraints") or []),
                 }
             }
 
@@ -575,9 +678,14 @@ class AgentOrchestrator:
                 HumanMessage(content=prompt)
             ]
             clarification = await self.llm_handler.aquery(messages)
+            clarify_reason = state.get("clarify_reason") or "router"
             result = {
                 "answer": clarification,
-                "action": "CLARIFY"
+                "action": "CLARIFY",
+                "eval_trace": {
+                    "category_resolution": self._resolution_for_trace(state),
+                    "clarify_reason": clarify_reason,
+                },
             }
 
         elif action == "UPDATE_PROFILE":
@@ -611,7 +719,19 @@ class AgentOrchestrator:
         return result
 
     async def _generate_search_params(self, user_message: str, current_filters: Dict[str, Any], history_text: str = "") -> Dict[str, Any]:
-        """Uses LLM to generate semantic query and structured filters."""
+        """
+        Uses LLM to generate semantic query and structured filters.
+
+        The result carries `param_source`: "llm" for a parsed response, "fallback" when the call
+        failed (exception, unparsable JSON, a non-object payload or an "Error: ..." string from
+        SimpleLLMHandler.aquery). The fallback uses the raw message as semantic query, no filters.
+
+        Parsed results always carry the top-level `product_type_decided` exactly as the LLM returned
+        it (None when the key is missing). Only `_recover_category` reads it (FR-007a); the SEARCH
+        branch merges only `structured_filters`. The fallback result has no `product_type_decided`
+        key, and recovery reports it as "error".
+        """
+        response: Optional[str] = None
         try:
             filters_context = json.dumps(current_filters, indent=2, default=str)
             prompt = f"{SEARCH_GENERATION_PROMPT}\n\n[CONVERSATION HISTORY]\n{history_text}\n\n[ACTIVE FILTERS]\n{filters_context}\n\n[USER MESSAGE]\n{user_message}"
@@ -622,19 +742,155 @@ class AgentOrchestrator:
             ]
             
             response = await self.llm_handler.aquery(messages)
+            if not isinstance(response, str):
+                raise ValueError(f"LLM returned a non-string response of type {type(response).__name__}")
+            if response.strip().startswith("Error:"):
+                raise RuntimeError(f"LLM handler reported an error: {response.strip()[:200]}")
             logger.debug(f"Raw LLM response for search params: {response[:300]}")
             cleaned = self._clean_llm_json(response)
             parsed = json.loads(cleaned)
+            if not isinstance(parsed, dict):
+                raise ValueError(f"Search params JSON is a {type(parsed).__name__}, expected an object")
+            if not isinstance(parsed.get("structured_filters"), dict):
+                parsed["structured_filters"] = {}
+            parsed["product_type_decided"] = parsed.get("product_type_decided")
+            parsed["param_source"] = "llm"
             logger.info(f"Search params parsed successfully")
             return parsed
         except Exception as e:
             logger.error(f"Search Param Generation failed: {e}")
-            logger.error(f"Raw LLM response was: {response[:500] if 'response' in dir() else 'N/A'}")
+            logger.error(f"Raw LLM response was: {response[:500] if isinstance(response, str) else 'N/A'}")
             # Fallback: Use raw message as semantic query, no filters
             return {
                 "semantic_query": user_message,
-                "structured_filters": {}
+                "structured_filters": {},
+                "param_source": "fallback",
             }
+
+    @staticmethod
+    def _category_from_filters(filters: Any) -> Optional[str]:
+        """
+        First usable category value under CATEGORY_FILTER_KEYS (a string, or the first item of a
+        list); None for missing, non-string or NULL_CATEGORY_VALUES (case-insensitive, stripped).
+        """
+        if not isinstance(filters, dict):
+            return None
+        for key in CATEGORY_FILTER_KEYS:
+            value = filters.get(key)
+            if isinstance(value, (list, tuple)):
+                value = value[0] if value else None
+            if not isinstance(value, str):
+                continue
+            cleaned = value.strip()
+            if cleaned.lower() in NULL_CATEGORY_VALUES:
+                continue
+            return cleaned
+        return None
+
+    @staticmethod
+    def _category_from_hard_constraints(hard_constraints: Any) -> Optional[str]:
+        """First usable category value among session-context hard constraints (non-exclude operators)."""
+        if not isinstance(hard_constraints, (list, tuple)):
+            return None
+        for constraint in hard_constraints:
+            if not isinstance(constraint, dict):
+                continue
+            attribute = str(constraint.get("attribute") or "").strip().lower()
+            operator = str(constraint.get("operator") or "").strip().lower()
+            if attribute not in CATEGORY_FILTER_KEYS or operator == "exclude":
+                continue
+            value = AgentOrchestrator._category_from_filters({"category": constraint.get("value")})
+            if value is not None:
+                return value
+        return None
+
+    @classmethod
+    def _present_category(cls, active_filters: Any, current_context: Any,
+                          parser_category: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+        """
+        The category already available before any recovery, with its source: the parser's hard
+        constraint first ("parser"), then the active filters ("active_filters", which also carry
+        profile and accumulated session filters), then `current_context["category"]`
+        ("session_context"). (None, None) when no source has one.
+        """
+        if parser_category is not None:
+            return parser_category, "parser"
+        from_filters = cls._category_from_filters(active_filters)
+        if from_filters is not None:
+            return from_filters, "active_filters"
+        if isinstance(current_context, dict):
+            from_context = cls._category_from_filters({"category": current_context.get("category")})
+            if from_context is not None:
+                return from_context, "session_context"
+        return None, None
+
+    @staticmethod
+    def _search_history_text(state: ConversationState) -> str:
+        """History text for _generate_search_params: the last 6 messages before the current one."""
+        history_msgs = state["messages"][:-1]
+        return "\n".join([f"{type(m).__name__}: {m.content}" for m in history_msgs[-6:]])
+
+    async def _recover_category(self, state: ConversationState) -> Dict[str, Any]:
+        """
+        RS-23 option C: one _generate_search_params call before the guardrail clarifies. The result
+        is stored in state["search_params"] so the SEARCH branch reuses it (no second call).
+        The recovered category is not written back into the DialogueManager session (spec §3.4,
+        Open Question 4): a later turn without a category recovers again, until AI-07 merges the
+        parser and the search-params call into one source of truth.
+
+        Audit H-1 / FR-007a: the recovered category is used only when the same call also returned
+        `product_type_decided` as the JSON boolean `true`. Outcomes are checked in the order
+        error -> undecided -> null_category -> found:
+          - "error": the call raised or fell back (`param_source == "fallback"`).
+          - "undecided": the flag is not `True` (false, missing, null, or a non-boolean such as
+            "true" or 1); a usable category the call returned is discarded and reported.
+          - "null_category": the flag is `True` but there is no usable category.
+          - "found": the flag is `True` and a usable category is present.
+
+        Returns:
+            {"category": Optional[str],
+             "outcome": "found" | "undecided" | "null_category" | "error",
+             "product_type_decided": Optional[bool],  # the flag when it is a boolean, else None
+             "discarded_category": Optional[str]}     # set only for "undecided"
+        """
+        user_message = state["messages"][-1].content
+        active_filters = state.get("active_filters", {}) or {}
+        try:
+            params = await self._generate_search_params(user_message, active_filters, self._search_history_text(state))
+        except Exception as e:
+            logger.error(f"[STEP 2] Category recovery call failed: {e}")
+            return {"category": None, "outcome": "error", "product_type_decided": None, "discarded_category": None}
+        state["search_params"] = params
+        if params.get("param_source") == "fallback":
+            return {"category": None, "outcome": "error", "product_type_decided": None, "discarded_category": None}
+        raw_flag = params.get("product_type_decided")
+        flag: Optional[bool] = raw_flag if isinstance(raw_flag, bool) else None
+        category = self._category_from_filters(params.get("structured_filters"))
+        if raw_flag is not True:
+            return {"category": None, "outcome": "undecided", "product_type_decided": flag,
+                    "discarded_category": category}
+        if category is None:
+            return {"category": None, "outcome": "null_category", "product_type_decided": True,
+                    "discarded_category": None}
+        return {"category": category, "outcome": "found", "product_type_decided": True,
+                "discarded_category": None}
+        return {"category": category, "outcome": "found", "product_type_decided": True,
+                "discarded_category": None}
+
+    @staticmethod
+    def _resolution_for_trace(state: ConversationState) -> Dict[str, Any]:
+        """Copy of state["category_resolution"] for eval_trace, with the full key set even if routing was skipped."""
+        resolution = state.get("category_resolution") or {}
+        return {
+            "parser_category": resolution.get("parser_category"),
+            "category": resolution.get("category"),
+            "source": resolution.get("source"),
+            "guardrail_triggered": bool(resolution.get("guardrail_triggered", False)),
+            "recovery_attempted": bool(resolution.get("recovery_attempted", False)),
+            "recovery_outcome": resolution.get("recovery_outcome"),
+            "recovery_product_type_decided": resolution.get("recovery_product_type_decided"),
+            "recovery_discarded_category": resolution.get("recovery_discarded_category"),
+        }
 
     @staticmethod
     def _clean_llm_json(raw: str) -> str:

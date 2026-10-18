@@ -11,7 +11,119 @@ from __future__ import annotations
 from typing import Optional
 from langchain_core.prompts import ChatPromptTemplate
 
-SYSTEM_PROMPT = """<objective>
+# RS-23 option A (R2a, Technical Specification §4.1). The three texts below are kept as separate
+# module-level constants so tests can inspect them in isolation; SYSTEM_PROMPT concatenates them.
+# They are domain-agnostic on purpose: no category list, no inflection instruction, and none of
+# the legacy-21 benchmark product types (contamination rule FR-002).
+
+PRODUCT_TYPE_RULE = """      - PRODUCT TYPE RULE (category):
+        * When the user names the kind of product they want, you MUST add the hard constraint
+          {"attribute": "category", "operator": "include", "value": <product type>}.
+        * The product type is the head of the noun phrase that names the requested product: the noun,
+          or fixed compound noun, that says WHAT the product is. Copy it in the user's own words.
+        * Every modifier around the head (features, specifications, materials, connectivity, size,
+          colour, intended use, quality words) goes to soft_preferences, never into the category value.
+        * A product described with many modifiers still has exactly one product type. The longer the
+          description, the more carefully you must find its head noun. For example:
+          "a breathable lightweight linen midi dress with puff sleeves" -> category "dress";
+          "a fragrance-free moisturiser for sensitive skin" -> category "moisturiser";
+          "an insulated stainless-steel water bottle that keeps drinks cold all day" -> category "water bottle".
+        * Do not invent a product type the user did not state, and do not replace the user's words
+          with a broader or narrower type.
+"""
+
+CATEGORY_CONSISTENCY_RULE = """     * CONSISTENCY CHECK (category): before answering, compare your output with your own situational_context.
+       If the user's message or your situational_context names a product type, then hard_constraints MUST
+       contain a "category" constraint, and "category" MUST NOT appear in missing_critical_attributes.
+       List "category" as missing ONLY when the user has not decided what kind of product they want
+       (for example, they are choosing between different kinds of products, or they describe a need
+       without naming a product).
+"""
+
+LONG_MODIFIER_EXAMPLE = """<example_7>
+INPUT:
+User: I'm after a lightweight waterproof packable down hiking jacket with a removable hood and two zip chest pockets for under $180.
+OUTPUT:
+{
+  "current_session_context": {
+    "session_intent": "initial_search",
+    "situational_context": "Hiker looking for a lightweight, waterproof, packable down jacket with a removable hood and zip chest pockets under $180.",
+    "extracted_parameters": {
+      "hard_constraints": [
+        {
+          "attribute": "category",
+          "operator": "include",
+          "value": "jacket"
+        },
+        {
+          "attribute": "price",
+          "operator": "less_than",
+          "value": 180
+        }
+      ],
+      "soft_preferences": [
+        {
+          "category": "weight",
+          "value": "lightweight",
+          "polarity": 0.8,
+          "confidence": 0.9,
+          "evidence": "lightweight"
+        },
+        {
+          "category": "waterproofing",
+          "value": "waterproof",
+          "polarity": 0.9,
+          "confidence": 0.9,
+          "evidence": "waterproof"
+        },
+        {
+          "category": "packability",
+          "value": "packable",
+          "polarity": 0.7,
+          "confidence": 0.9,
+          "evidence": "packable"
+        },
+        {
+          "category": "insulation",
+          "value": "down",
+          "polarity": 0.8,
+          "confidence": 0.9,
+          "evidence": "down hiking jacket"
+        },
+        {
+          "category": "use_case",
+          "value": "hiking",
+          "polarity": 0.8,
+          "confidence": 0.9,
+          "evidence": "hiking jacket"
+        },
+        {
+          "category": "hood",
+          "value": "removable hood",
+          "polarity": 0.7,
+          "confidence": 0.9,
+          "evidence": "with a removable hood"
+        },
+        {
+          "category": "pockets",
+          "value": "two zip chest pockets",
+          "polarity": 0.6,
+          "confidence": 0.9,
+          "evidence": "two zip chest pockets"
+        }
+      ]
+    },
+    "dialogue_state": {
+      "ready_for_recommendation": true,
+      "missing_critical_attributes": [],
+      "suggested_system_action": "present_results"
+    }
+  }
+}
+</example_7>
+"""
+
+_PROMPT_HEAD = """<objective>
 You are an expert conversational preference extraction engine for an intelligent Conversational Recommender System (CRS).
 Your objective is to analyze a multi-turn conversation between a User and an Assistant, comprehend the user's domain intent, situation, and requirements, and extract structured preferences strictly complying with the canonical `current_session_context` JSON schema.
 </objective>
@@ -47,7 +159,9 @@ Analyze the full multi-turn conversation history carefully and extract the curre
         3. `brand` (EITHER affirmative inclusion OR negative exclusion):
            - Use operator "equal" or "include" when the user specifies a required brand (e.g., "from LG", "by Sony", "Apple laptop").
            - Use operator "exclude" when the user explicitly rejects a brand (e.g., "no HP", "except Dell", "anything but Apple").
-      - Do NOT put technical specifications (e.g., RAM, refresh rate, screen size) in `hard_constraints`. These must go to `soft_preferences`.
+"""
+
+_PROMPT_RULES_MIDDLE = """      - Do NOT put technical specifications (e.g., RAM, refresh rate, screen size) in `hard_constraints`. These must go to `soft_preferences`.
       - Each hard constraint object MUST contain:
         * "attribute" (String): Restricted to "price", "category", or "brand".
         * "operator" (String): EXACTLY ONE of the allowed enums:
@@ -86,7 +200,9 @@ Analyze the full multi-turn conversation history carefully and extract the curre
          * "ask_clarification": When "ready_for_recommendation" is `false`, prompt the user for missing critical details.
          * "present_results": When "ready_for_recommendation" is `true`, proceed to retrieve and show recommendations.
          * "change_topic": When the user changes subjects, asks general non-recommendation questions, or indicates completion.
+"""
 
+_PROMPT_RULES_TAIL = """
 6. MULTI-TURN ACCUMULATION:
    - When given a multi-turn conversation, combine preferences established across previous turns while respecting modifications, refinements, or corrections made in later turns.
 </rules>
@@ -114,14 +230,16 @@ OUTPUT:
           "attribute": "price",
           "operator": "less_than",
           "value": 1000
-        },
-        {
-          "attribute": "operating_system",
-          "operator": "exclude",
-          "value": "ChromeOS"
         }
       ],
       "soft_preferences": [
+        {
+          "category": "operating_system",
+          "value": "ChromeOS",
+          "polarity": -1.0,
+          "confidence": 1.0,
+          "evidence": "I definitely do not want ChromeOS"
+        },
         {
           "category": "weight",
           "value": "lightweight",
@@ -420,12 +538,25 @@ OUTPUT:
 }
 </example_6>
 
+"""
+
+_PROMPT_OUTPUT_FORMAT = """
 </examples>
 <output_format>
 CRITICAL: Your response MUST consist of a single, valid JSON object and nothing else.
 Do NOT wrap it in markdown code fences. Do NOT add any explanatory text before or after the JSON.
 Ensure all numeric values for "greater_than" / "less_than" operators are raw numbers (e.g. 1000), never strings with currency symbols (e.g. "$1000").
 </output_format>"""
+
+SYSTEM_PROMPT = (
+    _PROMPT_HEAD
+    + PRODUCT_TYPE_RULE
+    + _PROMPT_RULES_MIDDLE
+    + CATEGORY_CONSISTENCY_RULE
+    + _PROMPT_RULES_TAIL
+    + LONG_MODIFIER_EXAMPLE
+    + _PROMPT_OUTPUT_FORMAT
+)
 
 
 def prompt(conversation_text: Optional[str] = None) -> str:

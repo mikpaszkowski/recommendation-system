@@ -8,15 +8,35 @@ Provides exact mathematical formulations for:
 - Precision at K (P@K)
 - Recall at K (R@K)
 - Average Precision at K (AP@K / MAP@K)
-- Popularity bias at K (share of top-K from the review-embedded product set)
+- Review-coverage bias at K (key `popularity_bias@k`: share of top-K from the review-embedded product set)
 - Type precision at K (share of top-K satisfying the requested category)
-- Batch retrieval evaluation across cutoff horizons K with rank-preserving deduplication
+- Constraint satisfaction at K (three-valued verdicts, see constraint_satisfaction.py)
+- Batch retrieval evaluation across cutoff horizons K with rank-preserving deduplication,
+  explicit denominators (all queries / SEARCH-only) and per-subset re-aggregation (R2a)
 """
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence, Set, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 import numpy as np
+
+from src.evaluation.constraint_satisfaction import cs_scores_at_k
+
+# R2a (FR-020): the metric key stays popularity_bias@k; reports call it review-coverage bias
+METRIC_LABELS: Dict[str, str] = {
+    "popularity_bias": "review-coverage-bias@K: share of top-K from products with >= 1 embedded review (not popularity)",
+}
+# FR-023 / FR-024: CS aggregate names per flavour (gold: cs_*@k, request: cs_req_*@k)
+CS_GOLD_KEYS: Dict[str, str] = {
+    "cs_sat": "cs_sat", "cs_viol": "cs_viol", "cs_unk": "cs_unk", "cs_known": "cs_known",
+    "violation_free": "violation_free", "cs_coverage": "cs_coverage",
+}
+CS_REQ_KEYS: Dict[str, str] = {
+    "cs_sat": "cs_req_sat", "cs_viol": "cs_req_viol", "cs_unk": "cs_req_unk", "cs_known": "cs_req_known",
+    "violation_free": "cs_req_violation_free", "cs_coverage": "cs_req_coverage",
+}
+SHARE_METRICS: Tuple[str, ...] = ("popularity_bias", "type_precision") + tuple(CS_GOLD_KEYS.values()) + tuple(CS_REQ_KEYS.values())
+REVIEW_SLICE_KS: Tuple[int, ...] = (5, 20)
 
 
 def compute_ndcg_at_k(
@@ -246,13 +266,17 @@ def compute_popularity_bias_at_k(
     k: int,
 ) -> Optional[float]:
     """
-    Computes popularity bias at K: the share of the top-K candidates that belong to the
-    popular set (products with embedded reviews, which the review channel can reach).
+    Computes review-coverage bias at K (reported as `RevCovBias@K`; key `popularity_bias@k`
+    kept for compatibility): the share of the top-K candidates that belong to the set of
+    products with at least one embedded review, i.e. the products the review channel can
+    reach. It measures review-embedding coverage, not popularity.
 
     Formulation:
-        PopBias@K = |top-K ∩ POPULAR| / |top-K|
+        RevCovBias@K = |top-K ∩ REVIEW_EMBEDDED| / |top-K|
 
-    Compare against the catalogue base rate |POPULAR| / |CATALOGUE|. Returns None when
+    Compare against the catalogue base rate |REVIEW_EMBEDDED| / |CATALOGUE|. Most review-embedded
+    products on the live graph are untitled "ghost" ParentProduct nodes, so the manifest also
+    reports the titled-only base rate (`catalog_popular_share_titled`). Returns None when
     nothing was retrieved, so empty runs do not count as unbiased.
     """
     return _share_in_set_at_k(retrieved_ids, popular_ids, k)
@@ -281,6 +305,81 @@ def _mean_skip_none(values: Sequence[Optional[float]]) -> Optional[float]:
     return float(np.mean(present)) if present else None
 
 
+def _is_search(row: Mapping[str, Any]) -> bool:
+    """Rows without an `action` (offline and legacy predictions) count as SEARCH."""
+    action = row.get("action")
+    return action is None or action == "SEARCH"
+
+
+def _cs_entries(verdict_rows: Optional[Sequence[str]], k_values: Sequence[int], names: Dict[str, str]) -> Dict[str, Optional[float]]:
+    """Per-K CS aggregates for one prediction, with None values when the query has no items or constraints."""
+    entry: Dict[str, Optional[float]] = {}
+    for k in k_values:
+        scores = cs_scores_at_k(list(verdict_rows or []), int(k))
+        for source_key, key in names.items():
+            entry[f"{key}@{k}"] = scores.get(source_key) if scores else None
+    return entry
+
+
+def _slice_block(rows: Sequence[Mapping[str, Any]], k_values: Sequence[int]) -> Dict[str, Any]:
+    """n, HR@{5,20}, MRR and strict NDCG@10 for a `by_target_review_embedded` slice."""
+    block: Dict[str, Any] = {"n": len(rows)}
+    for k in REVIEW_SLICE_KS:
+        if k in k_values:
+            block[f"mean_strict_hr@{k}"] = float(np.mean([r[f"strict_hit@{k}"] for r in rows])) if rows else None
+    block["mean_mrr"] = float(np.mean([r["mrr"] for r in rows])) if rows else None
+    if 10 in k_values:
+        block["mean_strict_ndcg@10"] = float(np.mean([r["strict_ndcg@10"] for r in rows])) if rows else None
+    return block
+
+
+def aggregate_rows(rows: Sequence[Mapping[str, Any]], k_values: Sequence[int]) -> Dict[str, Any]:
+    """
+    Per-strategy aggregate block over any subset of per-query result rows (FR-019 d), e.g. the
+    cross-run SEARCH intersection. Share metrics (review-coverage bias, type precision, CS@K)
+    are averaged over non-None values and reported with their `n_<metric>@k` count; they appear
+    only when the rows carry them. `search_only` repeats HR / NDCG / MRR / recall over SEARCH rows.
+    """
+    rows = list(rows)
+    agg: Dict[str, Any] = {"query_count": len(rows), "n_all": len(rows)}
+    if not rows:
+        agg.update({"n_search": 0, "search_only": {"n": 0}})
+        return agg
+    search_rows = [r for r in rows if _is_search(r)]
+    agg["n_search"] = len(search_rows)
+
+    for k in k_values:
+        agg[f"mean_strict_hr@{k}"] = float(np.mean([r[f"strict_hit@{k}"] for r in rows]))
+        agg[f"mean_soft_hr@{k}"] = float(np.mean([r[f"soft_hit@{k}"] for r in rows]))
+        agg[f"mean_strict_ndcg@{k}"] = float(np.mean([r[f"strict_ndcg@{k}"] for r in rows]))
+        agg[f"mean_graded_ndcg@{k}"] = float(np.mean([r[f"graded_ndcg@{k}"] for r in rows]))
+        agg[f"mean_recall@{k}"] = float(np.mean([r[f"recall@{k}"] for r in rows]))
+        for metric in SHARE_METRICS:
+            key = f"{metric}@{k}"
+            if any(key in r for r in rows):
+                values = [r.get(key) for r in rows]
+                agg[f"mean_{key}"] = _mean_skip_none(values)
+                agg[f"n_{key}"] = sum(1 for v in values if v is not None)
+    agg["mean_mrr"] = float(np.mean([r["mrr"] for r in rows]))
+    latencies = [r["latency_ms"] for r in rows if isinstance(r.get("latency_ms"), (int, float))]
+    agg["p50_latency_ms"] = float(np.median(latencies)) if latencies else None
+
+    search_only: Dict[str, Any] = {"n": len(search_rows)}
+    for k in k_values:
+        search_only[f"mean_strict_hr@{k}"] = float(np.mean([r[f"strict_hit@{k}"] for r in search_rows])) if search_rows else None
+        search_only[f"mean_strict_ndcg@{k}"] = float(np.mean([r[f"strict_ndcg@{k}"] for r in search_rows])) if search_rows else None
+        search_only[f"mean_recall@{k}"] = float(np.mean([r[f"recall@{k}"] for r in search_rows])) if search_rows else None
+    search_only["mean_mrr"] = float(np.mean([r["mrr"] for r in search_rows])) if search_rows else None
+    agg["search_only"] = search_only
+
+    if any(r.get("target_review_embedded") is not None for r in rows):
+        agg["by_target_review_embedded"] = {
+            "true": _slice_block([r for r in rows if r.get("target_review_embedded") is True], k_values),
+            "false": _slice_block([r for r in rows if r.get("target_review_embedded") is False], k_values),
+        }
+    return agg
+
+
 def evaluate_retrieval_batch(
     predictions: List[Dict[str, Any]],
     ground_truth: List[Dict[str, Any]],
@@ -292,11 +391,19 @@ def evaluate_retrieval_batch(
     Evaluates a batch of retrieval predictions against ground truth queries.
 
     Args:
-        predictions: List of dicts with keys 'query_id' (or 'id'), 'candidate_asins', 'strategy', 'latency_ms'
-        ground_truth: List of dicts with keys 'query_id' (or 'id'), 'ground_truth_asins', 'graded_relevance', 'utterance'
+        predictions: List of dicts with keys 'query_id' (or 'id'), 'candidate_asins', 'strategy', 'latency_ms';
+            optionally 'action' (rows without it count as SEARCH), 'cs_gold_verdicts' and 'cs_req_verdicts'
+            (one verdict string per deduplicated candidate, see constraint_satisfaction.verdict_matrix)
+        ground_truth: List of dicts with keys 'query_id' (or 'id'), 'ground_truth_asins', 'graded_relevance', 'utterance';
+            optionally 'gold_action' and 'type_explicit'
         k_values: Sequence of cutoff horizons K
-        popular_asins: Optional review-embedded product set; enables popularity_bias@K
+        popular_asins: Optional review-embedded product set; enables popularity_bias@K (review-coverage bias)
+            and the target_review_embedded tag
         type_match: Optional mapping query_id -> candidate ASINs satisfying the requested category; enables type_precision@K
+
+    All-queries rule (FR-019 c): CLARIFY on a type-explicit query scores 0 (a miss). On a
+    gold_action = "CLARIFY" query, hit@k / strict_hit@k, strict_ndcg@k and mrr are 1.0 if the
+    action is CLARIFY and 0.0 otherwise (`scored_as: "clarify_gold"`).
 
     Returns:
         Dict with 'aggregates' (pooled over all strategies), 'aggregates_by_strategy' and 'per_query_results'.
@@ -309,6 +416,7 @@ def evaluate_retrieval_batch(
 
     per_query_results: List[Dict[str, Any]] = []
     aggregates: Dict[str, float] = {}
+    max_k = max(int(k) for k in k_values) if k_values else 10
 
     for pred in predictions:
         qid = str(pred.get("query_id") or pred.get("id") or "")
@@ -328,6 +436,8 @@ def evaluate_retrieval_batch(
         strategy = pred.get("strategy", "hybrid")
         utterance = gt.get("utterance", pred.get("utterance", pred.get("query", "")))
         latency_ms = pred.get("latency_ms", 12.5)
+        action = pred.get("action")
+        clarify_gold = gt.get("gold_action") == "CLARIFY"
 
         res_entry: Dict[str, Any] = {
             "query_id": qid,
@@ -338,7 +448,11 @@ def evaluate_retrieval_batch(
             "primary_target": primary_target,
             "peer_asins": peer_asins,
             "latency_ms": latency_ms,
+            "action": action if action is not None else "SEARCH",
+            "scored_as": "clarify_gold" if clarify_gold else "retrieval",
+            "target_review_embedded": (primary_target in popular_asins) if popular_asins is not None and primary_target else None,
         }
+        clarify_score = 1.0 if action == "CLARIFY" else 0.0
 
         # For NDCG, prefer graded relevance if provided, else target_asins
         ndcg_target = graded_rel if graded_rel else target_asins
@@ -348,6 +462,9 @@ def evaluate_retrieval_batch(
             soft_hit = int(compute_hit_rate_at_k(retrieved_asins, soft_targets, k))
             strict_ndcg = compute_ndcg_at_k(retrieved_asins, strict_targets, k)
             graded_ndcg = compute_ndcg_at_k(retrieved_asins, ndcg_target, k)
+            if clarify_gold:
+                strict_hit = int(clarify_score)
+                strict_ndcg = clarify_score
 
             res_entry[f"hit@{k}"] = strict_hit
             res_entry[f"strict_hit@{k}"] = strict_hit
@@ -364,8 +481,12 @@ def evaluate_retrieval_batch(
             if type_match is not None:
                 res_entry[f"type_precision@{k}"] = compute_type_precision_at_k(retrieved_asins, type_match.get(qid, set()), k)
 
-        max_k = max(int(k) for k in k_values) if k_values else 10
-        res_entry["mrr"] = compute_mrr_at_k(retrieved_asins, strict_targets, max_k)
+        if "cs_gold_verdicts" in pred:
+            res_entry.update(_cs_entries(pred.get("cs_gold_verdicts"), k_values, CS_GOLD_KEYS))
+        if "cs_req_verdicts" in pred:
+            res_entry.update(_cs_entries(pred.get("cs_req_verdicts"), k_values, CS_REQ_KEYS))
+
+        res_entry["mrr"] = clarify_score if clarify_gold else compute_mrr_at_k(retrieved_asins, strict_targets, max_k)
         per_query_results.append(res_entry)
 
     if per_query_results:
@@ -384,21 +505,7 @@ def evaluate_retrieval_batch(
     aggregates_by_strategy: Dict[str, Dict[str, Any]] = {}
     for strategy in dict.fromkeys(r["strategy"] for r in per_query_results):
         rows = [r for r in per_query_results if r["strategy"] == strategy]
-        strat_agg: Dict[str, Any] = {"query_count": len(rows)}
-        for k in k_values:
-            strat_agg[f"mean_strict_hr@{k}"] = float(np.mean([r[f"strict_hit@{k}"] for r in rows]))
-            strat_agg[f"mean_soft_hr@{k}"] = float(np.mean([r[f"soft_hit@{k}"] for r in rows]))
-            strat_agg[f"mean_strict_ndcg@{k}"] = float(np.mean([r[f"strict_ndcg@{k}"] for r in rows]))
-            strat_agg[f"mean_graded_ndcg@{k}"] = float(np.mean([r[f"graded_ndcg@{k}"] for r in rows]))
-            strat_agg[f"mean_recall@{k}"] = float(np.mean([r[f"recall@{k}"] for r in rows]))
-            if popular_asins is not None:
-                strat_agg[f"mean_popularity_bias@{k}"] = _mean_skip_none([r.get(f"popularity_bias@{k}") for r in rows])
-            if type_match is not None:
-                strat_agg[f"mean_type_precision@{k}"] = _mean_skip_none([r.get(f"type_precision@{k}") for r in rows])
-        strat_agg["mean_mrr"] = float(np.mean([r["mrr"] for r in rows]))
-        latencies = [r["latency_ms"] for r in rows if isinstance(r.get("latency_ms"), (int, float))]
-        strat_agg["p50_latency_ms"] = float(np.median(latencies)) if latencies else None
-        aggregates_by_strategy[strategy] = strat_agg
+        aggregates_by_strategy[strategy] = aggregate_rows(rows, k_values)
 
     return {
         "aggregates": aggregates,

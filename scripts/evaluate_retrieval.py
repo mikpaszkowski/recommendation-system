@@ -34,8 +34,32 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.evaluation.metrics import evaluate_retrieval_batch
-from src.evaluation.tracker import create_evaluation_run_dir, save_run_artifacts
+from src.evaluation.constraint_satisfaction import (
+    GoldConstraint,
+    attribute_names_for,
+    constraints_from_search_request,
+    judge,
+    parse_gold_constraints,
+    validate_gold_annotations,
+    verdict_matrix,
+)
+from src.evaluation.dialogue_metrics import (
+    annotate_target_admission,
+    build_query_record,
+    compute_dialogue_metrics,
+    format_share,
+)
+from src.evaluation.metrics import METRIC_LABELS, evaluate_retrieval_batch
+from src.evaluation.stats import DEFAULT_RESAMPLES, DEFAULT_SEED, build_comparisons, format_comparison
+from src.evaluation.provenance import (
+    GitRunner,
+    collect_benchmark_provenance,
+    collect_git_provenance,
+    collect_runtime_provenance,
+    evaluate_citable,
+    offending_paths,
+)
+from src.evaluation.tracker import create_evaluation_run_dir, save_run_artifacts, write_per_query_jsonl
 from src.evaluation.visualizer import plot_retrieval_metrics
 from src.tools.score_fusion import FUSION_ARMS, FusionConfig
 
@@ -295,6 +319,93 @@ def validate_benchmark_graph_grounding(benchmark_data: List[Dict[str, Any]], neo
     return validation_report
 
 
+# Review-coverage base rates (R2a audit). About 39% of ParentProduct nodes are untitled "ghosts"
+# (no title, price or category, only an embedding), and most review-embedded products are ghosts,
+# so the all-node base rate is dominated by them; the titled-only rate is reported alongside it.
+TITLED_PRODUCT_COUNT_QUERY = (
+    "MATCH (p:ParentProduct) WHERE p.title IS NOT NULL AND trim(p.title) <> '' RETURN count(p) AS n"
+)
+TITLED_REVIEW_EMBEDDED_COUNT_QUERY = (
+    "UNWIND $asins AS asin MATCH (p:ParentProduct {parent_asin: asin}) "
+    "WHERE p.title IS NOT NULL AND trim(p.title) <> '' RETURN count(p) AS n"
+)
+
+
+def compute_review_coverage_base_rates(session: Any, popular_asins: Set[str]) -> Dict[str, Optional[Any]]:
+    """
+    Catalogue base rates for review-coverage bias (key `popularity_bias@k`), with one
+    parameterised read per count:
+      - catalog_products / catalog_popular_share: over all ParentProduct nodes (as in R1);
+      - catalog_titled_products / review_embedded_products_titled / catalog_popular_share_titled:
+        over products with a non-empty title only (untitled ghost nodes excluded).
+    Retrieval is unaffected; this only changes what the metric is compared against.
+    Each failing count is logged and reported as None.
+    """
+    rates: Dict[str, Optional[Any]] = {
+        "catalog_products": None,
+        "catalog_popular_share": None,
+        "catalog_titled_products": None,
+        "review_embedded_products_titled": None,
+        "catalog_popular_share_titled": None,
+    }
+    try:
+        catalog_size = session.run("MATCH (p:ParentProduct) RETURN count(p) AS n").single()["n"]
+        rates["catalog_products"] = int(catalog_size)
+        rates["catalog_popular_share"] = float(len(popular_asins) / catalog_size) if catalog_size else None
+    except Exception as e:
+        logger.warning(f"Could not count catalogue products for the review-coverage base rate: {e}")
+    try:
+        titled_size = session.run(TITLED_PRODUCT_COUNT_QUERY).single()["n"]
+        titled_popular = session.run(TITLED_REVIEW_EMBEDDED_COUNT_QUERY, {"asins": sorted(popular_asins)}).single()["n"]
+        rates["catalog_titled_products"] = int(titled_size)
+        rates["review_embedded_products_titled"] = int(titled_popular)
+        rates["catalog_popular_share_titled"] = float(titled_popular / titled_size) if titled_size else None
+    except Exception as e:
+        logger.warning(f"Could not count titled products for the titled review-coverage base rate: {e}")
+    return rates
+
+
+def _gold_constraints(item: Dict[str, Any]) -> List[GoldConstraint]:
+    """Parsed gold constraints of a benchmark item ([] when absent; validated before the run)."""
+    return parse_gold_constraints(item.get("gold_constraints") or [])
+
+
+def check_gold_against_targets(benchmark_data: List[Dict[str, Any]], graph_tool: Any) -> Dict[str, Any]:
+    """
+    Gold-vs-target pre-flight (FR-026): judges each item's target against its own gold
+    constraints. Violations are warnings, not fatal; QA reports them (annotation error or
+    bad benchmark item). Unknown verdicts are counted but are not violations.
+    """
+    report: Dict[str, Any] = {"checked": 0, "constraints": 0, "unknown": 0, "violations": []}
+    items = [(item, _gold_constraints(item)) for item in benchmark_data]
+    items = [(item, gold) for item, gold in items if gold and item.get("target_asin")]
+    if not items or graph_tool is None:
+        return report
+    names = attribute_names_for([c for _, gold in items for c in gold])
+    facts = graph_tool.fetch_constraint_facts([item["target_asin"] for item, _ in items], names) or {}
+    for item, gold in items:
+        report["checked"] += 1
+        for constraint in gold:
+            verdict = judge(facts.get(item["target_asin"]), constraint)
+            report["constraints"] += 1
+            if verdict == "unknown":
+                report["unknown"] += 1
+            elif verdict == "violated":
+                qid = item.get("query_id") or item.get("id")
+                report["violations"].append({"query_id": qid, "constraint": constraint.label, "verdict": verdict})
+                logger.warning(f"[GoldCheck] Target of {qid} violates its own gold constraint {constraint.label}")
+    logger.info(
+        f"[GoldCheck] {report['checked']} targets, {report['constraints']} constraints: "
+        f"{len(report['violations'])} violated, {report['unknown']} unknown"
+    )
+    return report
+
+
+def _top_k_unique(asins: List[str], k: int) -> List[str]:
+    """Rank-preserving deduplicated top-k."""
+    return list(dict.fromkeys(a for a in asins if a))[:k]
+
+
 def run_retrieval_evaluation(
     benchmark_path: Path,
     k_values: List[int],
@@ -304,6 +415,10 @@ def run_retrieval_evaluation(
     sample_size: Optional[int] = None,
     orchestrator: Optional[Any] = None,
     fusion_arms: Optional[List[str]] = None,
+    stats_seed: int = DEFAULT_SEED,
+    stats_resamples: int = DEFAULT_RESAMPLES,
+    require_clean: bool = False,
+    git_runner: Optional[GitRunner] = None,
 ) -> int:
     """
     Executes retrieval evaluation aligned with the production Chainlit UI pipeline.
@@ -324,6 +439,10 @@ def run_retrieval_evaluation(
       - Demarcates each query with >>> [START QUERY ...] and <<< [END QUERY ...]
       - Emits human-readable Query Telemetry Summaries with constraints & Cypher
 
+    Provenance (R2a): the manifest records git, benchmark, LLM, Neo4j and Python provenance and
+    a `citable` flag. A dirty src/scripts scope or benchmark warns and marks the run non-citable;
+    with `require_clean` the run is refused (exit code 2) before the orchestrator is built.
+
     Fusion arms (live mode only):
       - Each SEARCH query's eval_trace['search_request'] is replayed through
         GraphSearchTool.search(..., fusion_config=FUSION_ARMS[arm]) and scored as
@@ -341,8 +460,26 @@ def run_retrieval_evaluation(
         logger.error("Benchmark JSON must be a list of query objects.")
         return 1
 
+    gold_errors = validate_gold_annotations(ground_truth)
+    if gold_errors:
+        for err in gold_errors:
+            logger.error(f"[GoldSchema] {err}")
+        logger.error(f"Benchmark has {len(gold_errors)} gold-annotation errors. Halting.")
+        return 1
+
+    benchmark_query_count = len(ground_truth)
     if sample_size and sample_size > 0:
         ground_truth = ground_truth[:sample_size]
+
+    # Provenance and dirty-tree policy (FR-029, FR-030), before any orchestrator or Neo4j work
+    git_provenance = collect_git_provenance(REPO_ROOT, runner=git_runner)
+    benchmark_provenance = collect_benchmark_provenance(REPO_ROOT, benchmark_path, benchmark_query_count, runner=git_runner)
+    unclean = offending_paths(git_provenance, benchmark_provenance)
+    if unclean:
+        if require_clean:
+            logger.error(f"--require-clean: refusing to run on an unclean tree. Offending paths: {unclean}")
+            return 2
+        logger.warning(f"Uncommitted or untracked evaluation inputs; this run will be marked citable: false. Paths: {unclean}")
 
     logger.info(f"Loaded {len(ground_truth)} benchmark queries. Running mode: {mode}")
 
@@ -410,20 +547,28 @@ def run_retrieval_evaluation(
         popular_asins: Optional[Set[str]] = None
         type_match: Optional[Dict[str, Set[str]]] = None
         catalog_popular_share: Optional[float] = None
+        base_rates: Dict[str, Optional[Any]] = {}
         graph_tool = getattr(orchestrator, "graph_tool", None) if mode == "live" else None
         if graph_tool is not None:
             popular_asins = set(graph_tool.fetch_review_embedded_asins() or [])
             type_match = {}
             try:
                 with graph_tool.db.session() as session:
-                    catalog_size = session.run("MATCH (p:ParentProduct) RETURN count(p) AS n").single()["n"]
-                catalog_popular_share = float(len(popular_asins) / catalog_size) if catalog_size else None
+                    base_rates = compute_review_coverage_base_rates(session, popular_asins)
+                catalog_popular_share = base_rates.get("catalog_popular_share")
             except Exception as e:
-                logger.warning(f"Could not count catalogue products for the popularity base rate: {e}")
+                logger.warning(f"Could not open a session for the review-coverage base rates: {e}")
             logger.info(
                 f"Review-embedded products: {len(popular_asins)} "
-                f"(catalogue share: {catalog_popular_share if catalog_popular_share is not None else 'unknown'})"
+                f"(catalogue share: {catalog_popular_share if catalog_popular_share is not None else 'unknown'}); "
+                f"titled only: {base_rates.get('review_embedded_products_titled')} of "
+                f"{base_rates.get('catalog_titled_products')} titled products "
+                f"(share: {base_rates.get('catalog_popular_share_titled') if base_rates.get('catalog_popular_share_titled') is not None else 'unknown'})"
             )
+            gold_target_check = check_gold_against_targets(ground_truth, graph_tool)
+        else:
+            gold_target_check = None
+        query_records: List[Dict[str, Any]] = []
 
         for idx, item in enumerate(ground_truth, 1):
             qid = str(item.get("query_id") or item.get("id") or f"query_{idx}")
@@ -465,6 +610,8 @@ def run_retrieval_evaluation(
             status = "SUCCESS"
             action = "UNKNOWN"
             latency = 0.0
+            result: Optional[Dict[str, Any]] = None
+            search_request: Optional[Dict[str, Any]] = None
 
             if orchestrator is not None and mode == "live":
                 # Reset dialogue session state for benchmark query independence
@@ -488,6 +635,7 @@ def run_retrieval_evaluation(
                     latency = (time.perf_counter() - t0) * 1000.0
 
                 action = result.get("action", "UNKNOWN")
+                search_request = (result.get("eval_trace") or {}).get("search_request")
                 session_ctx = result.get("session_context", {})
                 extracted_params = session_ctx.get("extracted_parameters", {}) if isinstance(session_ctx, dict) else {}
                 hard_constraints = extracted_params.get("hard_constraints", [])
@@ -526,7 +674,6 @@ def run_retrieval_evaluation(
                     critic_asins = [p.get("asin") for p in critic_reranked if isinstance(p, dict) and p.get("asin")]
 
                     search_request = eval_trace.get("search_request")
-
                     # Replay fusion arms first, rotating their order per query so no arm always
                     # runs first (cold-start latency would otherwise bias one arm's p50)
                     arm_strats = [s for s in strategies if s.startswith("hybrid@")]
@@ -637,17 +784,53 @@ def run_retrieval_evaluation(
                 union_asins = list(dict.fromkeys(a for cands in strat_candidates_map.values() for a in cands))
                 type_match[qid] = set(graph_tool.match_category(union_asins, requested_category) or []) if union_asins else set()
 
+            # Per-query dialogue record (R2a): category attribution, clarify reason, target admission
+            record = build_query_record(item, result if result is not None else {"action": action}, latency)
+            target_asin = record.get("target_asin")
+            if popular_asins is not None and target_asin:
+                record["target_review_embedded"] = target_asin in popular_asins
+            annotate_target_admission(record, graph_tool)
+
+            # Constraint-satisfaction verdicts (FR-022 … FR-025): one fact fetch per query, all strategies
+            gold = _gold_constraints(item)
+            request_constraints = constraints_from_search_request(search_request)
+            record["gold_constraint_labels"] = [c.label for c in gold]
+            verdicts_gold: Dict[str, List[str]] = {}
+            verdicts_req: Dict[str, List[str]] = {}
+            if graph_tool is not None:
+                tops = {strat: _top_k_unique(strat_candidates_map.get(strat, []), max_k) for strat in strategies}
+                union = list(dict.fromkeys(a for top in tops.values() for a in top))
+                facts = graph_tool.fetch_constraint_facts(union, attribute_names_for(gold)) if union and (gold or request_constraints) else {}
+                for strat, top in tops.items():
+                    verdicts_gold[strat] = verdict_matrix(top, facts, gold)
+                    verdicts_req[strat] = verdict_matrix(top, facts, request_constraints)
+
+            record["strategies"] = {}
+            for strat in strategies:
+                top = _top_k_unique(strat_candidates_map.get(strat, []), max_k)
+                record["strategies"][strat] = {
+                    "top20": top,
+                    "target_rank": (top.index(target_asin) + 1) if target_asin in top else None,
+                    "cs_gold": verdicts_gold.get(strat, []),
+                    "cs_req": verdicts_req.get(strat, []),
+                }
+            query_records.append(record)
+
             # Populate predictions across requested strategies
             for strat in strategies:
                 cands = strat_candidates_map.get(strat, [])
-                all_predictions.append({
+                prediction: Dict[str, Any] = {
                     "query_id": qid,
                     "strategy": strat,
                     "candidate_asins": cands,
                     "latency_ms": strat_latency_map.get(strat, latency),
                     "status": status,
                     "action": action,
-                })
+                }
+                if graph_tool is not None:
+                    prediction["cs_gold_verdicts"] = verdicts_gold.get(strat, [])
+                    prediction["cs_req_verdicts"] = verdicts_req.get(strat, [])
+                all_predictions.append(prediction)
 
             # Format Telemetry Summary
             if action == "CLARIFY":
@@ -729,9 +912,24 @@ def run_retrieval_evaluation(
         aggregates["total_queries"] = len(ground_truth)
         aggregates["clarification_count"] = clarification_count
         aggregates["clarification_rate"] = float(clarification_count / len(ground_truth)) if ground_truth else 0.0
+        aggregates["metric_labels"] = dict(METRIC_LABELS)
+        dialogue = compute_dialogue_metrics(query_records)
+        aggregates["dialogue"] = dialogue
 
         logger.info(f"Evaluation complete. Evaluated {len(per_query_results)} prediction runs across {len(ground_truth)} queries.")
         logger.info(f"Clarification rate: {aggregates['clarification_rate']:.2%} ({clarification_count}/{len(ground_truth)})")
+        logger.info(
+            f"[Dialogue] Spurious CLARIFY {format_share(dialogue['spurious_clarify'])} by reason {dialogue['spurious_clarify']['by_reason']} | "
+            f"CER parser {format_share(dialogue['cer_parser'])} | CER pipeline {format_share(dialogue['cer_pipeline'])} | "
+            f"type-explicit non-SEARCH {dialogue['type_explicit_non_search']['numerator']}/{dialogue['type_explicit_non_search']['n']}"
+        )
+        logger.info(
+            f"[Dialogue] Clarification recall {format_share(dialogue['clarification_recall'])} | "
+            f"precision {format_share(dialogue['clarification_precision'])} | "
+            f"target-admitting category {format_share(dialogue['target_admitting_category'])} "
+            f"(MACS dropped {dialogue['target_admitting_category']['category_dropped_by_macs']}) | "
+            f"category sources {dialogue['category_source_counts']} | recovery calls {dialogue['recovery_calls']}"
+        )
         logger.info("Pooled aggregates below average over ALL strategies; see per-strategy aggregates for comparisons.")
         for k in k_values:
             logger.info(
@@ -744,16 +942,41 @@ def run_retrieval_evaluation(
         def _fmt(value: Optional[float]) -> str:
             return f"{value:.3f}" if isinstance(value, (int, float)) else "n/a"
 
+        def _fmt_n(agg: Dict[str, Any], metric: str) -> str:
+            return f"{_fmt(agg.get(f'mean_{metric}'))} (n={agg.get(f'n_{metric}', 0)})"
+
         for strat, agg in aggregates_by_strategy.items():
+            search_only = agg.get("search_only") or {}
             logger.info(
-                f"[{strat}] HR@1 {_fmt(agg.get('mean_strict_hr@1'))} | HR@5 {_fmt(agg.get('mean_strict_hr@5'))} | "
+                f"[{strat}] all (n={agg.get('n_all')}): HR@1 {_fmt(agg.get('mean_strict_hr@1'))} | HR@5 {_fmt(agg.get('mean_strict_hr@5'))} | "
                 f"HR@10 {_fmt(agg.get('mean_strict_hr@10'))} | HR@20 {_fmt(agg.get('mean_strict_hr@20'))} | "
                 f"NDCG@5 {_fmt(agg.get('mean_strict_ndcg@5'))} | MRR {_fmt(agg.get('mean_mrr'))} | "
-                f"PopBias@5 {_fmt(agg.get('mean_popularity_bias@5'))} | PopBias@20 {_fmt(agg.get('mean_popularity_bias@20'))} | "
-                f"TypeP@5 {_fmt(agg.get('mean_type_precision@5'))} | TypeP@20 {_fmt(agg.get('mean_type_precision@20'))} | "
+                f"SEARCH-only (n={search_only.get('n')}): HR@5 {_fmt(search_only.get('mean_strict_hr@5'))} | "
+                f"HR@20 {_fmt(search_only.get('mean_strict_hr@20'))} | MRR {_fmt(search_only.get('mean_mrr'))} | "
                 f"p50 {_fmt(agg.get('p50_latency_ms'))} ms"
             )
+            logger.info(
+                f"[{strat}] RevCovBias@5 {_fmt_n(agg, 'popularity_bias@5')} | RevCovBias@20 {_fmt_n(agg, 'popularity_bias@20')} | "
+                f"TypeP@5 {_fmt_n(agg, 'type_precision@5')} | TypeP@20 {_fmt_n(agg, 'type_precision@20')} | "
+                f"CS@5 known {_fmt_n(agg, 'cs_known@5')} viol {_fmt_n(agg, 'cs_viol@5')} cov {_fmt_n(agg, 'cs_coverage@5')} | "
+                f"CS@20 known {_fmt_n(agg, 'cs_known@20')} cov {_fmt_n(agg, 'cs_coverage@20')} | "
+                f"CS-req@20 known {_fmt_n(agg, 'cs_req_known@20')} cov {_fmt_n(agg, 'cs_req_coverage@20')}"
+            )
         aggregates["by_strategy"] = aggregates_by_strategy
+
+        # Pre-registered arm comparisons (R2-D3, FR-028) on the SEARCH-only population
+        comparisons = build_comparisons(per_query_results, strategies, k_values, seed=stats_seed, n_resamples=stats_resamples)
+        aggregates["comparisons"] = comparisons
+        for entry in comparisons["primary"]:
+            logger.info(f"[Compare:primary] {format_comparison(entry)}")
+        for test in comparisons["secondary"]["tests"]:
+            if test.get("status") == "ok":
+                logger.info(
+                    f"[Compare:secondary] {test['a']} vs {test['b']} (n={test['n']}): RR diff {test['mean_diff']:+.4f} "
+                    f"p={test['p']:.4f} p_holm={test['p_holm']:.4f}{' reject' if test['reject'] else ''}"
+                )
+            else:
+                logger.info(f"[Compare:secondary] {test['a']} vs {test['b']}: {test.get('status')}")
         default_fusion = getattr(graph_tool, "fusion_config", None)
 
         # Multi-strategy comparison plots
@@ -802,6 +1025,11 @@ def run_retrieval_evaluation(
                 "fusion_arms": {arm: FUSION_ARMS[arm].to_dict() for arm in fusion_arms},
                 "review_embedded_products": len(popular_asins) if popular_asins is not None else None,
                 "catalog_popular_share": catalog_popular_share,
+                # Titled-only base rate (untitled ghost ParentProduct nodes excluded); R2a audit
+                "catalog_titled_products": base_rates.get("catalog_titled_products"),
+                "review_embedded_products_titled": base_rates.get("review_embedded_products_titled"),
+                "catalog_popular_share_titled": base_rates.get("catalog_popular_share_titled"),
+                "gold_target_check": gold_target_check,
             },
             "artifacts_generated": [
                 "manifest.json",
@@ -815,7 +1043,24 @@ def run_retrieval_evaluation(
             ],
         }
 
+        # Provenance and citable flag (FR-029 … FR-031); runtime facts collected after the loop so the
+        # model IDs the API reported are included
+        runtime_provenance = (
+            collect_runtime_provenance(orchestrator, len(popular_asins) if popular_asins is not None else None)
+            if orchestrator is not None else collect_runtime_provenance(None, None)
+        )
+        citable, citable_reasons, citable_warnings = evaluate_citable(
+            mode, sample_size, git_provenance, benchmark_provenance, runtime_provenance.get("llm") if mode == "live" else None,
+        )
+        manifest["citable"] = citable
+        manifest["citable_reasons"] = citable_reasons
+        manifest["citable_warnings"] = citable_warnings
+        manifest["provenance"] = {**git_provenance, "benchmark": benchmark_provenance, **runtime_provenance}
+        manifest["artifacts_generated"].append("per_query.jsonl")
+        logger.info(f"[Provenance] citable={citable} reasons={citable_reasons} warnings={citable_warnings}")
+
         save_run_artifacts(run_dir, manifest, batch_results)
+        write_per_query_jsonl(run_dir, query_records)
         logger.info(f"Artifacts successfully persisted to: {run_dir}")
         return 0
 
@@ -854,6 +1099,12 @@ def main() -> None:
         default=None,
         help=f"Fusion arms to replay per SEARCH query as 'hybrid@<arm>' (live only). Choices: {', '.join(sorted(FUSION_ARMS))}",
     )
+    parser.add_argument("--require-clean", action="store_true",
+                        help="Refuse to run (exit 2) if src/, scripts/ or the benchmark have uncommitted or untracked changes")
+    parser.add_argument("--stats-resamples", type=int, default=DEFAULT_RESAMPLES,
+                        help=f"Resamples for the randomization test and bootstrap (default: {DEFAULT_RESAMPLES})")
+    parser.add_argument("--stats-seed", type=int, default=DEFAULT_SEED,
+                        help=f"Seed for the comparison statistics (default: {DEFAULT_SEED})")
 
     args = parser.parse_args()
     mode = "offline" if args.offline else args.mode
@@ -869,6 +1120,9 @@ def main() -> None:
         output_dir=args.output_dir,
         sample_size=args.sample_size,
         fusion_arms=[a for raw in (args.fusion_arms or []) for a in raw.replace(",", " ").split()],
+        stats_seed=args.stats_seed,
+        stats_resamples=args.stats_resamples,
+        require_clean=args.require_clean,
     )
     sys.exit(exit_code)
 
