@@ -4,6 +4,7 @@
 **Spec Audited**: `production_artifacts/Technical_Specification.md` (R2a, approved 2026-10-18 at Gate #2; Appendix A approved; open questions 1–8 resolved as recommended; numeric constraints "option 1": verdicts on `Attribute.numeric_value` only, every `graph_attribute_names` empty, coverage reported as 0%)
 **Context**: `production_artifacts/Research_Report.md` (R2), Vision decisions 2026-10-18-014 … 017
 **Status**: PASS WITH FIXES. One High finding (H-1) is open and needs a user decision before the gate commit. The live exit gate (§7) has not run yet.
+**Status update (2026-10-18, re-audit)**: H-1 is **fixed in code** by option (c), FR-007a (commit `5446dcf`). Live verification (AC-039, §7.4 smoke check) is pending restored OpenAI credits. See "Re-audit 2026-10-18: FR-007a (H-1 option c)" below; its gate procedure replaces the one at the end of this report.
 **Branch**: `feature/afp-002-vector-aggregation` (uncommitted working tree on top of `9cbf426`)
 **Previous report**: The R1 audit (rank-based multi-channel fusion) previously at this path is preserved in git history (`git show 9cbf426:production_artifacts/Audit_Report.md`).
 
@@ -125,6 +126,8 @@ None.
   - (c) gate recovery on an explicit `product_type_decided` boolean from the same call (one call; the recovered category is used only when it is `true`).
 
   Recommended: (c) or (b) before R2b, and in any case add the smoke check to the gate procedure as a reported diagnostic.
+
+  **Status (2026-10-18)**: the user chose option (c) (spec §13 A-11, FR-007a). **Fixed in code** at `5446dcf`. Live verification pending credits (AC-039, §7.4). See the re-audit section.
 
 ### 🟡 Medium Issues
 - **M-1 — The review-coverage base rate is dominated by ghost nodes** (`scripts/evaluate_retrieval.py`). Verified on the live graph:
@@ -270,6 +273,8 @@ The R2a exit gate (G-3 … G-8, AC-031, AC-032) is **not yet evaluated**, becaus
 
 ## Gate Procedure (to run after the user authorises the commit)
 
+_Superseded 2026-10-18 by "Remaining gate procedure (after credits are restored)" in the re-audit section below. Kept for the record._
+
 Run everything from the repository root with the R1 interpreter. Every run made at the final commit must be reported; selecting 3 of N runs is not allowed.
 
 ```bash
@@ -317,3 +322,126 @@ Then @qa appends the following to this report:
 - the smoke counts.
 
 If any run shows a spurious CLARIFY, the gate fails (§7.3). Record the query, `clarify_reason` and `category_resolution` from `per_query.jsonl`. After a fix, repeat all three runs at the new commit.
+
+---
+
+## Re-audit 2026-10-18: FR-007a (H-1 option c)
+
+**Scope**: spec §13 A-11 (FR-007a, AC-034 … AC-039) and the A-11 inline amendments to FR-006, FR-007, FR-009, FR-037, §4.2, §5.1.1, §5.1.7, §7 and §10. Re-checked: FR-006, FR-007, FR-007a, FR-009, AC-004 … AC-010, AC-034 … AC-039, NFR-001.
+**Code**: `5446dcf` (R2a code, including FR-007a), docs at `f3ed804`. The working tree was clean in `src/`, `scripts/` and `tests/` during the audit.
+**Method**: static review, unit tests, and a dry run of the AC-039 harness with a mocked LLM handler. **No live LLM calls**: the OpenAI account returns HTTP 429 `credit_balance_exhausted`. AC-039 and the §7.4 smoke check are still to run.
+**Result**: **H-1 fixed in code; live verification pending credits.** No Critical or High findings. QA changed no source or test file in this re-audit.
+
+### Compliance
+
+| ID | Status | Evidence |
+|----|--------|----------|
+| FR-007a (1) prompt | ✅ | The `SEARCH_GENERATION_PROMPT` diff against `9cbf426` was rebuilt from the R1 constant plus the §4.2.3 (FR-007) edits plus the A-11 edits, and matches HEAD **byte for byte**. `PRODUCT_TYPE_DECIDED_RULE` equals the A-11 text exactly. The flag line sits between `"thought"` and `"structured_filters"`. The rule follows "Never guess a category.". The first line, the `"category": "laptop"` example line and every existing rule are unchanged |
+| FR-007a (1) vocabulary | ✅ | The rule and the whole prompt contain none of the AC-034 smoke-set tokens, none of the FR-002 legacy-21 types and none of "plural", "singular" or "lemma". The rule has no examples. The rule was checked by both the test and an independent substring scan |
+| FR-007a (2) outcomes | ✅ | `_recover_category` checks error → undecided → null_category → found. Error covers an exception and `param_source == "fallback"`; the fallback dict has no flag, so `'Error: {"product_type_decided": true}'` is still an error. Undecided is `raw_flag is not True`, a strict identity check: `"true"`, `1`, `None`, a missing key and `False` are all undecided. The reported flag is the raw value only when it is a `bool`, otherwise `None` |
+| FR-007a (3) scope | ✅ | Only `_recover_category` reads the flag. The SEARCH branch merges only `structured_filters`, so the top-level flag never reaches `active_filters`, the catalog partition or Cypher. A parser-category SEARCH with flag `false` or missing still searches. Recovery off never calls the LLM for search params, so the flag is never read |
+| FR-007a (4) trace | ✅ | `recovery_product_type_decided` and `recovery_discarded_category` are initialised to `None` every turn and are always present via `_resolution_for_trace`, on SEARCH (L659) and CLARIFY (L686) traces |
+| FR-006 / FR-008 | ✅ | `"undecided"` joins the `recovery_failed` branch. Stored params are never searched on undecided or null_category, because the turn ends in CLARIFY. `state["search_params"]` is reset every turn |
+| FR-009 | ✅ | `CLARIFY_REASONS` is unchanged |
+| Log line | ✅ | Matches the A-11 format string |
+| NFR-001 | ✅ | A recovered turn makes 3 LLM calls, the same as a normal SEARCH turn |
+| AC-034 … AC-038 | ✅ | `tests/test_category_recovery.py` L315+ (`TestDecidedPrompt`, `TestDecidedGate`, `TestRecoverCategoryDirect`, `TestDecidedScope`). AC-036 covers all five flag values, AC-037 covers five error shapes, and AC-038 asserts the flag is absent from `active_filters` and from the `structured_filters` passed to `search` |
+| AC-009 / AC-038 "pre-R2a tests unmodified" | ✅ | `git diff 9cbf426 HEAD --stat -- tests/` lists only new R2a files. `tests/test_agent_orchestrator.py` and every other pre-R2a test are untouched |
+| AC-039 set (i) | ✅ static / ⏳ live | `FRESH_VAGUE_UTTERANCES` has 8 utterances from 8 unrelated domains: cooking gift, bedroom décor, camping, farewell gift, skincare, workwear, children's science, pet. None is from §7.4 or paraphrases it. They share the H-1 failure class (recipient, occasion or interest, sometimes with a budget), which is the point of the check. None of them occurs anywhere else in the repository (grep, excluding `.git` and `.venv`). The file's only history in any ref is its creation in `5446dcf` (`git log --all --diff-filter=A`). No AC-039 output exists: no `AC039_JSON` line, no `fresh_vague` rows and no result file. The repository cannot show whether the test was run live before the commit; stdout is not persisted. The orchestrator session should confirm that it was not |
+| AC-039 set (ii) | ✅ static / ⏳ live | 8 type-explicit legacy items, starting with the 4 required ones. All 8 resolve in `live_eval_dataset.json` |
+| AC-039 harness | ✅ (dry run) | It was run with a mocked `aquery`: 48 calls, per-utterance lines and `AC039_JSON` rows printed, `as_expected` computed correctly. This checks the plumbing only and is not evidence |
+| FR-037 / §6 smoke test | ✅ | It prints `clarify_reason`, `recovery_outcome` and `recovery_discarded_category` per utterance, with recovery on and off |
+
+### Test edits made by the orchestrator session (judged)
+
+| Test (`tests/test_category_recovery.py`) | Edit | Intent preserved? |
+|---|---|---|
+| AC-004 `test_recovered_category_reaches_search_with_one_param_call` | Flag added to the double (the engineer's change, which §7 permits); the two new keys added to the expected `category_resolution` dict (orchestrator) | **Yes.** The test asserts the full dict, so the new keys must be in it, and AC-035 requires exactly these values (`True`, `None`) |
+| NFR-001 `test_recovered_turn_costs_the_same_llm_calls_as_a_normal_search` | `product_type_decided: True` on the shared double | **Yes.** Without it the recovered turn ends in CLARIFY ("undecided"), and the call-count comparison of a *recovered SEARCH* cannot run. The normal-path run ignores the flag (AC-038), so it behaves as before |
+| AC-005 `test_null_category_clarifies_without_search` | `product_type_decided: True` | **Yes.** Without it the outcome would be "undecided" and the `recovery_outcome == "null_category"` assertion would fail. With the flag the test still exercises the null-category path, as AC-037 requires ("AC-005 still passes") |
+
+**Spec conflict (for @pm-specs, not edited by QA)**: A-11 §7 says the AC-004 double is "the only permitted change to an existing R2a test", but AC-037 requires that AC-005 "still passes", and NFR-001's test cannot hold without the flag. The three edits are the smallest changes that satisfy AC-035, AC-037 and NFR-001 together. Amend A-11 §7 to permit: the flag on the AC-004, AC-005 and NFR-001 doubles, and the two new keys in AC-004's expected dict.
+
+### Findings
+
+#### 🔴 Critical / 🟠 High
+None.
+
+#### 🟡 Medium
+- **M-4 — Blocked guesses are not visible in `per_query.jsonl`** (`src/evaluation/dialogue_metrics.py::build_query_record`; spec §5.1.7, §7.3).
+  - The per-query line carries `recovery_attempted` and `recovery_outcome`, which now include "undecided". It does not carry `recovery_product_type_decided` or `recovery_discarded_category`. This matches the spec: A-11 amends §5.1.7 only for the "undecided" value.
+  - Nothing in `src/` or `scripts/` enumerates outcome values. `recovery_outcome` is passed through opaquely. `compute_dialogue_metrics` counts only `recovery_calls`, and `check_eval_gate.py` uses `clarify_reason` / `by_reason`. So "undecided" and "null_category" both appear as `recovery_failed` in the gate output.
+  - Effect on R2a: none for the gate. A type-explicit query that clarifies is a spurious CLARIFY whatever the outcome, and the outcome is in the JSONL. But §7.3 asks QA to record `category_resolution` from `per_query.jsonl`. The discarded category is there only in the `[STEP 2] Category recovery` line of `execution_trace.log`, which is git-ignored and archived only as a SHA-256.
+  - Effect on R2b: the ambiguous stratum will need the blocked-guess rate.
+  - **Not changed** (output schema; spec decides). Recommend that @pm-specs add the two keys to §5.1.7 and a `recovery_outcome_counts` block to `summary.dialogue`. Both are additive.
+
+#### 🔵 Low
+- **L-10 — Unreachable duplicate `return`** at the end of `AgentOrchestrator._recover_category` (`src/agents/orchestrator.py` L877–878, after the `"found"` return). There is no behaviour change. Delete it in the next commit, before the gate runs.
+- **L-11 — `test_null_like_category_values_do_not_count` (AC-006) is now weaker**. Its double has no flag, so it reaches `recovery_failed` through "undecided" before the null-marker check runs. `TestDecidedGate::test_null_category` covers `None`, `"none"` and `"  "` with the flag `True`. `"N/A"`, `"unknown"` and `"any"` are covered only by the direct `_category_from_filters` unit test. Fix: add `product_type_decided: True` to that double. This needs the same §7 amendment as above.
+- **L-12 — Pre-R2a live test without a skip marker**. `tests/test_session_adapter.py::test_live_eval_phone_01_candidate_recovery` builds a real `AgentOrchestrator()` and calls OpenAI unconditionally.
+  - Without credits, every call returns 429, the parser returns nothing, the router JSON fails, and the dialogue fallback gives CLARIFY. The test then fails with `assert 'CLARIFY' == 'SEARCH'` (L529).
+  - The 429 is the only cause. The query names "smartphone", so with credits the parser supplies the category and FR-007a is not involved.
+  - The default suite also spends live tokens through this test, which contradicts G-1's "live tests skipped".
+  - Recommendation (not applied; AC-009 forbids editing pre-R2a tests): add the `RUN_LIVE_TESTS` `skipif` marker, or move the test to `tests/integration/`, by user decision.
+- **L-13 — The flag nested inside `structured_filters`**. If the model put `product_type_decided` inside `structured_filters` instead of at the top level, recovery would correctly fail closed ("undecided"). But on a parser-category SEARCH the key would be merged into `active_filters` and demoted to a soft preference. This is model-dependent and was not observed. Recommend dropping the key in the SEARCH-branch merge if it is ever seen.
+
+### Test results (re-audit)
+
+- `/opt/homebrew/anaconda3/bin/python -m pytest tests/ -q --tb=short`: **653 passed, 5 skipped, 1 failed** in 114 s. The only failure is L-12 (429). The 5 skipped are the `RUN_LIVE_TESTS` tests: the 2 AC-039 tests, the smoke check and the 2 fusion regressions.
+- All 31 FR-007a unit tests pass, and so do all R2a and pre-R2a orchestrator tests.
+
+### Recommended spec amendments (for @pm-specs, continuing the list above)
+
+12. **A-11 §7**: permit the flag on the AC-004, AC-005 and NFR-001 doubles, and the two new keys in AC-004's expected dict. Optionally also on the AC-006 double (L-11).
+13. **§5.1.7 / §5.1.6** (M-4): add `recovery_product_type_decided` and `recovery_discarded_category` to the per-query line, and `recovery_outcome_counts` to `summary.dialogue`. Decide this before R2b.
+14. **G-1 / AC-009** (L-12): allow a skip marker on `tests/test_session_adapter.py::test_live_eval_phone_01_candidate_recovery`, or state that G-1 needs live credentials.
+
+### Verdict (re-audit)
+
+**PASS (static), live verification pending.** FR-007a is implemented exactly as specified, it fails closed, and its scope is contained. H-1 is fixed in code. The R2a gate must not start until AC-039 has passed live.
+
+### Remaining gate procedure (after credits are restored)
+
+Run everything from the repository root with `PY=/opt/homebrew/anaconda3/bin/python`. Every run made at the gate commit is reported; selecting 3 of N runs is not allowed.
+
+1. **Gate commit.** Delete the dead `return` (L-10), if wanted. Commit this report and any spec amendments (12–14). Do not commit again until step 9.
+   ```bash
+   git status --porcelain --untracked-files=all -- src scripts live_eval_dataset.json   # must print nothing
+   git rev-parse HEAD                                                                   # note the gate commit
+   ```
+2. **G-1**: `$PY -m pytest tests/ -v --tb=short`. With credits, L-12 should pass. Any other failure stops the procedure.
+3. **AC-039, before any gate run** (the 3 passes happen inside each test, `N_PASSES = 3`):
+   ```bash
+   RUN_LIVE_TESTS=1 $PY -m pytest -s "tests/integration/test_category_recovery_live.py::test_decided_gate_fresh_vague_set"
+   RUN_LIVE_TESTS=1 $PY -m pytest -s "tests/integration/test_category_recovery_live.py::test_decided_gate_type_explicit_legacy"
+   ```
+   - Expected (i): `"undecided"` in **3/3** for each of the 8 fresh utterances.
+   - Expected (ii): `"found"` with the expected token in **3/3** for each of the 8 type-explicit items.
+   - QA reports the per-utterance outcome, flag and discarded category (the printed lines plus the `AC039_JSON` rows).
+   - **If any utterance fails**: report it. If the rule text is then changed, set (i) becomes tuning data. A new fresh set must be written and committed before the re-run, then re-audit and restart from step 1.
+4. **G-2**: `RUN_LIVE_TESTS=1 $PY -m pytest tests/integration/test_fusion_live_regression.py -v` (2 passed).
+5. **Gate run R_a**, then **§7.4 smoke check** once (diagnostic, not gating):
+   ```bash
+   $PY scripts/evaluate_retrieval.py --mode live --require-clean --fusion-arms rrf3 rrf2 wrrf3 cc3 sum_legacy
+   RUN_LIVE_TESTS=1 $PY -m pytest -s "tests/integration/test_category_recovery_live.py::test_ambiguous_smoke_recovery_on_and_off"
+   ```
+   Record "CLARIFY k/5 with recovery on / off", with `clarify_reason`, `recovery_outcome` and `recovery_discarded_category` per utterance. Exit code 2 from the eval means the tree is not clean: stop and fix it; do not drop `--require-clean`.
+6. **Gate run R_b**, then the smoke check (same commands as step 5).
+7. **Gate run R_c**, then the smoke check (same commands as step 5).
+8. **G-3 … G-6**: `$PY scripts/check_eval_gate.py --runs <R_a> <R_b> <R_c> --max-spurious-clarify 0` (exit 0 = PASS). On a spurious CLARIFY, record the query, `clarify_reason` and `recovery_outcome` from `per_query.jsonl`, and `discarded=` from the `[STEP 2] Category recovery` line in that run's `execution_trace.log` (M-4). The gate fails (§7.3); after a fix, repeat all three runs at the new commit.
+9. **G-7**: archive the runs and commit the archive.
+   ```bash
+   $PY scripts/archive_eval_run.py <R_a>
+   $PY scripts/archive_eval_run.py <R_b>
+   $PY scripts/archive_eval_run.py <R_c>
+   git add evaluations_archive/ && git commit -m "eval: archive R2a gate runs"
+   ```
+   G-8 (the three legacy archives) is already satisfied.
+10. **Report**: @qa appends the items below to this report.
+    - AC-039 results;
+    - the gate table, with the three smoke counts next to it;
+    - parser-only CER per run;
+    - `category_source_counts`;
+    - the gold-vs-target pre-flight;
+    - CS@K coverage per kind;
+    - the primary comparisons (n = 21 cannot separate the arms, R2-D3).

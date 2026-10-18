@@ -874,8 +874,6 @@ class AgentOrchestrator:
                     "discarded_category": None}
         return {"category": category, "outcome": "found", "product_type_decided": True,
                 "discarded_category": None}
-        return {"category": category, "outcome": "found", "product_type_decided": True,
-                "discarded_category": None}
 
     @staticmethod
     def _resolution_for_trace(state: ConversationState) -> Dict[str, Any]:
