@@ -2,7 +2,7 @@
 
 **Date**: 2026-10-18
 **Author**: Product Manager Agent (@pm-specs)
-**Status**: Approved 2026-10-18 (Gate #2). Appendix A annotations approved; open questions 1–8 resolved as recommended. Amendments added 2026-10-18 post-audit (§13): A-1 … A-10 record the accepted engineer deviations and QA findings; A-11 records the H-1 decision, **option (c)** (`product_type_decided` flag, new FR-007a).
+**Status**: Approved 2026-10-18 (Gate #2). Appendix A annotations approved; open questions 1–8 resolved as recommended. Amendments added 2026-10-18 post-audit (§13): A-1 … A-10 record the accepted engineer deviations and QA findings; A-11 records the H-1 decision, **option (c)** (`product_type_decided` flag, new FR-007a). A-12 and A-13 (post-re-audit) record the accepted FR-007a test edits and the R2b-deferred blocked-guess output.
 **Related Research**: `production_artifacts/Research_Report.md` (R2, approved 2026-10-18 at Gate #1; decisions R2-D1 … R2-D8), Vision decisions 2026-10-18-014+ (R2)
 **Roadmap**: Release R2a of `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` (RS-23, RS-20 rest, run archiving; prepares RS-21 / RS-02 for R2b)
 **Branch**: `feature/afp-002-vector-aggregation` (or a follow-up branch cut from it)
@@ -978,6 +978,7 @@ How to read this section:
 - The original text in §1–§12 is kept. Each place where it would now be wrong carries a short inline note pointing here. Where an inline note and the original text differ, this section wins.
 - **A-1 … A-10** describe behaviour that is already implemented and audited. They change the spec, not the code.
 - **A-11** changes approved behaviour. It goes back through @engineer, and @qa re-audits the affected requirements before the gate commit (Audit Report, Gate Procedure step 0).
+- **A-12** and **A-13** come from the FR-007a re-audit (Audit Report, "Re-audit 2026-10-18: FR-007a (H-1 option c)", amendments 12–14). A-12 records test edits already made; A-13 is deferred to R2b.
 
 | ID | Amends | Audit source | Kind |
 |---|---|---|---|
@@ -992,6 +993,8 @@ How to read this section:
 | A-9 | FR-018 | Amendment 9, L-3 | Spec follows code |
 | A-10 | FR-020 (R1 base rate; listed by QA as FR-013) | Amendment 10, M-1 | Spec follows the audit fix |
 | A-11 | FR-007 (new FR-007a), FR-006, FR-009, FR-037, §4.2, §5.1.1, §7, §9, §10 | Amendment 11, H-1 | **New behaviour**: re-implement, re-test, re-audit |
+| A-12 | A-11 §7 (permitted test edits), AC-006 test | Re-audit amendment 12, L-11 | Spec follows code; one test to strengthen in R2b |
+| A-13 | §5.1.6, §5.1.7, `_execute_step` filter merge, G-1 / AC-009 | Re-audit amendments 13–14, M-4, L-12, L-13 | **Deferred to R2b**; not in the R2a gate |
 
 ### A-1 — `has_category` definition (FR-006, §4.2.2)
 
@@ -1151,11 +1154,57 @@ Failure policy for AC-039: a failing utterance is reported with its outcome, fla
 
 **7. Implementation and re-audit.**
 - @engineer changes `src/agents/orchestrator.py` (`PRODUCT_TYPE_DECIDED_RULE`, the output-format line, `_recover_category`, `_resolution_for_trace`, the recovery log line) and adds tests to `tests/test_category_recovery.py` and `tests/integration/test_category_recovery_live.py`.
-- The recovery double behind the existing AC-004 test gains `product_type_decided: true`. This is the only permitted change to an existing R2a test. Pre-R2a tests stay unmodified.
+- The recovery double behind the existing AC-004 test gains `product_type_decided: true`. This is the only permitted change to an existing R2a test. Pre-R2a tests stay unmodified. _Amended (§13, A-12): three further minimal edits are permitted and accepted._
 - @qa re-audits FR-006, FR-007, FR-007a, FR-009, AC-004 … AC-010 and AC-034 … AC-039, then runs AC-039 before the gate commit.
 - No new files, dependencies, environment variables or Cypher.
 
 **8. Residual risk** (added to §10): the flag comes from the same LLM call as the category, so it is a soft guard, not independent verification. A call that guesses a category can also claim the type is decided. The R2b ambiguous stratum measures this, with clarification recall reported with recovery on and off.
+
+### A-12 — Permitted edits to existing R2a tests (A-11 §7)
+
+**Source**: Audit Report, "Re-audit 2026-10-18: FR-007a (H-1 option c)", amendment 12 and "Test edits made by the orchestrator session (judged)".
+**Status**: accepted. The edits were made on 2026-10-18 in commit `5446dcf`. QA judged all three intent-preserving.
+
+A-11 §7 allowed one change to an existing R2a test (the flag on the AC-004 double). FR-007a needed three further edits in `tests/test_category_recovery.py`. They are the smallest changes that satisfy AC-035, AC-037 and NFR-001 together:
+
+| Test | Edit | Why it is needed |
+|---|---|---|
+| AC-004 `test_recovered_category_reaches_search_with_one_param_call` | The expected `category_resolution` dict gains `"recovery_product_type_decided": True, "recovery_discarded_category": None` (in addition to the flag on the double that A-11 §7 already permits) | The test asserts the full dict, so the two new keys must be in it. AC-035 requires exactly these values |
+| NFR-001 `test_recovered_turn_costs_the_same_llm_calls_as_a_normal_search` | `product_type_decided: True` on the shared double | Without it the recovered turn ends in CLARIFY ("undecided"), and a recovered SEARCH cannot be counted. The normal-path run ignores the flag (AC-038) |
+| AC-005 `test_null_category_clarifies_without_search` | `product_type_decided: True` on the double | Without it the outcome is "undecided", not "null_category". AC-037 requires that AC-005 still passes |
+
+A-11 §7 therefore reads: the permitted changes to existing R2a tests are the flag on the AC-004, AC-005 and NFR-001 doubles, and the two new keys in AC-004's expected dict. Pre-R2a tests stay unmodified (AC-009).
+
+**Known weakness (L-11)**: `test_null_like_category_values_do_not_count` (AC-006) has no flag on its double. It now reaches `recovery_failed` through "undecided" before the null-marker check runs, so it no longer exercises the null markers end to end. `None`, `"none"` and `"  "` are covered by `TestDecidedGate::test_null_category`. `"N/A"`, `"unknown"` and `"any"` are covered only by the direct `_category_from_filters` unit test. The test is kept as it is for R2a. In R2b, add `product_type_decided: True` to its double; this amendment permits that edit.
+
+### A-13 — Blocked-guess visibility in evaluation output (M-4; deferred to R2b)
+
+**Source**: Audit Report, re-audit amendments 13–14, findings M-4, L-12 and L-13.
+**Status**: deferred to R2b. Not part of the R2a gate; G-1 … G-8 are unchanged. A-13 must be implemented and audited **before the first R2b ambiguous-stratum measurement**, which needs the blocked-guess rate.
+
+**1. Per-query line (§5.1.7).** `build_query_record` (`src/evaluation/dialogue_metrics.py`) copies two keys from `eval_trace.category_resolution` (A-11 §3), with the same types and meaning:
+
+```json
+"recovery_product_type_decided": false, "recovery_discarded_category": "gadget"
+```
+
+Both are `null` when recovery did not run.
+
+**2. Dialogue summary (§5.1.6).** `compute_dialogue_metrics` adds `summary.dialogue.recovery_outcome_counts`:
+
+```json
+"recovery_outcome_counts": {"found": 4, "undecided": 0, "null_category": 0, "error": 0}
+```
+
+- Counted over queries with `recovery_attempted: true`, so the four counts sum to `recovery_calls`.
+- All four keys are always present (0 when none).
+- `recovery_calls`, `by_reason` and `scripts/check_eval_gate.py` are unchanged. Both changes are additive.
+
+**R2a interim**: on a spurious CLARIFY, QA reads the discarded category from the `[STEP 2] Category recovery` line of the run's `execution_trace.log` (Audit Report, remaining gate procedure step 8).
+
+**Related items, handled together with A-13:**
+- **L-13 — nested flag guard.** If the model puts `product_type_decided` inside `structured_filters`, recovery already fails closed ("undecided"). On a parser-category SEARCH, however, the key would be merged into `active_filters` by the SEARCH-branch merge in `AgentOrchestrator._execute_step` and demoted to a soft preference. Add a guard there that drops `product_type_decided` from `structured_filters` before the merge, with a unit test. Not observed so far; model-dependent.
+- **L-12 — pre-R2a live test without a skip marker.** `tests/test_session_adapter.py::test_live_eval_phone_01_candidate_recovery` builds a real `AgentOrchestrator()` and calls OpenAI unconditionally. Without credits it fails on HTTP 429, and with credits the default suite spends live tokens, which contradicts G-1 ("live tests skipped"). FR-007a is not involved. **Recommendation**: add the `RUN_LIVE_TESTS` `skipif` marker used by the other live tests (or move the test to `tests/integration/`). This edits a pre-R2a test, which AC-009 forbids, so it **needs explicit user approval**. Until then, G-1 is read as requiring live credentials for this one test.
 
 ---
 
