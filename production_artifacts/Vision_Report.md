@@ -47,6 +47,87 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-10-19-021: Correction Note — Claims Invalidated by the Ghost-Product Finding (Graph v1)
+**Context**: The ghost finding (brainstorm, 2026-10-18, `_bmad-output/brainstorming/brainstorm-kg-attribute-problems-2026-10-18/brainstorm-intent.md`) and the graph v2 research report (`production_artifacts/Research_Report_Graph_Rebuild.md`) checked earlier claims against the v1 graph and pipeline. This follows the 2026-10-18-017 precedent.
+**Decision**: The following are recorded as v1 artefacts or as not holding:
+1. **Coverage figures**:
+   - "47% of products have reviews": in v1, 12% of titled products have reviews.
+   - Review-embedding coverage of 4.7% / 2.2%: 85% of the 5,715 review-embedded products are ghosts.
+   - "53% cold products" (2026-10-18-014 context).
+   - The 2026-10-05-001 counts (12,909 complete products, 72,538 users with ≥ 3 reviews) and "71 live categories".
+   - All of these are recomputed on graph v2.
+2. **R1 results** (2026-10-17-013, `eval_2026-10-17_1846` and `eval_2026-10-17_1937`) were measured on a candidate pool that contained 104,281 ghosts with identical embeddings. They are valid as v1 evidence only and are re-baselined on v2.
+3. **2026-10-07-009 point 3** (hierarchical traversal) ran over 33 legacy `SUBCATEGORY_OF` edges and was effectively inactive. It is superseded by the v2 `Taxon` tree (2026-10-19-018).
+4. **2026-09-28-006 point 4 (EAV numeric schema) and 2026-10-09-012 point 2 (numeric parsing)**: `numeric_value` exists on no `Attribute` node, and attributes hold only Material, Color, Style and Size. Numeric attribute filters never ran on live data.
+5. **Vision §4**: "rich structural … nodes" did not hold for v1:
+   - 39% of products had no metadata;
+   - `features` text was not loaded;
+   - reviews are whole-review nodes, not chunks.
+6. **v1 preprocessing** read `helpful_votes` and `sort_timestamp`, but the raw fields are `helpful_vote` and `timestamp`, so both are 0 in all 1,630,273 v1 reviews.
+   - The v1 "20 most helpful" cap was therefore not based on helpfulness.
+   - The AI-03 plan to backfill timestamps from `processed_reviews.csv` cannot work.
+**Rationale**: The Decision Log must describe the system that produced the thesis results.
+**Impact on vision**: None on the vision itself. It removes claims the thesis could not support.
+**Approved by**: User (2026-10-19, `/implement` graph v2 Gate #1)
+
+### 📅 2026-10-19-020: Amendment of Implementation Plan C1 — Official Amazon 2023 Splits; KG Holds Train and No-Split Reviews
+**Context**: C1 planned an 80/20 or leave-one-out split of the curated subset, with the KG populated from train only. The official 5-core, leave-last-out splits exist locally: `datasets/Electronics.{train,valid,test}.csv` (train 12,191,484 rows; valid and test 1,641,026 each; 1999-06 to 2023-09). About 22.0M in-scope reviews belong to users outside the 5-core splits.
+**Decision**:
+1. C1 uses the official Amazon 2023 splits.
+2. Valid and test (user, parent_asin) pairs never enter the KG.
+3. Train-split and no-split reviews are both kept (K-12). Both are available to the Meta-Phase C baselines, so the KG and the baselines see the same training data.
+4. Products stay in the catalogue even when all their reviews are held out.
+**Rationale**: No-split reviews have no leakage path to the official test items. Standard splits make the baseline comparison citable (Hou et al., 2024, arXiv:2403.03952).
+**Impact on vision**: Implements §4 "exact same dataset splits". The Implementation Plan C1 text is updated only with separate user approval.
+**Approved by**: User (2026-10-18 K-12; 2026-10-19 `/implement` graph v2 Gate #1)
+
+### 📅 2026-10-19-019: Amendment — Graph Writes Are a Versioned Rebuild, Not Additive In-Place Writes (K-2)
+**Context**: K-2 (brainstorm, 2026-10-18) approved additive, in-place writes under new names after an offline dump, so that R1 and R2a stay reproducible on the same graph. K-3 then chose to fill the ghosts by re-ingesting, which changes existing nodes.
+**Decision**:
+1. The graph is rebuilt as version v2 (2026-10-19-018). There are no additive in-place writes.
+2. v1 stays reproducible through the offline dump (hash recorded) and the retained v1 Docker volume.
+3. The K-2 order is kept: the rebuild starts only after R2a's citable runs on v1 are archived.
+4. New structures keep new names (`Taxon`, `p.features`, the full-text index), so v1-era code reads v2 with v1 semantics.
+**Rationale**: Filling 104k products changes existing nodes, so additive writes cannot deliver K-3.
+**Impact on vision**: None. It clarifies how graph versions are managed.
+**Approved by**: User (2026-10-19, `/implement` graph v2 Gate #1)
+
+### 📅 2026-10-19-018: Graph v2 — Rebuild of the Knowledge Graph from the Raw Amazon Reviews 2023 Electronics Files
+**Context**: 104,281 of the 265,307 v1 products are ghosts: they have no title, price or category, and an embedding of the blank template that is identical across ghosts. There are three causes:
+- metadata and reviews were sampled independently (`AmazonDataProcessor.process_and_save_data`);
+- `scripts/graph_ingestion/batch_ingest.py` created products from reviews (`MERGE`);
+- `src/knowledge_graph/graphdb/backfill_embeddings.py` embedded empty texts.
+
+Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
+**Decision**:
+1. **Source** (K-1): `datasets/raw/meta_Electronics.jsonl` and `datasets/raw/Electronics.jsonl` (SHA-256 in `datasets/raw/SHA256SUMS`), plus the official splits. No download.
+2. **Catalogue** (K-3): the 265,307 v1 `parent_asin`s, frozen as a hashed ID list and filled from raw metadata. Products are created only from metadata, never from a review. Zero ghosts.
+3. **Reviews** (K-11, K-12, G-6):
+   - (user, parent_asin) pairs in valid or test are excluded;
+   - then at most 20 per product, ordered by `helpful_vote` DESC, `verified_purchase` DESC, `timestamp` DESC, `review_id` ASC;
+   - `timestamp`, `helpful_vote`, child `asin` and `in_train_split` are stored on `Review`.
+4. **Schema** (G-3, K-7, G-11):
+   - v1 labels and relationships keep their v1 semantics: `Category` = `main_category`; `HAS_BRAND` from `coalesce(store, details.Brand)`, with case-only duplicates reported, not merged; `HAS_ATTRIBUTE` for Material, Color, Style and Size; no `numeric_value`.
+   - The category tree is built from the raw category lists as `(:Taxon {taxon_id = full path})-[:BROADER]->(:Taxon)` and `(:ParentProduct)-[:IN_TAXON]->(:Taxon)` (deepest level).
+   - Listing text is stored as `p.features` (list) and `p.details_json`.
+   - A full-text index covers title, description and features.
+   - Legacy `Variant`, `Product`, `PriceRange`, `RATED` and `REVIEWS` are dropped, and `Variant`/`PriceRange` are removed from `src/llm_interface/prompts/graph_cypher_prompt.py` (G-12).
+5. **Load** (G-1, G-2): a Python transform to CSV with a lineage file, then `neo4j-admin database import full` into a new Docker volume (Neo4j 5.14 Community, G-10), with the v1 volume retained.
+6. **Embeddings and indexes** (G-4, G-5):
+   - Embeddings are written online with the v1 templates, in deterministic order, skipping empty texts.
+   - The top 5 reviews per product (same ordering) are embedded.
+   - K-6 (features text in the product embedding) is deferred to an R3 arm (`p.embedding_feat`), with no rebuild.
+   - Vector indexes are created in procedure form (5.14 has no `CREATE VECTOR INDEX`), followed by the full-text index.
+7. **Memory** (G-7): heap 4G during the build with a raised transaction timeout. At runtime, 2G heap and 2G page cache inside the 8 GB Docker VM.
+8. **Validation and citability** (G-8):
+   - A validation gate checks zero ghosts, referential integrity, split exclusion, the cap, no blank-template embeddings and indexes online.
+   - A `GraphVersion` node is written only after the gate passes.
+   - `src/evaluation/provenance.py` records it, and a run against a graph without it is not citable.
+9. **R2b amendment of 2026-10-18-014** (G-9): stratum S1 "cold" (no reviews) has about 13 candidates on v2. It is redefined as review-sparse (1–2 reviews in the graph), and true cold start is simulated by masking reviews at query time.
+**Rationale**: The KG can only ground what it contains. A rebuild that is a pure function of hashed inputs is reproducible, and the importer enforces referential integrity structurally. Keeping v1 semantics isolates the data fix from representation changes. Data-validation practice: Breck et al., SysML 2019; Schelter et al., 2018.
+**Impact on vision**: Strengthens §4 (KG as grounding, Amazon-only) and §5 (reproducible evaluation). All retrieval figures are re-baselined on v2. No model training.
+**Approved by**: User (2026-10-19, `/implement` graph v2 Gate #1, G-1 … G-12)
+
 ### 📅 2026-10-18-017: Correction Note — Dynamic Domain Schemas (2026-09-29-007) Not Implemented; Lucene Tier (2026-09-28-006) Superseded
 **Context**: The R2 research report (`production_artifacts/Research_Report.md`, 2026-10-18) checked two earlier decisions against the code.
 **Decision**:

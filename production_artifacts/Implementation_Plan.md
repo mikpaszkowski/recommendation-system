@@ -5,6 +5,7 @@
 > **Status audit**: 2026-10-10 — A4–A6 statuses corrected against the live graph. Open items tagged `AI-xx` reference `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md`.
 > **Retrieval redesign**: 2026-10-17 — Retrieval score redesign roadmap (releases R1–R5, work packages `RS-xx`) added under A1.1. Source: `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 > **R2a**: 2026-10-18 — Release R2a (RS-23 spurious-CLARIFY fix, constraint-satisfaction@K, paired statistics, citable-run provenance, `evaluations_archive/`) implemented; exit gate PASS (`production_artifacts/Audit_Report.md`, "R2a exit gate"). R2b (RS-21 benchmark v2, RS-02 evidence) is open.
+> **Graph v2**: 2026-10-19 — F4 added (user-approved). 39% of live products were empty "ghost" nodes; the graph is rebuilt from the raw Amazon 2023 files (Vision 2026-10-19-018 … 021). Code done and audited; no graph operation run yet. R2b waits for F4.
 
 ---
 
@@ -70,6 +71,7 @@ The system has two independent execution axes that share a common data foundatio
 
 * [x] **GAP-003 — Neo4j Deprecated API Migration** (`src/tools/graph_search_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`): Replace all 8 occurrences of deprecated `CALL db.index.vector.queryNodes(...)` with Cypher 25 `VECTOR SEARCH` syntax. Replace `CALL db.index.vector.createNodeIndex(...)` in `create_vector_indexes.cypher` and `setup_indexes.py` with `CREATE VECTOR INDEX ... IF NOT EXISTS` DDL.
   * _Note (2026-10-17)_: The live Neo4j is 5.14, which has no Cypher 25 `VECTOR SEARCH`. `src/knowledge_graph/graphdb/vector_search_helper.py` therefore still emits `db.index.vector.queryNodes`. Pending decision D-4 in the retrieval redesign roadmap.
+  * _Note (2026-10-19)_: `CREATE VECTOR INDEX` DDL arrived only in Neo4j 5.15, so on the live 5.14 the index scripts must use `db.index.vector.createNodeIndex`. `create_vector_indexes.cypher` was switched back to the procedure form and `setup_indexes.py` no longer falls back to DDL below 5.15 (F4, Research_Report_Graph_Rebuild.md N-4).
 
 * [x] **GAP-011 — `requirements.txt` Hygiene**: Pin `openai>=1.0.0`. Add `langgraph>=1.0.0`. Add `pydantic>=2.0.0`. Move unused legacy packages (`lightfm`, `scikit-surprise`, `fastapi`, `uvicorn`, `streamlit`) to `requirements-legacy.txt`. Add `.env.example` documenting `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`, `OPENAI_API_KEY`, `ENABLE_GRAPH_RETRIEVAL`.
 
@@ -109,6 +111,8 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   - `constraints.cypher` already has `:User` node type defined — compatible with future REDIAL extension.
 
 ### F2 — Curated Amazon Subset — Dataset Selection
+
+> _Note (2026-10-19)_: Historical. The live graph is not the curated subset: it is a full ingest of `datasets/processed_data/` (265,307 products, 39% of them empty ghosts). It is superseded by **F4 — Graph v2 Rebuild**.
 
 > **Strategy**: Select a small, representative slice of the Amazon Electronics dataset that exercises all graph features (dense users, cold-start users, popular products, obscure products). The existing graph will NOT be deleted — a new Neo4j database (`neo4j` → `kg_curated`) will be used for the fresh build.
 
@@ -192,6 +196,8 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 
 ### F3 — Fresh Graph Build (Curated Subset, New DB)
 
+> _Note (2026-10-19)_: Historical, see F2 note. Neo4j Community has no second database (`kg_curated`); F4 rebuilds the single `neo4j` database into a new Docker volume.
+
 > **Important**: Do NOT delete or modify the existing Neo4j database. Create a separate database for the curated graph. In Neo4j Desktop / Aura: create a new database named `kg_curated`. Set `NEO4J_DATABASE=kg_curated` in `.env` when running the new pipeline.
 
 * [x] **F3.1 — Write Curated Subset Extractor** *(Skipped: DB is already curated)* (`scripts/extract_curated_subset.py`): Reads `processed_reviews.csv` and `combined_product_data.csv` / `processed_metadata.csv`. Filters to the 25 selected users + 5 cold-start users and 20 selected products + 5 cold-start products. Writes out:
@@ -216,6 +222,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   - **⚠️ GAP-003 prerequisite**: Must migrate deprecated index API before this step
 
 * [x] **F3.5 — Vector Index Creation (Cypher 25 DDL)**: Create indexes on `kg_curated`:
+  * _Note (2026-10-19)_: The DDL below fails on the live Neo4j 5.14 (`CREATE VECTOR INDEX` needs 5.15+). The live indexes use `db.index.vector.createNodeIndex`; F4 does the same.
   ```cypher
   CREATE VECTOR INDEX product_embedding_index IF NOT EXISTS
     FOR (n:ParentProduct) ON (n.embedding)
@@ -245,6 +252,17 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   MATCH (p:ParentProduct) WHERE p.embedding IS NOT NULL
   RETURN p.title, size(p.embedding) AS dims LIMIT 3;
   ```
+
+### F4 — Graph v2 Rebuild (Vision 2026-10-19-018 … 021)
+**Status (2026-10-19): code implemented and audited (PASS WITH FIXES, delta audit PASS; `production_artifacts/Audit_Report_Graph_Rebuild.md`); no graph operation run yet.** Spec: `production_artifacts/Technical_Specification_Graph_Rebuild.md`. Research: `production_artifacts/Research_Report_Graph_Rebuild.md`. Supersedes the curated-subset story of F2/F3 for the live graph. Runbook: `scripts/graph_ingestion/README.md` ("Graph v2").
+* [x] **F4.1 Code**: transform package `src/knowledge_graph/graph_v2/` and `scripts/graph_ingestion/build_graph_v2.py` (catalogue-first products, K-11/K-12 review selection, `Taxon` tree, lineage); import, post-import and validation scripts; `embedding_templates.py`; legacy guards (`batch_ingest.py` MERGE → MATCH, skip-empty in `backfill_embeddings.py`, `AmazonDataProcessor` field names); G-12 prompt cleanup; `GraphVersion` in `provenance.py`; compose volume and memory via env. Not yet committed.
+* [ ] **F4.2 Pre-flight** (read-only) and user-approved `graph_versions/v2/build_params.json` (CP-1).
+* [ ] **F4.3 Start gate**: R2a v1 reference runs archived and confirmed (CP-2); catalogue frozen; v1 stopped and dumped (SHA-256 in `graph_versions/v1/DUMP.json`).
+* [ ] **F4.4 Pilot** (5%) on a scratch volume; size and time extrapolation approved.
+* [ ] **F4.5 Full import** into `kg_neo4j_data_v2`; post-import (constraints, embeddings with v1 templates, top-5 review embeddings, vector indexes in procedure form, full-text index).
+* [ ] **F4.6 Validation gate** H-01 … H-18 passed; `GraphVersion` v2 stamped; `graph_versions/v2/*` committed.
+* [ ] **F4.7 v2 baseline**: R1 arms on legacy-21, r = 3, at the allow-listed baseline commit; archived; v1 vs v2 comparison reviewed.
+* Unblocks: R2b benchmark freeze on v2 (with the G-9 S1 redefinition), AI-03, AI-06, RS-12, RS-03.
 
 ---
 
@@ -477,6 +495,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 | GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
+| F4 | Graph v2 Rebuild (ghost fix) | Foundation F4 | ⚠️ Code done and audited; graph operations (F4.2–F4.7) not run |
 | RS-01 … RS-24 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 and R2a done (RS-01, 02 ablation, 05, 20, 23); R2b (RS-21, RS-02 evidence) and R3–R5 open |
 
 ---
