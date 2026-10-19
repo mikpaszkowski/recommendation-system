@@ -21,3 +21,28 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
 - User decisions at CP-1: approve `graph_versions/v2/build_params.json` as written, including
   `product_content_rule = "title_description"` (OQ-1: the single features-only product gets no embedding
   instead of a near-blank one) and `embedding_device = "mps"` with encode batch 32.
+
+## R-2 start gate — CP-2 approved (2026-10-20)
+
+- User confirmed that R2a no longer needs the v1 graph. R2a's citable v1 runs are archived
+  (`evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`, commit `96874f3`).
+- `.env` (git-ignored) gained `NEO4J_DATA_VOLUME=knowledge-graph_neo4j_data` (compose stays on v1 until
+  R-9) and `NEO4J_DATA_VOLUME_V1=knowledge-graph_neo4j_data` (import guard). The running database was not changed.
+
+## R-3 re-verify catalogue (2026-10-20)
+
+- `export_v1_snapshot.py … --verify-only`: catalogue (265,307), v1 snapshot and benchmark targets unchanged.
+
+## R-4 stop v1 — CP-3 approved (2026-10-20)
+
+- `docker stop neo4j-recommendation` (status exited, exit code 0). The runbook's compose stop command does not
+  match this container: it belongs to compose project `knowledge-graph`, created from the former path
+  `src/knowledge-graph/docker-compose.yml`. To be handled at R-9 (`-p knowledge-graph` or remove the stopped
+  v1 container first). Rollback: `docker start neo4j-recommendation`.
+
+## R-5 dump v1 — CP-4 approved (2026-10-20)
+
+- `import_graph_v2.py dump --volume knowledge-graph_neo4j_data … --execute`: `~/neo4j-backups/kg_v1_20261019_2234/neo4j.dump`,
+  2,717,863,893 bytes, SHA-256 `51db81286ef04f4a780a37833ed5d6d47d1ecc9737ea16ca9043c20af6c0026f`
+  (re-checked independently with `shasum`). Record: `graph_versions/v1/DUMP.json`. Optional restore test not run.
+- The v1 volume `knowledge-graph_neo4j_data` was mounted only by the dump container and not modified.
