@@ -53,3 +53,16 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
 - Pilot: 13,381 products, 171,212 reviews, 54,668 to embed, 790 taxon nodes; 152 MB CSV; 6 min, peak RSS 1.1 GB.
 - Full: 265,307 products, 3,382,248 reviews, 1,081,137 to embed, 2,594,661 users, 49,663 brands, 38 categories,
   36,187 attributes, 1,183 taxon nodes; 2.9 GB CSV; 10.5 min, peak RSS 4.2 GB. Counts equal `build_params.json`.
+
+## R-7 pilot — CP-5 approved (2026-10-20)
+
+- v1 container renamed to `neo4j-recommendation-v1` (unchanged, stopped) so compose can create `neo4j-recommendation`.
+- `docker volume create kg_neo4j_data_v2_pilot`; import 13 s, store 479 MB, empty import report (0 bad rows).
+- Neo4j 5.14 started on the pilot volume with the build profile (heap 4G, page cache 1G, tx timeout 600s).
+- `post_import_v2.py all`: 7.8 min; MPS, encode batch 32, 0 out-of-memory events, 0 CPU fallbacks; all eligible
+  nodes embedded (13,381 products, 54,668 reviews); 5 vector indexes via procedure; full-text smoke test passed.
+- `validate_graph.py --pilot`: **18/18 hard gates passed**. R-07 shows 20 benchmark targets outside the 5% sample;
+  the sampled target `live_eval_laptop_02` keeps title, price, brand and category (reviews 33 → 20, cap).
+- Full-build estimate (`pilot/pilot_report.json`): import ≈ 4 min; embedding ≈ 2.25 h (reviews ≈ 110 min at
+  164 texts/s, products ≈ 22 min); store ≈ 12.5 GB plus ≈ 0.5–1 GB transaction logs.
+- Pilot container removed (`compose down`, no `-v`) and scratch volume `kg_neo4j_data_v2_pilot` deleted.

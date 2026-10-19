@@ -1,0 +1,64 @@
+{
+  "created_at": "2026-10-19T23:03:18Z",
+  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "sentence_transformers_version": "5.2.0",
+  "torch_version": "2.9.1",
+  "device": "mps:0",
+  "batch_size": 256,
+  "labels": {
+    "Attribute": {
+      "template_id": "attribute_v1",
+      "eligible": 2815,
+      "embedded": 2815,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 11,
+      "seconds": 7.282,
+      "texts_per_s": 386.56
+    },
+    "Brand": {
+      "template_id": "brand_v1",
+      "eligible": 6928,
+      "embedded": 6928,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 28,
+      "seconds": 9.223,
+      "texts_per_s": 751.15
+    },
+    "Category": {
+      "template_id": "category_v1",
+      "eligible": 31,
+      "embedded": 31,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 1,
+      "seconds": 0.652,
+      "texts_per_s": 47.53
+    },
+    "ParentProduct": {
+      "template_id": "product_v1",
+      "eligible": 13381,
+      "embedded": 13381,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 53,
+      "seconds": 67.918,
+      "texts_per_s": 197.02
+    },
+    "Review": {
+      "template_id": "review_v1",
+      "eligible": 54668,
+      "embedded": 54668,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 214,
+      "seconds": 333.024,
+      "texts_per_s": 164.16
+    }
+  },
+  "embed_batch_size": 32,
+  "effective_embed_batch_size": 32,
+  "oom_events": 0,
+  "cpu_fallback_batches": 0
+}
