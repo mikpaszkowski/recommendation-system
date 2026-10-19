@@ -29,7 +29,9 @@ The retrieval score should measure **how well a product matches what the user as
 
 > **Correction (2026-10-17)**: an earlier version of this table (HR@1 0.079, HR@5 0.127, HR@20 0.206, NDCG@5 0.100, MRR 0.099) quoted `summary.json`, whose aggregates are pooled over the `hybrid`, `vector_only` and `cypher_only` strategies (63 rows). R1 adds per-strategy aggregates (Technical Specification FR-010).
 
-### Live data facts (read-only queries, 2026-10-10 and 2026-10-14)
+### Live data facts (graph v1; read-only queries, 2026-10-10 and 2026-10-14)
+
+> **Correction (2026-10-19, Vision 2026-10-19-021)**: the figures in this section describe the **v1 graph** only. 104,281 of the 265,307 v1 products are ghosts (no title, price or category; identical blank-template embedding), so the "47% have reviews", "53% no reviews / cold", "4.7% / 2.2% review-embedding coverage" and "71 categories" figures do not hold as statements about the catalogue. In v1, 12% of titled products have reviews, and 85% of the 5,715 review-embedded products are ghosts. All of them are recomputed on graph v2 (`production_artifacts/Technical_Specification_Graph_Rebuild.md`). **Graph v2 has not been built yet** (code only, 2026-10-19): the live Neo4j is still v1, and no v2 figure exists. The v1 numbers are kept below as history.
 
 | Fact | Value |
 |---|---|
@@ -46,7 +48,7 @@ The retrieval score should measure **how well a product matches what the user as
 | `BOUGHT_TOGETHER` | absent |
 | Review properties | no timestamp, no helpful votes |
 
-**Consequence**: the low 2.2% was *embedding* coverage, not *review* coverage. Also, "no reviews" is the **normal case** (53% of all products, 81% of priced ones), not an edge case.
+**Consequence (v1 reading, superseded by the correction above)**: the low 2.2% was *embedding* coverage, not *review* coverage. Also, "no reviews" is the **normal case** (53% of all products, 81% of priced ones), not an edge case. The 53% and 81% include ghosts; the "normal case" claim is re-tested on v2.
 
 ---
 

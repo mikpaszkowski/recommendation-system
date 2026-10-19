@@ -5,6 +5,113 @@
 
 ---
 
+## 📅 2026-10-19 (Graph v2 — przebudowa fundamentu danych: kod potoku gotowy, żadna operacja na grafie jeszcze nie wykonana)
+
+### Changelog (względem stanu z 2026-10-19, wpis R2a)
+
+> **Kontekst**: Pipeline `/implement` dla przebudowy grafu wiedzy (gałąź `feature/afp-002-vector-aggregation`, zmiany **niezatwierdzone** w git: `git status` pokazuje zmodyfikowane pliki i nieśledzone nowe katalogi). Podstawa: `production_artifacts/Research_Report_Graph_Rebuild.md` (Gate #1, decyzje G-1 … G-12), `production_artifacts/Technical_Specification_Graph_Rebuild.md` (Gate #2, wraz z poprawkami A-1 … A-6 w §13), `production_artifacts/Audit_Report_Graph_Rebuild.md` (**PASS WITH FIXES**, audyt delta: PASS), decyzje Vision Report **2026-10-19-018 … 021** oraz `_bmad-output/brainstorming/brainstorm-kg-attribute-problems-2026-10-18/brainstorm-intent.md` (decyzje K-1 … K-12). Wpis opisuje wyłącznie **kod i dokumentację**. **Żadna operacja na grafie (zatrzymanie v1, zrzut, import, zapis do Neo4j, przełączenie wolumenu) nie została wykonana**; graf aktywny to nadal v1. Wpis R2a powyżej pozostaje bez zmian.
+>
+> **Odniesienie do Vision Report**: §4 „Knowledge Graph as Grounding” i „bogate węzły strukturalne” nie zachodziły dla v1 (decyzja 2026-10-19-021, p. 5). Przebudowa przywraca tę właściwość, a przez to warunek poprawności metryk z §5. Nie zmienia kierunku strategicznego, nie dodaje trenowania modeli, nie zmienia zbioru danych (nadal wyłącznie Amazon Reviews 2023 Electronics).
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Przyczyna: „duchy” w grafie v1 (ustalenie, Critical):**
+    *   **104 281 z 265 307** węzłów `ParentProduct` w v1 (39,3%) to „duchy”: tylko `parent_asin` oraz identyczne osadzenie pustego szablonu, bez tytułu, ceny i kategorii.
+    *   Trzy współdziałające przyczyny: (1) niezależne próbkowanie metadanych i recenzji w `AmazonDataProcessor.process_and_save_data` (`src/utils/AmazonDataProcessor.py`), co daje recenzje bez metadanych; (2) `MERGE` produktu w kroku recenzji w `scripts/graph_ingestion/batch_ingest.py`, który tworzył produkt z samej recenzji; (3) osadzanie pustych tekstów w `src/knowledge_graph/graphdb/backfill_embeddings.py`.
+    *   Konsekwencje: wyniki R1 i R2a zmierzono na puli kandydatów z ~104 tys. duchami o identycznym wektorze (decyzja 2026-10-19-021 p. 2); 85% z 5 715 produktów z osadzoną recenzją to duchy; atrybuty v1 zawierają tylko Material, Color, Style i Size, a żaden `Attribute` nie ma `numeric_value`.
+    *   **Drugie ustalenie (preprocessing v1):** `AmazonDataProcessor.process_reviews_file` czytał pola `helpful_votes` i `sort_timestamp`, a w surowych danych pola nazywają się `helpful_vote` i `timestamp`. Wszystkie **1 630 273** recenzje v1 mają więc 0 głosów i znacznik czasu 0; „20 najbardziej pomocnych” w v1 nie wynikało z pomocności, a plan AI-03 (uzupełnienie znaczników z `processed_reviews.csv`) nie mógłby zadziałać.
+2.  **Pakiet transformacji `src/knowledge_graph/graph_v2/` (nowy, Critical):** czysty Python, testowalny bez Neo4j, Dockera i surowych plików. Moduły: `product_mapping.py` (rekord metadanych → produkt, marka, kategoria, atrybuty; FR-006 … FR-009), `taxonomy.py` (`TaxonomyBuilder`, `TaxonIdCollisionError`), `review_selection.py` (`make_review_id`, `TopKSelector`, rangi `cap_rank` i `embed_rank`), `csv_io.py` (sanityzacja i `ImportCsvWriter`), `lineage.py` (składanie linii pochodzenia, niezmienniki, `build_paths`, `FULL_PATHS`, `PILOT_PATHS`), `models.py` (modele Pydantic v2 dla artefaktów JSON, m.in. `BuildParams`), `transform.py` (dwuprzebiegowa orkiestracja, `--dry-run`, `--sample-mod`), `import_command.py` (budowanie poleceń Docker), `validation.py` (bramki jako czyste funkcje; `pilot_build_params`), `graph_queries.py`.
+3.  **Podsumowanie decyzji projektowych (poziom ogólny):**
+    *   **Źródło (K-1):** surowe pliki Amazon 2023 Electronics z `datasets/raw/` (`meta_Electronics.jsonl`, `Electronics.jsonl`), SHA-256 w `datasets/raw/SHA256SUMS` sprawdzane przez transformację przed odczytem jakichkolwiek danych (niezgodność = kod wyjścia 2, zanim powstanie jakikolwiek plik wyjściowy). Dodatkowo oficjalne podziały `datasets/Electronics.{train,valid,test}.csv`.
+    *   **Katalog (K-3):** te same 265 307 produktów (zamrożona lista `graph_versions/v2/catalogue_asins.txt.gz`), duchy uzupełnione z surowych metadanych. Produkty powstają **wyłącznie z metadanych**, nigdy z recenzji; recenzje produktów bez metadanych są odrzucane (`product_missing`).
+    *   **Recenzje (K-11, K-12, G-6):** wykluczone pary (`user_id`, `parent_asin`) z podziałów valid i test; potem maksymalnie 20 na produkt wg klucza `(helpful_vote DESC, verified_purchase DESC, timestamp DESC, review_id ASC)`; oczekiwane **3 388 842** recenzji (liczba do potwierdzenia w pre-flight P-02). Na `Review` zapisywane: `timestamp`, `helpful_vote`, `asin`, `in_train_split`, `cap_rank`, `embed_rank`.
+    *   **Schemat (K-7, G-3, G-11):** drzewo `Taxon` (`BROADER`, `IN_TAXON`) z surowych list kategorii, nowe nazwy; `p.features`, `p.details_json`, `p.details_text` przechowywane; etykiety, relacje, właściwości i szablony osadzeń z v1 zachowane (czytniki `GraphSearchTool`, `KnowledgePathExtractor`, `ResolverService` działają bez zmian, NFR-009); `numeric_value` nie jest zapisywane.
+    *   **Osadzenia (G-4, G-5):** szablony v1, kolejność deterministyczna, pomijanie pustych tekstów; osadzane top-5 recenzji na produkt (~1,1 mln). Wariant z tekstem `features` w osadzeniu produktu (K-6) odroczony do ramienia R3.
+    *   **Ładowanie (G-1, G-2, G-10):** `neo4j-admin database import full` w kontenerze `neo4j:5.14.0` do **nowego** wolumenu Docker; wolumen v1 zachowany; Neo4j pozostaje w wersji 5.14.
+    *   **Walidacja i cytowalność (G-8):** bramka twarda H-01 … H-18 oraz kontrole raportowe R-01 … R-08; węzeł `GraphVersion` zapisywany tylko po przejściu bramki i zatwierdzeniu użytkownika; przebieg live na grafie bez `GraphVersion` nie jest cytowalny.
+    *   **Bezpieczeństwo operacyjne:** dziewięć punktów kontrolnych CP-1 … CP-9 wymagających jawnej zgody użytkownika; **żadna operacja na grafie nie rusza przed bramką startową CP-2**.
+4.  **Skrypty `scripts/graph_ingestion/` (7 nowych):**
+    *   `preflight_v2.py`: pomiary P-01 … P-10 (tylko odczyt), raport `graph_versions/v2/preflight_report.json`, w tym szczytowe zużycie pamięci próby (`p10_timing.dry_run_peak_rss_bytes`).
+    *   `export_v1_snapshot.py`: zamrożenie katalogu, migawka v1 i cele benchmarku na v1; `--verify-only`.
+    *   `build_graph_v2.py`: CLI transformacji (`--dry-run`, `--sample-mod`, `--require-clean`, `--build-params`), pliki CSV i `lineage.json` (bajtowo deterministyczne).
+    *   `import_graph_v2.py`: podpolecenia `dump`, `restore-test`, `import`; domyślnie tylko loguje polecenie; wykonanie wymaga `--execute --confirm-volume <nazwa>`; odmawia przy wolumenie równym `NEO4J_DATA_VOLUME_V1`, wolumenie w użyciu, braku CSV lub zbyt małej ilości miejsca.
+    *   `post_import_v2.py`: `constraints` (8 ograniczeń), `embed`, `vector-indexes` (forma proceduralna `db.index.vector.createNodeIndex`, bo 5.14 nie ma `CREATE VECTOR INDEX`), `fulltext-index` (`product_fulltext_index` z testem dymnym i awaryjnym `features_text`), `stamp`, `all`; strażnik „zły graf” przed każdym podpoleceniem.
+    *   `validate_graph.py`: bramki H-01 … H-18 (m.in. brak duchów, integralność referencyjna, wykluczenie podziałów valid/test, limit 20, brak osadzeń pustego szablonu, indeksy online, H-15 uziemienie celów benchmarku), raport `validation_report.json`, kod wyjścia 0 / 1 / 2, tryb `--pilot`.
+    *   `check_baseline_diff.py`: sprawdza, że różnica commita bazowego `88cdbdf` względem commita B zawiera wyłącznie ścieżki z listy dozwolonych (kod wyjścia 1 przy ścieżce spoza listy).
+5.  **`src/knowledge_graph/graphdb/embedding_templates.py` (nowy):** szablony tekstu osadzeń v1 (`product_text_v1`, `review_text_v1`, `brand_text_v1`, `attribute_text_v1`, `category_text_v1`) z regułą pomijania pustych tekstów (zwracają `None`); współdzielone przez `backfill_embeddings.py`, `backfill_category_embeddings.py` i `post_import_v2.py`.
+6.  **Testy (nowe):** `tests/graph_v2/` (13 plików testowych: `test_product_mapping`, `test_taxonomy`, `test_review_selection`, `test_csv_io`, `test_transform`, `test_lineage`, `test_embedding_templates`, `test_check_baseline_diff`, `test_import_command`, `test_post_import`, `test_validation`, `test_validate_graph_collectors` oraz `conftest.py`), `tests/fixtures/graph_v2/` (ręcznie napisane deterministyczne fixtury z syntetycznymi identyfikatorami), `tests/test_legacy_ingest_guards.py` (FR-031 … FR-035), `tests/test_graph_cypher_prompt.py` (FR-036). Wszystkie działają bez Neo4j, Dockera i `datasets/raw/` (NFR-005).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **Strażniki duchów w starych skryptach (High):**
+    *   `scripts/graph_ingestion/batch_ingest.py`: krok recenzji używa `OPTIONAL MATCH (p:ParentProduct {...})` + `WITH row, p WHERE p IS NOT NULL` zamiast `MERGE` produktu; niedopasowane wiersze są liczone i logowane; docstring oznacza skrypt jako legacy v1.
+    *   `src/knowledge_graph/graphdb/backfill_embeddings.py` (`BackfillService`): generatory delegują do `embedding_templates`, puste teksty są pomijane i liczone, atrybuty sortowane przed `collect` (deterministyczna kolejność).
+    *   `src/knowledge_graph/graphdb/backfill_category_embeddings.py`: próbka kategorii tylko z produktów z tytułem, sortowana `review_count DESC, parent_asin ASC` przed `collect(...)[..5]`.
+2.  **Indeksy wektorowe w formie proceduralnej dla Neo4j 5.14:** `src/knowledge_graph/graphdb/create_vector_indexes.cypher` przepisany na `CALL db.index.vector.createNodeIndex(...)` (z odwołaniem do decyzji D-4); `src/knowledge_graph/graphdb/setup_indexes.py` ma moduł-poziomowe `INDEX_SPECS`, wstrzykiwalny konektor, parametr `allow_ddl_fallback` (tylko dla wersji ≥ 5.15) i `.consume()` na wynikach (poprawka audytu M-1: błąd procedury był wcześniej przypisywany następnemu indeksowi); `create_indexes.py` dostał tylko notę, że wymaga Neo4j ≥ 5.15.
+3.  **Pochodzenie i cytowalność (High):** `src/evaluation/provenance.py` — `collect_runtime_provenance` dodaje do `graph_snapshot` klucze `graph_version` (właściwości pojedynczego węzła `GraphVersion`, w przeciwnym razie `None`), `products_untitled`, `reviews_embedded`; `evaluate_citable(..., graph=...)` dodaje powody `graph_version_unknown` i `graph_version_not_validated` w trybie `live`. **Skutek:** przebiegi live na grafie v1 (np. po wycofaniu) nie będą cytowalne; dowodem dla v1 są zarchiwizowane przebiegi R1/R2a. `scripts/evaluate_retrieval.py` przekazuje migawkę grafu do `evaluate_citable`; `scripts/archive_eval_run.py` kopiuje `graph_version` do `evaluations_archive/index.json`. Testy: `tests/test_provenance.py`, `tests/test_archive_eval_run.py`.
+4.  **`src/knowledge_graph/docker-compose.yml` i `.env.example`:** wolumen danych Neo4j jest **zewnętrzny** i wskazywany przez wymaganą zmienną `NEO4J_DATA_VOLUME` (Compose nie może utworzyć ani usunąć wolumenu grafu, więc `docker compose down -v` go nie usunie); sterta i cache stron z zmiennych (`NEO4J_HEAP`, `NEO4J_PAGECACHE`, domyślnie 2G / 2G), limit transakcji `db.transaction.timeout` (`NEO4J_TX_TIMEOUT`) i retencja logów (`NEO4J_TX_LOG_RETENTION`); nowe zmienne `NEO4J_DATA_VOLUME_V1` i `GRAPH_BACKUP_DIR`.
+5.  **`src/llm_interface/prompts/graph_cypher_prompt.py` (G-12):** usunięte linie schematu `Variant` i `PriceRange` oraz relacja `IN_PRICE_RANGE`; reguła „abstract range” zastąpiona regułą bez wymyślania pułapu ceny (sortowanie `pp.price ASC`); przykład „budget headphones” przepisany. Plik poza ścieżką ewaluacji.
+6.  **`src/utils/AmazonDataProcessor.py`:** poprawione nazwy pól (`helpful_vote` z zapasowym `helpful_votes`, `timestamp` z zapasowym `sort_timestamp`; kolumny wyjściowe zachowują dotychczasowe nazwy), stabilne sortowanie (`kind="mergesort"`), ostrzeżenie przy `frac < 1.0` (metadane i recenzje próbkowane niezależnie), docstring zabraniający użycia do budowy KG. **Usunięty błąd składniowy sprzed zmian:** zbłąkana cyfra `1` powodowała, że `ast.parse` pliku w HEAD kończył się błędem; obecny plik się parsuje. Logika próbkowania i wartości domyślne bez zmian (moduł nadal obsługuje klasyczne baseline'y).
+7.  **`scripts/graph_ingestion/README.md`:** sekcja „Graph v2 (current)” z poleceniami runbooka (R-6, R-7 z jawnymi ścieżkami pilota), dotychczasowa treść pod nagłówkiem legacy v1.
+8.  **Zależności:** `seaborn>=0.12` dodane do `requirements.txt` i zainstalowane w `.venv` (zamyka część AI-13; potrzebne, bo bramka H-15 ładuje `scripts/evaluate_retrieval.py`, który przez `src/evaluation/visualizer.py` importuje `seaborn`).
+9.  **Poprawki z audytu (kod już uwzględnia):**
+    *   **H-1 (High):** `scripts/graph_ingestion/import_graph_v2.py` — strażnik nazwy wolumenu v1 był „fail-open”, gdy `NEO4J_DATA_VOLUME_V1` nie było w środowisku procesu (skrypt nie ładował `.env`); teraz `main` ładuje `.env` (`override=False`), a `--execute` bez tej zmiennej kończy się kodem 2 (`GuardRefused`). Test: `test_refuses_execute_without_v1_volume_name`.
+    *   **H-2 (High):** `scripts/graph_ingestion/post_import_v2.py` — strażnik „zły graf” (FR-021) nie odróżniał v1 od v2, gdy `catalogue_missing_in_meta = 0` (ta sama liczba produktów, brak `GraphVersion` w v1); dodano warunek `count(:Taxon) == lineage.counts.nodes["Taxon"]` (`GUARD_TAXON_COUNT_QUERY`, `check_graph_guard`). Test: `test_guard_v1_lookalike_graph` (6 przypadków).
+    *   **M-1:** patrz p. 2. **M-2:** `transform.py` zwalnia rekordy produktów po zapisie plików po stronie produktów i usuwa zbiór wykluczeń po przebiegu 1; szacowany szczyt ~3,3 GB (cel NFR-002 ≤ 3 GB jest teraz mierzony w P-10 i oceniany przez użytkownika w CP-1, poprawka A-4).
+    *   **Poprawki specyfikacji A-1 … A-6** (§13): m.in. A-3 — `validate_graph.py --pilot` czyta `build_params.json` pełnego buildu, a trzy liczności (H-01, H-08, H-10) bierze z linii pochodzenia pilota (`pilot_build_params`); A-6 — testy kolektorów walidacji na fałszywych sesjach (AC-048).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Czytniki grafu: `src/tools/graph_search_tool.py`, `src/tools/kecr_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`, `src/knowledge_graph/graphdb/vector_search_helper.py` (nadal emituje `db.index.vector.queryNodes`, D-4), `src/agents/orchestrator.py`, `src/agents/critic_agent.py` — bez zmian i zgodnie ze specyfikacją mają działać na v2 bez modyfikacji (NFR-009).
+*   `live_eval_dataset.json` i `src/evaluation/live_dataset_generator.py` bez zmian; `validate_benchmark_graph_grounding()` w `scripts/evaluate_retrieval.py` bez zmian (używana jako bramka H-15); zmiana w tym skrypcie dotyczy tylko wywołania `evaluate_citable`.
+*   Architektura wyszukiwania i agentów (RRF, router, Critic, KECR) oraz wpis R2a powyżej: bez zmian. Neo4j pozostaje w wersji 5.14 (G-10).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **Brak wykonania na grafie (najważniejsze):** pre-flight (CP-1, zatwierdzenie `build_params.json`), bramka startowa CP-2, zatrzymanie v1 i zrzut ze skrótem SHA-256 (CP-3, CP-4), transformacja pilotowa i pełna, pilot 5% na wolumenie roboczym (CP-5), pełny import do `kg_neo4j_data_v2` (CP-6), kroki po imporcie i walidacja H-01 … H-18 (CP-7), pieczęć `GraphVersion` (CP-8). Kryteria AC-040 … AC-045 są kontrolami runbooka i nie zostały uruchomione.
+*   **Baseline v2:** trzy przebiegi live (r = 3) legacy-21 na commicie B i porównanie v1 / v2 (CP-9, §6.6 specyfikacji). Kierunek zmiany wyników jest nieprzewidywalny (104 tys. dawnych duchów to teraz realni konkurenci). Do tego czasu wszystkie liczby coverage i wyniki R1/R2a są dowodem wyłącznie dla v1.
+*   **R2b** (stratyfikowany benchmark, zamrożenie podziału) — czeka na v2 (z redefinicją stratum S1 wg G-9); do przeliczenia na v2: statystyki pokrycia recenzjami i liczba kategorii.
+*   Pozycja F4 planu implementacji (`production_artifacts/Implementation_Plan.md`) nie została jeszcze zatwierdzona i nie jest odnotowana w planie; plan nie jest tu modyfikowany.
+*   Wciąż otwarte: AI-03 (ścieżki historyczne KECR; odblokowane dopiero przez znaczniki czasu na v2), AI-06, RS-03, RS-12, RS-11, RS-24, B1–B6, Meta-Phase C (wymaga decyzji 2026-10-19-020 o oficjalnych podziałach), dynamiczne schematy domen (2026-09-29-007).
+*   Uwagi niskiego priorytetu z audytu, nienaprawione: L-1 … L-13 oraz DL-1 … DL-3 (m.in. L-3 brak weryfikacji SHA-256 plików CSV przed importem, L-13 brak przełącznika `attribute_key` fallback w `post_import_v2.py`, DL-2 wywołanie `build_graph_v2.py` bez argumentów uruchamia pełną transformację).
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+*   Z promptu `graph_cypher_prompt.py` usunięto `Variant`, `PriceRange` i `IN_PRICE_RANGE`; w v2 nie powstają też `Variant`, `Product`, `PriceRange`, `RATED` i `REVIEWS`.
+*   `AmazonDataProcessor` oznaczony jako zdeprecjonowany dla budowy KG (nadal używany przez klasyczne baseline'y); `batch_ingest.py` i `create_indexes.py` oznaczone jako ścieżki legacy (v1 / Neo4j ≥ 5.15).
+*   Wyłączony pomysł przyrostowych zapisów „in place” (K-2): zastąpiony wersjonowaną przebudową (decyzja 2026-10-19-019).
+
+#### 📊 Weryfikacja
+
+*   **Audyt:** PASS WITH FIXES (0 Critical, 2 High — H-1, H-2 — naprawione; 5 Medium — M-1, M-2 naprawione, M-3, M-4, M-5 zamknięte audytem delta). Audyt delta (A-3, A-5, A-6): **PASS**, 3 uwagi Low.
+*   **Testy:** pełny zestaw **805 zaliczonych, 5 pominiętych, 0 niezaliczonych** (767 w pierwszym audycie + 38 w delcie); celowane `tests/graph_v2` + `tests/test_legacy_ingest_guards.py` + `tests/test_graph_cypher_prompt.py` + `tests/test_provenance.py` + `tests/test_archive_eval_run.py`: 193 zaliczone. Wykluczono cztery pliki łączące się z Neo4j (`tests/test_category_resolution.py`, `tests/test_challenger_empirical.py`, `tests/test_benchmark_alignment.py`, `tests/test_cypher_ranking.py`). Audyt nie używał Dockera, Neo4j ani surowych plików JSONL.
+*   Uwaga: pełny zestaw testów nadal zapisuje przebiegi offline do ignorowanego przez git katalogu `evaluations/` (AI-12, istniejący problem).
+
+#### ➡️ Następne kroki
+
+1.  Zatwierdzenie i commit kodu (obecnie niezatwierdzony), tak by `--require-clean` było spełnione.
+2.  Pre-flight i punkty kontrolne runbooka CP-1 … CP-8 (zrzut v1, pilot, pełny import, walidacja, pieczęć), potem baseline v2 (CP-9), a następnie R2b.
+
+### Zaktualizowana Architektura
+
+```mermaid
+flowchart LR
+    RAW["datasets/raw/*.jsonl<br/>(SHA-256 w SHA256SUMS)"] --> T["graph_v2.transform<br/>build_graph_v2.py<br/>2 przebiegi, bez Neo4j"]
+    CAT["catalogue_asins.txt.gz<br/>265 307 ASIN"] --> T
+    SPL["Electronics.{train,valid,test}.csv"] --> T
+    T --> CSV["CSV importu + lineage.json"]
+    CSV --> IMP["import_graph_v2.py<br/>neo4j-admin import full<br/>nowy wolumen v2"]
+    IMP --> POST["post_import_v2.py<br/>ograniczenia, osadzenia v1,<br/>indeksy wektorowe, full-text"]
+    POST --> VAL["validate_graph.py<br/>H-01..H-18"]
+    VAL -->|"przeszła + zgoda CP-8"| GV["GraphVersion v2"]
+    GV --> PROV["provenance.py<br/>citable tylko z GraphVersion"]
+    V1[("wolumen v1<br/>zachowany + zrzut")] -.-> IMP
+```
+
+Diagram opisuje potok zaimplementowany w kodzie; żaden jego krok nie został jeszcze wykonany na grafie.
+
+---
+
 ## 📅 2026-10-19 (R2a — fundament ewaluacji, poprawka fałszywego CLARIFY RS-23, archiwum cytowalnych przebiegów)
 
 ### Changelog (względem stanu z 2026-10-17, po wdrożeniu R1)

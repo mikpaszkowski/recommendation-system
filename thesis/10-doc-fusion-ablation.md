@@ -40,6 +40,11 @@ Consequences: finding 2's "about ten times the 2.15% base rate" for `rrf3` is ab
 
 **C-5. Rubric.** The scores in §6 are left as recorded on 2026-10-18. As of 2026-10-19, the reproducibility evidence for this contribution is the citable R2a replication (C-3), not the R1 runs, and the coverage-bias claims should be read with the titled base rate (C-1). The verdict (Methodological Artifact) is unchanged.
 
+**C-7. Content of the v1 channels (added 2026-10-19, graph v2 evaluation, `13-doc-graph-integrity.md`).** Two v1 facts recorded in Vision 2026-10-19-021 limit what the channel comparisons can say:
+- **Attribute channel.** Attributes hold only Material, Color, Style and Size, and no `numeric_value` exists (item 4). The attribute channel could therefore match colour, material, style and size, never a technical specification. Every statement here about the attribute channel's contribution concerns that channel. It is a lower bound for an attribute or specification channel in general (RS-03, RS-11).
+- **Review channel.** The v1 review fields `helpful_votes` and `sort_timestamp` are 0 in all 1,630,273 rows (item 6). The v1 "20 most helpful reviews" sample was therefore ordered by `verified_purchase` only, and it was not a helpfulness sample. Together with C-1, the review channel of R1 and R2a is a v1-specific evidence set. Its $\text{rrf2}$ vs $\text{rrf3}$ differences do not transfer to v2.
+- **Coverage-bias metric on v2.** Graph v2 embeds the top 5 reviews of every reviewed product (projected 265,294 of 265,307 products with at least one review). $P_{\text{rev}}$ will then cover nearly the whole catalogue, so coverage bias@K as defined in §3 stops discriminating. It must be redefined before it is reported on v2 (`13-doc-graph-integrity.md` §4.4, E-2). The v1 values in this document and in C-1 and C-3 remain valid as v1 evidence.
+
 ---
 
 ## 0. Scope of the Claim

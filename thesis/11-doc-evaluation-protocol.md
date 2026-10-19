@@ -12,6 +12,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator, graph v2 evaluation)
+
+The text below is kept as written. No result in it is rewritten, and the archived runs keep `citable: true`. Sources: Vision decisions 2026-10-19-018 and 2026-10-19-021, `production_artifacts/Technical_Specification_Graph_Rebuild.md` (FR-028, FR-029, R8), and `13-doc-graph-integrity.md`.
+
+**C-1. "Citable" certified provenance, not graph validity.** Claim 3 in §0 says the predicate binds every reported number to a graph snapshot. That snapshot recorded counts only (`products`, `categories`, `reviews`), and a count cannot detect property-level defects. The three citable runs recorded 265,307 products while 104,281 of them (39.3%) were ghost nodes with no title, price or category and an identical blank-template embedding. The predicate therefore admitted runs on a graph that contradicted the grounding premise of Vision §4. This qualifies claim 3; it does not invalidate the protocol. The limitation in §4.7 ("Graph not frozen") understated it.
+
+**C-2. Predicate extended.** Since FR-028 and FR-029 (graph v2, uncommitted at the time of writing), `graph_snapshot` also records `graph_version`, `products_untitled` and `reviews_embedded`. A live run is citable only if the graph carries exactly one `GraphVersion` node with `validation_passed: true`, which is written only after 18 hard validation gates pass. Archived runs are never recomputed. `eval_2026-10-18_2340`, `_2349` and `_2358` therefore stay citable as **graph v1 evidence**. A new run on v1 would now be non-citable with reason `graph_version_unknown`.
+
+**C-3. v1 figures in §4.4 and §4.5.** The price coverage of Table 3 (≈ 0.54), the base rates 2.15% and 0.52%, and Table 5 are v1 quantities. On v2, ghosts are removed and the top 5 reviews of every reviewed product are embedded. That changes the price-unknown share and makes review-coverage bias, as defined, close to uninformative (`13-doc-graph-integrity.md` §4.4, E-2). Findings 6 and 7 are statements about v1 and should be cited as such.
+
+---
+
 ## 0. Scope of the Claim
 
 This document claims a **methodological** contribution. It does **not** claim that any retrieval arm is better than another. Its claims are:

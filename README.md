@@ -14,7 +14,7 @@ The system addresses the fundamental limitations of pure LLM implementations (ha
 * `src/` - Primary source code
   * `agents/` - Multi-agent implementations (`orchestrator.py`, `critic_agent.py`)
   * `dialog_manager/` - Dialogue state modeling and session adapters
-  * `knowledge_graph/` - Neo4j database connectors and resolver services
+  * `knowledge_graph/` - Neo4j database connectors and resolver services; `graph_v2/` holds the graph v2 transform, taxonomy, lineage and validation code
   * `tools/` - GraphSearchTool and KECRTool for retrieval
   * `llm_interface/` - Prompt parsers and LLM extraction utilities
   * `evaluation/` - Two-Tiered evaluation metrics and harnesses
@@ -28,16 +28,12 @@ The system addresses the fundamental limitations of pure LLM implementations (ha
 
 ## Getting Started
 
-1. Set up your Neo4j container:
+1. Set up your `.env` based on `.env.example`. `NEO4J_DATA_VOLUME` is required: the compose file uses an external Docker volume, which must exist before the first start (`docker volume create <name>`).
+2. Start the Neo4j container from the repository root:
    ```bash
-   cd src/knowledge_graph
-   docker-compose up -d
+   docker compose --env-file .env -f src/knowledge_graph/docker-compose.yml up -d
    ```
-2. Set up your `.env` based on `.env.example`.
-3. Ingest the dataset (Amazon-curated subset):
-   ```bash
-   python scripts/graph_ingestion/batch_ingest.py
-   ```
+3. Build the Knowledge Graph. The current graph is **v1** (the full Electronics ingest by `scripts/graph_ingestion/batch_ingest.py`, which created 104,281 ghost products; Vision 2026-10-19-021). Do not use `batch_ingest.py` for the KG any more. The graph is rebuilt as **v2** from the raw Amazon Reviews 2023 files by `scripts/graph_ingestion/build_graph_v2.py`, `import_graph_v2.py`, `post_import_v2.py` and `validate_graph.py`, under a step-by-step runbook with user approval checkpoints (see `scripts/graph_ingestion/README.md` and `production_artifacts/Technical_Specification_Graph_Rebuild.md`). As of 2026-10-19 only the code exists: no graph operation has run and the live graph is still v1.
 4. Run the Retrieval Evaluation suite:
    ```bash
    python scripts/evaluate_retrieval.py

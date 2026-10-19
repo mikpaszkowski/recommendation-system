@@ -1,5 +1,7 @@
 ```mermaid
 flowchart TD
+%% NOTE 2026-10-19: this diagram shows the v1 design schema. Graph v2 (Vision 2026-10-19-018) drops Variant, PriceRange, RATED and
+%% REVIEWS and adds Taxon (IN_TAXON, BROADER) and GraphVersion. Redraw after the v2 graph is built and validated.
 
 subgraph Sources
   M["Metadata: parent_asin title price avg_rating rating_number categories details Brand etc bought_together"]

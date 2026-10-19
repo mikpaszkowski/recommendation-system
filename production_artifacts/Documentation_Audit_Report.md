@@ -2,85 +2,113 @@
 
 **Date**: 2026-10-19
 **Auditor**: Documentation Auditor Agent (@doc-cleaner)
-**Scope**: Documentation affected by release R2a (RS-23 spurious-CLARIFY fix with the `product_type_decided` gate, constraint-satisfaction@K, paired statistics, citable-run provenance, `evaluations_archive/`, exit gate) on `feature/afp-002-vector-aggregation`, commits `5446dcf..HEAD` since R1's `9cbf426`
-**Previous report**: The R1 audit (2026-10-17) previously at this path is preserved in git history (`git show 9cbf426:production_artifacts/Documentation_Audit_Report.md`). The 2026-10-09 full audit is at `git show 2fdf251:production_artifacts/Documentation_Audit_Report.md`.
+**Scope**: `/implement` Phase 6, Graph v2 rebuild (Vision 2026-10-19-018 … 021). Code only: **no graph operation has run, the live Neo4j is still the v1 graph.** No v2 result is claimed anywhere.
+
+Sources checked: `Technical_Specification_Graph_Rebuild.md` (incl. §13), `Research_Report_Graph_Rebuild.md`, `Audit_Report_Graph_Rebuild.md`, Vision Decision Log 2026-10-19-018 … 021, `src/knowledge_graph/graph_v2/`, `scripts/graph_ingestion/*_v2.py`, `validate_graph.py`, `export_v1_snapshot.py`, `check_baseline_diff.py`, `src/knowledge_graph/docker-compose.yml`, `.env.example`.
 
 ## Executive Summary
 
-The docs that track R2 were checked against the R2a code (`src/agents/orchestrator.py`, `src/evaluation/{provenance,stats,constraint_satisfaction,dialogue_metrics,metrics}.py`, `scripts/{evaluate_retrieval,archive_eval_run,check_eval_gate}.py`) and the archived gate runs. The Implementation Plan and the roadmap still listed RS-23, RS-20 (rest) and the R2 gate as open; they now show R2a done and R2b (RS-21, RS-02 evidence) open. The README did not mention `--require-clean`, the gate checker, the archive script or `evaluations_archive/`; it does now. `.env.example` and `evaluations_archive/README.md` were already accurate and were extended or confirmed. The architecture diagram's guardrail text ("category missing → CLARIFY") no longer matched the code; the HTML is fixed, but the rendered JPG is stale and needs a re-render. Last time's flag "evaluation artifacts are not versioned" is **resolved** by `evaluations_archive/`; the flag "no thesis contribution for R1" is **resolved** by `thesis/10-doc-fusion-ablation.md`. Open: the Audit Report's top status lines are stale, and several documents from the separate graph-v2 workstream will need updating once that work is committed.
+The v2 work left 13 documents stating v1 facts as current: the ingest path (`batch_ingest.py`), the Docker start commands (compose now needs an external volume), the `Variant` / `PriceRange` schema, and the coverage figures that Vision 2026-10-19-021 invalidates. 12 files were fixed with dated notes or targeted edits that keep v1 history. 6 items needed your approval; the user resolved them on 2026-10-19 (see "Decisions for the User" and "Follow-up Pass" below).
 
-## Documentation Inventory
+## Documentation Inventory (scoped to the v2 change)
 
-| File | Status | Category | Notes |
-|------|--------|----------|-------|
-| `production_artifacts/Implementation_Plan.md` | ✅ (fixed) | Plan | Header R2a line; A1.1 status; R2 block split into R2a (RS-23, RS-20 rest, statistics, provenance, archive: done) and R2b (RS-21, RS-02 evidence: open); A6 baseline and label-free-metrics items; AI-07 "1500 → 150" part done; gap-table row |
-| `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` | ✅ (fixed) | Roadmap | Header status; RS-02, RS-20, RS-21, RS-23 rows; release table R2 split into R2a / R2b with gates; metric rename note; statistics and citable-run note |
-| `production_artifacts/action_items/README.md` | ✅ (fixed) | Index | Roadmap row: R1 and R2a done, R2b next, Vision 014 … 017 |
-| `README.md` | ✅ (fixed) | Setup | `--require-clean`, `--stats-seed` / `--stats-resamples`, `scripts/check_eval_gate.py`, `scripts/archive_eval_run.py`, `ORCH_CATEGORY_RECOVERY`; `evaluations/` and `evaluations_archive/` in the directory list |
-| `.env.example` | ✅ | Config | `ORCH_CATEGORY_RECOVERY=1` matches `AgentOrchestrator._resolve_category_recovery` (default on; `0`, `false`, `no` disable) |
-| `evaluations_archive/README.md` | ✅ (extended) | Policy | Policy, layout and commands match `archive_eval_run.py` and `check_eval_gate.py`. Added the archived-run table, a manifest-reading note (`git_describe` is repository-wide, QA observation L-14) and the run-ID / `--force` behaviour |
-| `evaluations_archive/index.json`, run folders | ✅ | Archive | Six runs: three legacy (`citable: false`), three citable R2a runs at `88cdbdf` with one benchmark hash |
-| `diagrams/crs_detailed_architecture.html` | ✅ (fixed) | Diagram | Guardrail card now describes category recovery; roadmap line and date updated. **JPG not re-rendered** (see Flagged) |
-| `diagrams/crs_detailed_architecture_2026-10-17.jpg` | ⏰ | Diagram | Shows the old guardrail card text and the 2026-10-17 roadmap line |
-| `diagrams/conversation_flow.md` | ✅ | Diagram | Older flow chart; does not show the guardrail or recovery, but states nothing wrong about them |
-| `production_artifacts/Technical_Specification.md` | ✅ | Pipeline | R2a spec with amendments A-1 … A-13; consistent with the code. Not edited |
-| `production_artifacts/Audit_Report.md` | ⚠️ | Pipeline | Gate section at the end is current; header lines 6-8 are stale (see Conflicting). Not edited |
-| `production_artifacts/Research_Report.md` | ✅ | Pipeline | R2 research; the "1500 → 150" recommendation was implemented as FR-011. Not edited |
-| `production_artifacts/Vision_Report.md` | ✅ | Vision | Decisions 2026-10-18-014 … 017 describe R2 and match the delivered R2a; not modified by this audit |
-| `docs/changelog/changelog.md` | ✅ | Changelog | Not read for edits; @historian is appending in parallel |
-| `thesis/10-doc-fusion-ablation.md`, `11-doc-evaluation-protocol.md`, `12-doc-clarification-gating.md`, `thesis/README.md` | ✅ | Thesis | Listed in `thesis/README.md`; not touched |
-| `src/README.md`, `src/knowledge_graph/README.md` | ✅ | Overview | No R2a-specific detail |
-| `production_artifacts/Evaluation_Failure_Analysis.md`, AFP documents, `Live_Graph_Audit_2026-10-10.md` | ✅ | Historical | Dated records; AI-07 progress is tracked in the plan |
+| File | Status | Notes |
+|---|---|---|
+| `scripts/graph_ingestion/README.md` | ✅ v2 section / ⏰ legacy section (fixed) | v2 runbook matches CLI flags and defaults in `build_graph_v2.py`, `import_graph_v2.py`, `post_import_v2.py`, `validate_graph.py`, `export_v1_snapshot.py`, `preflight_v2.py`, `check_baseline_diff.py`. A-3 (no pilot `build_params.json`) and A-5 (seaborn) are already reflected. Legacy section claimed OpenAI embeddings and Cypher 25 vector indexes |
+| `README.md` (root) | ⏰ fixed | Pointed to `batch_ingest.py` and `cd src/knowledge_graph; docker-compose up` |
+| `src/README.md` | ⏰ fixed | No `graph_v2/`; named a non-existent `knowledge_graph/neo4j_connector.py` (real path `graphdb/`) |
+| `src/knowledge_graph/README.md` | 🗑️ Deleted 2026-10-19 (user-approved) | Wrong import path, missing `example_usage.py`, never-implemented "Planned" schema, old compose command |
+| `src/knowledge_graph/DOCKER.md` | ⚠️ fixed | Contradicted `docker-compose.yml` (external volume, `NEO4J_DATA_VOLUME` required, memory from env, `down -v` no longer removes the graph) |
+| `src/knowledge_graph/QUICKSTART.md` | 🗑️ Deleted 2026-10-19 (user-approved) | Had obsolete `Product` examples and `graphrag` imports; `DOCKER.md` now points to `graphdb/neo4j_connector.py` |
+| `production_artifacts/graph_state_snapshot.md` | ⏰ banner added (AI-13) | July curated-subset state; rewrite flagged |
+| `production_artifacts/action_items/README.md` | ⏰ fixed | Added the graph rebuild row and a v1-figures note |
+| `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` | ⏰ fixed | "Live data facts" correction note; the "Consequence" sentence marked superseded |
+| `production_artifacts/action_items/Proposed_Fix_Vector_Aggregation.md` | ⏰ fixed | "2.2% / 47%" marked as v1 and invalidated |
+| `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md` | ⏰ fixed | Header note (v1; F-02 timestamp backfill cannot work; legacy structures) |
+| `docs/kg_pipeline/schema.md` | ⏰ banner added, rewrite flagged | Design-time schema with `Variant`, `PriceRange`, `RATED`, `REVIEWS` |
+| `diagrams/nodes_edges_mermaid.md`, `diagrams/general_kg_state_of_the_art_mermaid.md` | ⏰ comment added, redraw flagged | Show `Variant` / `PriceRange` |
+| `diagrams/conversation_flow.md` | ⏰ flagged only | Node box lists `:Item ... :PriceRange` |
+| `docs/kg_pipeline/extensibility.md`, `chainlit.md`, `production_artifacts/Project_State_Report.md`, `evaluations_archive/README.md` | ✅ | No v1/v2 conflicts found |
+| `.env.example`, `src/knowledge_graph/docker-compose.yml` | ✅ | Match the spec (FR-020) |
 
 ## Findings by Severity
 
-### ⚠️ Conflicting Documentation
-- **Audit Report header vs its own gate section**: `production_artifacts/Audit_Report.md` lines 6-8 say "PASS WITH FIXES … H-1 is open … The live exit gate has not run yet" and "uncommitted working tree on top of `9cbf426`", while the end of the same file records H-1 fixed (`5446dcf`), the exit gate PASS at `88cdbdf`, and the three runs archived. The code and the gate section agree; the header is stale. **Flagged** (the Audit Report is @qa's file and was not edited).
-- **Implementation Plan vs Audit Report on R2a**: the plan listed RS-23, RS-20 (rest) and RS-21 as open while the Audit Report recorded the gate as passed. **Resolved** in favour of the audit and the code: RS-23 and RS-20 done, RS-21 open as R2b.
+### ⚠️ Conflicting
+- `DOCKER.md` vs `docker-compose.yml`: docs said `cd src/knowledge_graph && docker-compose up`, heap 512m/2G, page cache 1G, and `down -v` deletes data. Compose is external-volume, `NEO4J_DATA_VOLUME` required, heap 2G (initial = max), page cache 2G, tx timeout 60s. Resolved in favour of compose.
+- Roadmap / AFP-002 "47% have reviews", "53% cold", 4.7% / 2.2% coverage vs Vision 2026-10-19-021 (invalidated; 12% of titled products have reviews in v1). Resolved with dated correction notes; the original v1 numbers stay as history.
+- `Live_Graph_Audit` F-02 suggests backfilling review timestamps from `processed_reviews.csv`; Vision -021 item 6 says `sort_timestamp` is 0 in all v1 reviews. Noted in the audit header.
 
-### ⏰ Outdated Documentation
-- **Plan R2 block**: RS-23 and RS-20 (rest) unchecked, no R2a / R2b split (Vision 2026-10-18-015 sets that order). **Fixed**, with the still-open leftovers named (ambiguous-stratum clarification recall in R2b, vocabulary fallback in RS-24, parser merge in AI-07).
-- **Plan A6**: "Live baseline: `eval_2026-10-09_1336`" with no mention of citable runs; the label-free metrics item still listed `popularity-bias@K` and `constraint-satisfaction@K` as scheduled. **Fixed**: citable reference runs named, `review-coverage-bias@K` rename noted, RS-20 done, RS-21 open.
-- **Plan AI-07**: still asked to "Fix the '1500 → 150' example". `SEARCH_GENERATION_PROMPT` now says `price_max` to 1500 (FR-011). **Fixed** with a dated note; the merge itself stays open.
-- **Plan gap table, roadmap header, roadmap release table, RS-02 / RS-20 / RS-21 / RS-23 rows, action-items index**: "R2 next", "Decided", "removal decided in R2". **Fixed**.
-- **README**: no mention of the citable-run workflow, the gate checker, the archive script or `--require-clean`. **Fixed**.
-- **Architecture diagram**: "Guardrail: category missing → CLARIFY". The code (`AgentOrchestrator._decide_next_step`) keeps SEARCH when any category source exists, otherwise makes one recovery call and accepts its category only if `product_type_decided` is true; CLARIFY follows only when none is found (or recovery is disabled). **HTML fixed; JPG stale**.
-- **Plan / roadmap metric name**: `popularity-bias@K` measures review-embedding coverage, and reports call it `review-coverage-bias@K` (code key `popularity_bias@k` unchanged). Noted in the plan and roadmap; R1-era text that uses the old name is kept as history.
+### ⏰ Outdated
+- Root `README.md`, `scripts/graph_ingestion/README.md` (legacy part), `src/README.md`, `graph_state_snapshot.md`, `docs/kg_pipeline/schema.md`, diagrams. See the fixes below.
+- ~~`CLAUDE.md` project-structure list lacks `src/knowledge_graph/graph_v2/`~~ Resolved 2026-10-19: line added by the user-approved edit.
+- ~~`Implementation_Plan.md` GAP-003 "Done", F3.5 DDL, F2/F3 curated-subset story, no F4~~ Resolved 2026-10-19: F4 and dated notes on F2, F3, F3.5 and GAP-003 added (user-approved). AI-13 remains open (the snapshot rewrite waits for v2).
 
-### 📋 Duplicated Content
-- R2a gate results appear in the Audit Report, the plan R2 block, the roadmap header and `evaluations_archive/README.md`. The Audit Report ("R2a exit gate") is canonical; the others are one-line summaries with the same run IDs and commit (`88cdbdf`).
+### 📋 Duplicated
+- v1 coverage figures appear in the Roadmap (§1 table and R1-7), AFP-002 §1, the Research Report R2 and Vision decisions. Canonical correction: Vision 2026-10-19-021. Other documents now carry a short note and link rather than a restatement.
 
 ### 🔗 Stale References
-- No broken paths found in the scoped documents. The commands in `README.md` and `evaluations_archive/README.md` match the argparse definitions (`archive_eval_run.py` takes a run ID, not a path; `check_eval_gate.py` resolves runs from `evaluations/` then `evaluations_archive/`).
-- `production_artifacts/Research_Report_Graph_Rebuild.md` (lines 23, 246) says `evaluations_archive/` holds only the three legacy R1 runs and that the K-2 gate is not met. That is no longer true: the three citable R2a runs are archived. The file belongs to the graph-v2 workstream and was not touched.
+- `src/README.md`: `neo4j_connector.py` and `resolver_service.py` live in `graphdb/`. Fixed.
+- `QUICKSTART.md` and `src/knowledge_graph/README.md` (wrong paths, `graphrag...` imports, missing `example_usage.py`): both files deleted on 2026-10-19 with user approval. The follow-up pass (below) found no remaining links to them.
 
-### 🕳️ Missing Documentation
-- **Rendered diagram**: no current JPG for the updated guardrail card (see Flagged).
-- **Project instructions**: `CLAUDE.md` lists neither `evaluations_archive/` in Project Structure nor `scripts/check_eval_gate.py` / `scripts/archive_eval_run.py` in the commands. Not edited (project instructions).
-- **Graph-v2 workstream**: `src/knowledge_graph/graph_v2/`, `scripts/graph_ingestion/{build,import,post_import,preflight}_graph_v2.py`, `validate_graph.py`, `check_baseline_diff.py`, `export_v1_snapshot.py`, `Research_Report_Graph_Rebuild.md`, `Technical_Specification_Graph_Rebuild.md` and Vision decisions 2026-10-19-018 … 021 are uncommitted and from another session. When committed, these will need: a plan section (the plan has no graph-rebuild phase, and F-phase and A1.1 data facts will change), README directory and getting-started steps, `CLAUDE.md` project structure, and `.env.example` review (`scripts/graph_ingestion/preflight_v2.py` and `import_graph_v2.py` read `os.environ`). Also `production_artifacts/Technical_Specification.md` is the R2a spec, so the rebuild spec lives in a separate file. Noted only.
+### 🕳️ Missing
+- A schema document for v2 (the spec §5.1 is the only source). Propose creating it after the v2 build, from `graph_versions/v2/lineage.json`.
+- `graph_versions/` (v1 freeze, v2 record) has no README; it appears only after the CPs run.
+- `src/knowledge_graph/graph_v2/` has module docstrings in the spec only; no package README. Optional.
+- Neo4j version constraint (5.14 Community: procedures, not DDL) is documented in `scripts/graph_ingestion/README.md` now; `create_indexes.py` still contains DDL (code; noted, not touched).
 
-### ✅ Resolved from the previous audit
-- **"Evaluation artifacts are not versioned"**: resolved. `evaluations_archive/` is git-tracked (`.gitignore` un-ignores its CSVs), holds `ARCHIVE.json` hashes and a trace fingerprint per run, and has `index.json` and a policy README. The runs cited by the plan (`eval_2026-10-09_1336`, `_1846`, `_1937`) are archived as non-citable context; the R2a gate runs are citable.
-- **"No thesis contribution for R1"**: resolved by `thesis/10-doc-fusion-ablation.md` (listed in `thesis/README.md`). Not touched.
-
-### ✅ Valid Documentation
-- Technical Specification (R2a, with §13 amendments), Research Report (R2), Vision decisions 2026-10-18-014 … 017, `.env.example`, `evaluations_archive/` policy, historical AFP and failure-analysis documents, dated thesis contributions.
+### ✅ Valid
+`scripts/graph_ingestion/README.md` v2 section, `.env.example`, `docker-compose.yml`, `extensibility.md`, `chainlit.md`, the A-1 … A-6 amendment status lines in spec §13 versus code (A-3 and A-6 were marked "to implement" at the time of the spec; `pilot_build_params` and `tests/graph_v2/test_validate_graph_collectors.py` now exist in the tree, so the spec's "Code status" column for those two rows is stale; the spec is protected and not edited).
 
 ## Fixes Applied
 
 | File | Change | Reason |
-|------|--------|--------|
-| `production_artifacts/Implementation_Plan.md` | Header R2a line; A1.1 status; R2 block split into R2a (done) and R2b (open); A6 baseline and metrics items; AI-07 note; gap-table row | Outdated status |
-| `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` | Header; RS-02 / RS-20 / RS-21 / RS-23 rows; release table R2a / R2b; R1-7 and §6 metric rename; statistics note | Outdated status, renamed metric |
-| `production_artifacts/action_items/README.md` | Roadmap row status | Outdated status |
-| `README.md` | Citable-run, gate and archive commands; `--require-clean`; stats flags; `ORCH_CATEGORY_RECOVERY`; two directory entries | Undocumented CLI options and directory |
-| `evaluations_archive/README.md` | Archived-run table; manifest-reading note (`git_describe` scope); run-ID, `--force` and gate-lookup notes | Missing reader guidance (QA L-14) |
-| `diagrams/crs_detailed_architecture.html` | Guardrail card text; roadmap line; "flows as of" date | Outdated description |
+|---|---|---|
+| `README.md` | Getting Started: env + external volume, compose from repo root, step 3 now states v1 vs v2 ingest and that nothing is built; `graph_v2/` in the directory list | Stale ingest and Docker path |
+| `src/README.md` | `knowledge_graph/` entry corrected, `graph_v2/` added | Stale path, new package |
+| `src/knowledge_graph/README.md` | Dated status banner (later superseded: file deleted 2026-10-19) | Rewrite flagged instead |
+| `src/knowledge_graph/DOCKER.md` | Start command, external volume, memory env vars, `down -v` semantics, volume list | Contradicted compose |
+| `src/knowledge_graph/QUICKSTART.md` | Compose command; `test_connector.py` path (later superseded: file deleted 2026-10-19) | Stale |
+| `production_artifacts/graph_state_snapshot.md` | Historical / stale banner pointing to v1 census and v2 records (AI-13) | Stale since 2026-10-10 |
+| `production_artifacts/action_items/README.md` | Graph rebuild row; v1-figures note | Index completeness, Vision -021 |
+| `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` | Correction note under "Live data facts (graph v1…)"; "Consequence" marked superseded | Vision -021 |
+| `production_artifacts/action_items/Proposed_Fix_Vector_Aggregation.md` | v1 / invalidated note on 2.2% / 47% | Vision -021 |
+| `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md` | Header note | v1 record, F-02 timestamp idea cannot work |
+| `docs/kg_pipeline/schema.md` | Banner: design-time schema, v1 differences, v2 schema pointer | `Variant` / `PriceRange` etc. |
+| `diagrams/nodes_edges_mermaid.md`, `diagrams/general_kg_state_of_the_art_mermaid.md` | Mermaid `%%` comment (no rendering change) | Show dropped structures |
+| `scripts/graph_ingestion/README.md` | Legacy section: batch_ingest MERGE/MATCH state, procedure-form vector indexes on 5.14, no OpenAI key for embeddings | Stale claims |
 
-## Flagged for User Approval
+## Proposed Actions
 
-1. Re-render `diagrams/crs_detailed_architecture_2026-10-17.jpg` from the updated HTML (this audit had no rendering tool). Also decide on the untracked `diagrams/crs_detailed_architecture_1791405352600.jpg`: its origin is unknown, and it may be a render of an older or newer HTML. Delete or keep is your call; nothing was deleted.
-2. Ask @qa to refresh the header of `production_artifacts/Audit_Report.md` (lines 6-8: status, "gate has not run yet", branch base) so it matches the R2a exit gate section.
-3. Update `CLAUDE.md` (Project Structure and Build & Test Commands) with `evaluations_archive/`, `scripts/check_eval_gate.py` and `scripts/archive_eval_run.py`.
-4. After the graph-v2 work is committed, run a follow-up audit: plan phase, README, `CLAUDE.md`, `.env.example`, and the stale "archive holds only R1 legacy runs" statement in `Research_Report_Graph_Rebuild.md` (K-2 gate is met now).
-5. Vision Report (for @pm-research): nothing to change for R2a. The standing note from R1 remains: decision 2026-09-28-006 still says "Lucene full-text second" (superseded; recorded in 2026-10-18-017).
+| Action | File | Status |
+|---|---|---|
+| Edit (protected config) | `CLAUDE.md` Project Structure | **Resolved 2026-10-19**: user approved; `src/knowledge_graph/graph_v2/` line added |
+| Add item F4 | `production_artifacts/Implementation_Plan.md` | **Resolved 2026-10-19**: user approved; F4 plus dated notes on F2, F3, F3.5 and GAP-003 added. AI-13 still open |
+| Rewrite or delete | `src/knowledge_graph/README.md` and `QUICKSTART.md` | **Resolved 2026-10-19**: user approved deletion; `DOCKER.md` points to the runbook and `graphdb/neo4j_connector.py` |
+| Major rewrite | `production_artifacts/graph_state_snapshot.md` | **Deferred by the user until v2 is built.** Replace with a generated v1 snapshot (`graph_versions/v1/snapshot.json` from `export_v1_snapshot.py`) and, after the build, v2 |
+| Major rewrite | `docs/kg_pipeline/schema.md` and 3 diagrams (incl. `diagrams/conversation_flow.md` node box; the `.jpg` architecture image) | **Deferred by the user until v2 is built and validated** |
+| Create | v2 schema doc and `graph_versions/README.md` | After the build |
+| Spec status lines | `Technical_Specification_Graph_Rebuild.md` §13 | A-3 and A-6 rows say "To implement"; code and tests for both exist now. Owner @pm-specs |
+| None (verified) | `src/knowledge_graph/graphdb/create_indexes.py` | Still uses `CREATE VECTOR INDEX` DDL; the FR-034 docstring note ("Needs Neo4j >= 5.15") exists. No action |
+
+## Decisions for the User
+All four decisions were taken on 2026-10-19:
+1. `CLAUDE.md` structure line: approved and applied.
+2. F4 and related text updates in `Implementation_Plan.md`: approved and applied.
+3. `src/knowledge_graph/README.md` / `QUICKSTART.md`: deleted.
+4. `graph_state_snapshot.md`, `schema.md` and the diagrams: rewrite after the v2 build.
+
+## Follow-up Pass (2026-10-19)
+
+Scope: changes made after the report above (file deletions, CLAUDE.md line, F4, `--force` guard in `build_graph_v2.py`, thesis contribution 13).
+
+| Check | Result |
+|---|---|
+| References to the deleted `src/knowledge_graph/README.md` / `QUICKSTART.md` | None left in docs, code or config. Only `DOCKER.md` line 401 mentions them, deliberately, as a removal note; `src/README.md` links the root README, not the deleted file. `Technical_Specification_Graph_Rebuild.md` line 964 matched a link pattern but is a protected spec, not read for edits |
+| `scripts/graph_ingestion/README.md` vs `build_graph_v2.py` | The CLI (`--force`, `--dry-run`, `--sample-mod`, `--require-clean`, default paths, exit code 2) matched. The runbook did not mention `--force`. **Fixed**: R-6 now explains the refusal on existing lineage or non-empty CSV directory, `--force` for the pilot and the full build, and that `--dry-run` needs no `--force` |
+| `CLAUDE.md`, `Implementation_Plan.md` F4 and notes | Verified present and consistent with the runbook (F4 links the runbook; gap table row F4 says graph operations not run) |
+| `thesis/README.md` vs `thesis/13-doc-graph-integrity.md` | Consistent (read only): index row 13, "Total Thesis Documents: 13", RQ1 … RQ13, Chapter 3/4/5 mapping, correction notes for docs 3, 4, 6, 7, 8, 10, 11 and the unchanged doc 12. Doc 13's header (not executed, 12 test modules) matches the README. Referenced `.agents/skills/thesis_evaluator/SKILL.md` exists |
+
+Files changed in this pass: `scripts/graph_ingestion/README.md`, `production_artifacts/Documentation_Audit_Report.md`.
+Still open: `graph_state_snapshot.md`, `schema.md`, the 3 diagrams and the `.jpg` (deferred until v2 is built); the v2 schema doc and `graph_versions/README.md` (after the build); spec §13 status lines for A-3 and A-6 (owner @pm-specs); AI-13 in the plan.
+
+Note on scope: `docs/changelog/changelog.md` was not read for edits or modified (historian writing in parallel). Existing changelog lines mentioning `CREATE VECTOR INDEX` working (line 1140) are historical and unchanged; they conflict with the 5.14 reality (see Implementation_Plan GAP-003 note).

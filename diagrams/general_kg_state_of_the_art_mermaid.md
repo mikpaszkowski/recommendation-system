@@ -1,5 +1,7 @@
 ```mermaid
 flowchart TD
+%% NOTE 2026-10-19: v1 design schema. Graph v2 (Vision 2026-10-19-018) drops Variant and PriceRange and adds the Taxon tree.
+%% Redraw after the v2 graph is built and validated.
 
 subgraph Ingest
   METADATA[Product metadata\nparent asin title brand categories price]

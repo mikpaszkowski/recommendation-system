@@ -44,6 +44,7 @@ python scripts/evaluate_generative.py
 - `src/tools/` — Graph search tool, profile tool, KECR tool
 - `src/dialog_manager/` — Session adapter, preference agent flow
 - `src/knowledge_graph/graphdb/` — Graph operations, resolvers, embedding service
+- `src/knowledge_graph/graph_v2/` — Graph v2 rebuild pipeline (transform, import, validation); runbook in `scripts/graph_ingestion/README.md`
 - `src/llm_interface/` — Preference parser, prompt constructors, response generators
 - `src/llm/` — LLM handler, abstract interface
 - `src/personalization/` — Preference quantifier

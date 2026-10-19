@@ -8,8 +8,11 @@ Work-driving documents: audits that produce action items, and Architectural Fix 
 | [Proposed_Fix_Benchmark_Alignment.md](Proposed_Fix_Benchmark_Alignment.md) | AFP-001 | Implemented (Vision Report decision 2026-10-07-010) |
 | [Proposed_Fix_Vector_Aggregation.md](Proposed_Fix_Vector_Aggregation.md) | AFP-002 | Implemented 2026-10-17 via RRF (release R1, Vision decision 2026-10-17-013). |
 | [Retrieval_Score_Redesign_Roadmap.md](Retrieval_Score_Redesign_Roadmap.md) | RS-01 … RS-24, R1 … R5 | **R1 and R2a done** (branch `feature/afp-002-vector-aggregation`; R2a exit gate PASS 2026-10-18, citable runs in `evaluations_archive/`); R2b (RS-21, RS-02 evidence) next. D-1 recorded (Vision decision 2026-10-17-013); R2 evaluation decisions recorded as Vision 2026-10-18-014 … 017; D-2 … D-4 pending. |
+| Graph v2 rebuild (documents in `production_artifacts/`: `Research_Report_Graph_Rebuild.md`, `Technical_Specification_Graph_Rebuild.md`, `Audit_Report_Graph_Rebuild.md`) | Vision 2026-10-19-018 … 021; proposed Implementation Plan item F4 (not yet approved) | **Code implemented 2026-10-19 (audit PASS WITH FIXES); no graph operation has run, the live Neo4j is still v1.** Unblocks R2b, AI-03, AI-06, RS-12, RS-03. |
 | [Proposed_Fix_Category_Resolution.md](Proposed_Fix_Category_Resolution.md) | AFP-003 | Implemented (decision 2026-10-07-009) |
 | [Proposed_Fix_Prompt_Constraint_Inversion.md](Proposed_Fix_Prompt_Constraint_Inversion.md) | AFP-004 | Implemented (decision 2026-10-09-011) |
 | [Proposed_Fix_Cypher_Ranking_and_Typing.md](Proposed_Fix_Cypher_Ranking_and_Typing.md) | AFP-005 | Implemented (decision 2026-10-09-012) |
+
+> **Graph v1 figures (2026-10-19)**: the live-graph figures quoted in these documents ("47% have reviews", 4.7% / 2.2% review-embedding coverage, "53% cold products", 71 categories, `Variant` / `PriceRange` structures) are v1 facts. Vision 2026-10-19-021 records that 104,281 of the 265,307 v1 products are ghosts, so they are recomputed on graph v2. Each affected document carries a dated note.
 
 > **Moved 2026-10-10**: The `Proposed_Fix_*.md` files previously lived at `production_artifacts/Proposed_Fix_*.md`. Earlier entries in `Vision_Report.md` and `docs/changelog/changelog.md` still cite the old path. Those documents are append-only, so the references were intentionally left unchanged.

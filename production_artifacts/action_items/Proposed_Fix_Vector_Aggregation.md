@@ -20,7 +20,7 @@ Why the adaptive late fusion was dropped:
 2. **Cosine scales are not comparable across indexes.** RRF uses ranks only, so no calibration between indexes is needed.
 3. **Bounded scores expose the soft-preference bonus.** The `+0.2 × polarity` bonus per substring match dominates any score in [0, 1], so it must be rescaled together with the fusion change (RS-05).
 4. **Agreement is the desired signal.** The user decided that a product found by several channels outranks one found by a single channel when feature fit is equal. RRF does this by construction.
-5. **The review channel's role changes.** Reviews will verify fit rather than find candidates. Only 2.2% of products have embedded reviews, while 47% have review text. R1 runs the review channel as an ablation (3 vs 2 channels).
+5. **The review channel's role changes.** Reviews will verify fit rather than find candidates. Only 2.2% of products have embedded reviews, while 47% have review text. _(Graph v1 figures; invalidated as catalogue statements by Vision 2026-10-19-021 because 104,281 of the 265,307 products are ghosts. Recomputed on graph v2, not yet built.)_ R1 runs the review channel as an ablation (3 vs 2 channels).
 
 Changes to the acceptance criteria: AC-002.1–AC-002.3 are replaced by the R1 acceptance in the roadmap §5. AC-002.4 (C920 in the top 5 for `ret_021`) and AC-002.5 (no hub runaway on `ret_001`) remain as regression checks.
 

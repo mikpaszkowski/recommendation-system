@@ -8,6 +8,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-09-29. It was not rewritten. Sources: Vision decisions 2026-10-19-018 and 2026-10-19-021 (items 1 and 4), `production_artifacts/Research_Report_Graph_Rebuild.md` (Problem Statement), and `13-doc-graph-integrity.md`.
+
+**C-1. Numeric soft and hard specifications never ran on live data.** No `Attribute` node carries `numeric_value`, and attributes hold only Material, Color, Style and Size (Vision 2026-10-19-021 item 4). The "EAV Unit Trap" probes in §4.2 therefore exercise parsing code in unit tests only. On the live graph, the $\sum w_i S_{attr_i}$ term of §3.2 can match only colour, material, style and size values, not "target technical specs". MACS widening of numeric constraints is effective for price only, because price is the only numeric field the graph holds.
+
+**C-2. The NaN protection admitted ghost products.** The hard boundary `price IS NULL OR price <= $price_max` is satisfied by all 104,281 v1 ghost products (no title, price or category), and also by titled products without a price. Whether ghosts reached a reported top-K was not measured. Category filtering excludes them, because ghosts have no category, but any path without a category filter does not. Graph v2 removes ghosts at construction (Vision 2026-10-19-018). The deliberate NaN protection for titled products without a price is unchanged.
+
+**C-3. Graph version.** No retrieval figure is reported in this document. Any later figure for this mechanism must state whether it was measured on graph v1 or v2.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement

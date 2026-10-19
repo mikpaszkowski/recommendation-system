@@ -1,5 +1,7 @@
 # Knowledge Graph & Embedding State Report
 
+> **⏰ HISTORICAL (2026-07-11), STALE since 2026-10-10 (AI-13).** This file describes the 30-product curated graph that existed in July. The live Neo4j today is the **v1 full Electronics ingest** (265,307 `ParentProduct`, 1.63M `Review`; 104,281 products are ghosts without title, price or category). Current v1 counts are in `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md` §1, and the ghost finding is Vision 2026-10-19-021. The **v2 rebuild** (Vision 2026-10-19-018 … 021, `production_artifacts/Technical_Specification_Graph_Rebuild.md`) is implemented as code only; no v2 graph exists yet, so no v2 snapshot can be written. After the v2 build, the machine-readable record is `graph_versions/v2/lineage.json` and `validation_report.json`. The sections below are not current.
+
 **Date**: 2026-07-11
 **Purpose**: Document the current state of the Neo4j Knowledge Graph and embedding pipeline before the curated subset rebuild.
 

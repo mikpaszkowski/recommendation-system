@@ -1,5 +1,7 @@
 # Knowledge Graph Schema (Electronics CRS Foundation)
 
+> **⏰ Design-time schema, not the live graph (note 2026-10-19).** This document is the original design. The live **v1** graph only partly follows it: `Variant` (31), `PriceRange` (3), `Product` (25) and `REVIEWS` are leftovers of the curated build, `Review` has no `timestamp` or `helpful_votes` values, `Attribute` has no `numeric_value`, and the category hierarchy is 33 `SUBCATEGORY_OF` edges (Vision 2026-10-19-021). The **v2** schema (`production_artifacts/Technical_Specification_Graph_Rebuild.md` §5.1, Vision 2026-10-19-018) drops `Variant`, `PriceRange`, `Product`, `RATED` and `REVIEWS`, adds the `Taxon` tree (`IN_TAXON`, `BROADER`), `p.features`, `p.details_json`, `Review.cap_rank` / `embed_rank` / `in_train_split` and the `GraphVersion` node. Graph v2 has not been built yet. A full rewrite of this file after the v2 build is proposed in `production_artifacts/Documentation_Audit_Report.md`.
+
 This document captures the extensible Neo4j schema that underpins the conversational recommendation system. The design emphasises explicit entities and relationships extracted from the Amazon Reviews 2023 dataset while leaving dedicated attachment points for future commonsense knowledge, embeddings, and LLM alignment layers.
 
 ## Core Node Labels

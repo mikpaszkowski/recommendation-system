@@ -8,6 +8,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-10-06. Its numbers were not rewritten. Sources: Vision decisions 2026-10-19-018 and 2026-10-19-021 (items 1 and 3), `production_artifacts/Research_Report_Graph_Rebuild.md` (N-6), and `13-doc-graph-integrity.md`.
+
+**C-1. The counts cover only the titled 61% of the catalogue.** `scripts/analyze_product_distribution.py` counts `toLower(p.title) CONTAINS <keyword>` and `BELONGS_TO_CATEGORY` edges. On graph v1, 104,281 of the 265,307 products (39.3%) were ghost nodes with no title and no category, so the $N$ values in §3.2 and the "Computers ~46.5k" figure cover only the 161,026 titled products. The ghosts are real Electronics products whose metadata was never loaded (Vision 2026-10-19-018). All stratum sizes must be recomputed on graph v2.
+
+**C-2. The "taxonomy bottleneck" was partly an ingest artefact.** The raw Amazon Reviews 2023 metadata has a hierarchical `categories` list for each product. The v1 ingest reduced it to `main_category` plus 33 `SUBCATEGORY_OF` edges, which made the hierarchy traversal of 2026-10-07-009 point 3 effectively inactive. Claim 1 in §5 ("standard e-commerce KG topologies are too coarse-grained … requiring title-based NLP stratification") therefore describes the v1 ingest, not the dataset. Graph v2 builds a `Taxon` tree (`BROADER`, `IN_TAXON`) from the raw lists, so strata can be defined on taxonomy leaves.
+
+**C-3. Substring counts are noisy (pre-existing caveat).** `CONTAINS` keyword matching counts cross-type matches, for example "phone" inside "headphone" and "case" inside other words. This is the word-boundary problem fixed for category matching in 2026-10-07-009 point 2. The head/tail figures are approximate, and the qualitative long-tail claim should be re-checked on v2 taxonomy leaves.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement

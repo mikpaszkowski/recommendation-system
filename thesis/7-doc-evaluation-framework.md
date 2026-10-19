@@ -18,6 +18,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-10-04. It was not rewritten. Sources: Vision decisions 2026-10-19-018 and 2026-10-19-021 (items 1, 5 and 6), the brainstorm `_bmad-output/brainstorming/brainstorm-kg-attribute-problems-2026-10-18/brainstorm-intent.md` ("Thesis corrections"), and `13-doc-graph-integrity.md`.
+
+**C-1. Groundedness on graph v1 conflates hallucination with KG incompleteness.** The Hard Dilution Cap scores any claim absent from the KG evidence $\mathcal{E}_{KG}$ as fabricated. On graph v1, listing `features` text was never loaded, 39% of product nodes (104,281 of 265,307) had no metadata at all, and attributes held only Material, Color, Style and Size. A true specification taken from the Amazon listing would therefore be scored as a critical violation. No Tier 2 score on system output exists yet (Implementation Plan AI-04), so no reported number is invalidated. The Groundedness target in §4.1 ("0% Critical Hallucinations") cannot be interpreted on v1 data. Graph v2 stores `p.features` and `p.details_json`, but this release does not pass them to the judge's evidence. That is required before Groundedness is reported.
+
+**C-2. `profiled_user` scenarios and history-based explanations.** The v1 review timestamps and helpful votes are 0 throughout, and the KECR historical path yields nothing on the live graph (see the correction note in `6-doc-orthogonal-gating.md`). Scenarios "grounded in historical user reviews" therefore had no working historical evidence path on v1.
+
+**C-3. Citability now also requires a validated graph version.** Since the graph v2 change to `src/evaluation/provenance.py` (FR-028, FR-029), a live run is citable only if the graph carries one `GraphVersion` node with `validation_passed: true`. Tier 1 results from this framework must state the graph version. v1 evidence is limited to the archived runs.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement

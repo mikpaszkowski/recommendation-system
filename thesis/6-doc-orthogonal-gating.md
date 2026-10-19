@@ -8,6 +8,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-10-02. It was not rewritten. Sources: Vision decision 2026-10-19-021 (item 6), `production_artifacts/Research_Report_Graph_Rebuild.md` (N-1, N-2), `production_artifacts/Implementation_Plan.md` (A4 status 2026-10-10, AI-03), and `13-doc-graph-integrity.md`.
+
+**C-1. The temporal-decay term had no valid input on graph v1.** The v1 preprocessing read `sort_timestamp` and `helpful_votes`, but the raw fields are `timestamp` and `helpful_vote`. Both are 0 in all 1,630,273 v1 review rows. $\Delta t$ in the decay formula of §3.2 therefore cannot be computed from v1 data. The planned fix of backfilling timestamps from `processed_reviews.csv` (AI-03) cannot work. Separately, the A4 status of 2026-10-10 records that the historical subquery reads a schema the live graph does not have (rating on an edge, `BOUGHT_TOGETHER`), so the historical half of KECR yields no paths on the live graph.
+
+**C-2. Consequences for the claims.** Claim 2 in §5 ("temporal decay … provides a scalable solution for dynamic preference shifts") and the decay part of $H_1$ have not been exercised on live data. No result supports or refutes them. Only the conversational half ($s_{conv}$) and the gating formula were exercised.
+
+**C-3. What graph v2 changes.** Graph v2 stores the raw `timestamp` (ms), `helpful_vote`, `rating` and `verified` on every `Review` node, and it excludes official valid/test interactions (Vision 2026-10-19-018 point 3, 2026-10-19-020). That makes AI-03, a rewrite of the historical subquery for the live schema, feasible. The rebuild itself does not change `kecr_tool.py`, so the v1 → v2 baseline will not test $RQ_6$.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement
