@@ -4,6 +4,7 @@
 > **Foundation revised**: 2026-07-11 — LLM-REDIAL dependency removed from Foundation. Amazon-curated subset strategy adopted for the initial graph build. REDIAL integration deferred to Meta-Phase B.
 > **Status audit**: 2026-10-10 — A4–A6 statuses corrected against the live graph. Open items tagged `AI-xx` reference `production_artifacts/action_items/Live_Graph_Audit_2026-10-10.md`.
 > **Retrieval redesign**: 2026-10-17 — Retrieval score redesign roadmap (releases R1–R5, work packages `RS-xx`) added under A1.1. Source: `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
+> **R2a**: 2026-10-18 — Release R2a (RS-23 spurious-CLARIFY fix, constraint-satisfaction@K, paired statistics, citable-run provenance, `evaluations_archive/`) implemented; exit gate PASS (`production_artifacts/Audit_Report.md`, "R2a exit gate"). R2b (RS-21 benchmark v2, RS-02 evidence) is open.
 
 ---
 
@@ -264,7 +265,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] **AI-11** Parameterise the category title filter Cypher in `GraphSearchTool._build_filters` (currently string-interpolated).
 
 ### A1.1 — Retrieval Score Redesign (Roadmap R1–R5)
-**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-24) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
+**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). **R2a followed on 2026-10-18 (see the R2 block below).** Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-24) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 Goal: the retrieval score measures how well a product matches the request, not how many texts about it resemble the query. Ranking order: feature fit → channel agreement (RRF) → review experience. Unknown evidence is never scored as a mismatch.
 
 **R1 — RRF fusion (AFP-002, AI-01)**. Gate: live eval vs `eval_2026-10-09_1336`.
@@ -276,10 +277,17 @@ Goal: the retrieval score measures how well a product matches the request, not h
 * [x] Unit tests (fan-out gives no extra credit, deterministic RRF order, soft-bonus scale) and a live eval report for both arms.
 * [x] Vision Report decision D-1 (AFP-002 implemented via RRF), via @pm-research. Recorded as 2026-10-17-013.
 
-**R2 — Evaluation foundation** (before any weight tuning).
-* [ ] **RS-21** Stratified benchmark (no reviews, brand+model titles, accessory traps, many-feature trade-offs), tuning/test split, title-token leakage check.
-* [ ] **RS-20 (rest)** `constraint-satisfaction@K`.
-* [ ] **RS-23** Spurious CLARIFY: the parser misses an explicit category on 4 of 21 live queries (`eval_2026-10-17_1846`: charger_01, mouse_02, keyboard_01, keyboard_02), so the guardrail clarifies and every arm scores a miss. Measure category-extraction recall, report SEARCH-only metrics alongside all queries, fix the prompt (or within AI-07).
+**R2 — Evaluation foundation** (before any weight tuning). Split by Vision decision 2026-10-18-015: **R2a** (metrics, RS-23, run archive) then **R2b** (benchmark v2, RS-02 evidence). Status (2026-10-18): **R2a implemented; audit PASS WITH FIXES; exit gate PASS** (spurious CLARIFY 0/21 in each of three citable live runs at `88cdbdf`: `eval_2026-10-18_2340`, `_2349`, `_2358`, archived in `evaluations_archive/`). R2b is open. Decisions: Vision 2026-10-18-014 … 017. Spec: `production_artifacts/Technical_Specification.md`.
+
+*R2a (done)*
+* [x] **RS-23** Spurious CLARIFY. Extraction prompt: the head noun of the requested product is a `category` hard constraint, plus a consistency rule and one long-modifier example (`src/llm_interface/prompts/preference_extract_prompt.py`). Orchestrator: before the guardrail switches SEARCH to CLARIFY it first takes a category from any source, then tries one recovery call that reuses `_generate_search_params`. A recovered category counts only when the same call reports `product_type_decided == true` (FR-007a, audit H-1). The reason is recorded as `clarify_reason` in `eval_trace`. Switch: `ORCH_CATEGORY_RECOVERY` (default on). Also fixed in the same prompt: the "1500 → 150" line in `SEARCH_GENERATION_PROMPT` (FR-011, part of AI-07). Dialogue metrics (category-extraction recall, target-admitting rate, spurious-CLARIFY rate, SEARCH-only vs all-queries denominators) are in `src/evaluation/dialogue_metrics.py`.
+  * _Still open_: clarification recall on the ambiguous stratum (needs benchmark v2, R2b); the deterministic catalogue-vocabulary fallback (RS-24, R3); the parser/search-params merge (AI-07, B1).
+* [x] **RS-20 (rest)** `constraint-satisfaction@K`: three-valued (satisfied / violated / unknown) verdicts against hand-annotated `gold_constraints` of the 21 legacy queries (`src/evaluation/constraint_satisfaction.py`), and against the extracted request. Numeric constraints have 0% coverage because the live graph has no `Attribute.numeric_value` (RS-11). `popularity-bias@K` is now reported as `review-coverage-bias@K` (the code key is still `popularity_bias@k`).
+* [x] Paired statistics (`src/evaluation/stats.py`: randomization test, paired bootstrap, exact McNemar, Wilson CIs, Holm), citable-run provenance (`src/evaluation/provenance.py`, `--require-clean`), `per_query.jsonl`, `scripts/archive_eval_run.py`, `scripts/check_eval_gate.py` and the git-tracked `evaluations_archive/`.
+
+*R2b (open)*
+* [ ] **RS-21** Benchmark v2 (Vision 2026-10-18-014): about 200 retrieval queries over strata S0–S4 (control, cold, sparse title, accessory trap, many-feature trade-off) plus about 30 ambiguous queries, hashed tuning/test split, leakage check, user review of test utterances. Legacy-21 moves to the tuning side.
+* [ ] **RS-02 (evidence)** Decide the `rrf2` default on the tuning split by the rule in Vision 2026-10-18-015 §4; confirm once on test in R3.
 
 **R3 — Search order & query side**.
 * [ ] **RS-07** Adaptive order by filter selectivity: filter-first with exact scoring vs ANN-first with oversampling.
@@ -333,13 +341,13 @@ Goal: the retrieval score measures how well a product matches the request, not h
 
 ### A6 — Quantitative & Qualitative Evaluation
 **Status (2026-10-10): ⚠️ Tier 1 done, Tier 2 partial.** Evaluation defaults to `--mode live` since 2026-10-10. Offline mock runs are not valid thesis evidence.
-* [x] `scripts/evaluate_retrieval.py` — Hit@K, MRR, NDCG@K (strict/soft/graded), strategy ablation, staged `eval_trace`. Live baseline: `eval_2026-10-09_1336`.
+* [x] `scripts/evaluate_retrieval.py` — Hit@K, MRR, NDCG@K (strict/soft/graded), strategy ablation, staged `eval_trace`. Live baseline: `eval_2026-10-09_1336` (pre-R2, non-citable context). Since R2a (2026-10-18): per-strategy and per-arm aggregates with explicit denominators, three-valued constraint-satisfaction@K, paired statistics, a run manifest with `citable` provenance, `per_query.jsonl`, and `--require-clean`. Citable reference runs: `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (the thesis cites archived runs only).
 * [ ] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability. Rubrics are implemented in `src/evaluation/judge.py`, but the script judges hand-written responses rather than system output.
 * [ ] **AI-04** Make Tier 2 judge real system output: run `AgentOrchestrator` over the live benchmark, capture `answer` and `eval_trace`, then judge. Retire or regenerate `evaluations/benchmarks/generative_benchmark.json` (only 3 of 15 ASINs exist in the graph).
 * [ ] **AI-09 (decision)** Tier 2 judge model (currently `gpt-4o-mini` grading a `gpt-4o` system).
 * [ ] **AI-10 (decision)** After AI-01, evaluate the `ideas.txt` direction as an ablation: LLM-generated target-product description → pure vector retrieval.
   * _Direction (2026-10-17)_: run as the HyDE query version in RS-08 (A1.1 R3), generated on the merged AI-07 call.
-* [ ] **RS-20 / RS-21** Label-free metrics (`popularity-bias@K`, `type-precision@K`, `constraint-satisfaction@K`) and a stratified benchmark with a tuning/test split. Scheduled in A1.1 R1–R2.
+* [ ] **RS-20 / RS-21** (RS-20 done, RS-21 open) Label-free metrics: `review-coverage-bias@K` (formerly `popularity-bias@K`) and `type-precision@K` done in R1; `constraint-satisfaction@K` done in R2a (2026-10-18). The stratified benchmark with a tuning/test split (RS-21) is open, scheduled in R2b.
 * [ ] **AI-12** Stop `tests/test_challenger_distinguishing_features.py` from writing mock runs into `evaluations/`.
 
 ---
@@ -354,7 +362,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 * [ ] Implement conditional routing edges (including cyclic loops for REJECT/Refine).
 * [ ] Wire Meta-Phase A tools into the LangGraph nodes.
 * [ ] Verify end-to-end execution within the Chainlit async context.
-* [ ] **AI-07** Merge preference extraction (`LLMPreferenceParser`) and `_generate_search_params` into one LLM call with a single source of truth for filters. Fix the "1500 → 150" example in `SEARCH_GENERATION_PROMPT`.
+* [ ] **AI-07** Merge preference extraction (`LLMPreferenceParser`) and `_generate_search_params` into one LLM call with a single source of truth for filters. _(The "1500 → 150" example in `SEARCH_GENERATION_PROMPT` was fixed in R2a, FR-011, 2026-10-18; the merge is still open. R2a added category recovery from the search-params call, which is a step toward one source of truth. The R2 category-extraction metrics are this merge's regression gate, Vision 2026-10-18-016.)_
 
 ### B2 — MemoCRS Persistent Memory
 * [ ] `src/user/sqlite_profile_manager.py` — `SQLiteProfileManager`
@@ -469,7 +477,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 | GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
-| RS-01 … RS-24 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 done, R2–R5 open |
+| RS-01 … RS-24 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 and R2a done (RS-01, 02 ablation, 05, 20, 23); R2b (RS-21, RS-02 evidence) and R3–R5 open |
 
 ---
 
