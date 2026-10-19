@@ -65,7 +65,7 @@
   <div class="top">
     <div>
       <h1>AI Conversational Recommendation System — Technical Blueprint</h1>
-      <p class="sub">CRS 2.0 with Hybrid GraphRAG · flows as of 2026-10-17 · Neo4j 5.14 · gpt-4o</p>
+      <p class="sub">CRS 2.0 with Hybrid GraphRAG · flows as of 2026-10-18 · Neo4j 5.14 · gpt-4o</p>
     </div>
     <div class="legend">
       <span><i class="sw"></i>implemented</span>
@@ -139,7 +139,7 @@
       <h3>1. Preference Parser &amp; Router</h3>
       <p><b>Hard constraints:</b> price, brand include / exclude, category. <b>Soft preferences:</b> value + polarity. Attributes the catalog cannot filter on are demoted to soft preferences.</p>
       <p><b>Router actions:</b> SEARCH · CLARIFY · UPDATE_PROFILE · READ_PROFILE · ANSWER.</p>
-      <p><b>Guardrail:</b> category missing → CLARIFY. <b>Override:</b> category and brand given → SEARCH.</p>
+      <p><b>Guardrail:</b> router SEARCH with no category → one category-recovery call (search parameters, accepted only if the product type is reported as decided); CLARIFY only if none is found (RS-23, R2a). <b>Override:</b> category and brand given → SEARCH.</p>
     </div>
     <div class="card">
       <h3>2. Multi-Index Search, Fusion &amp; MACS</h3>
@@ -157,7 +157,7 @@
       <h3>4. Explainable Synthesis</h3>
       <p><b>Prompt construction:</b> the top-3 items and their KECR paths are injected as [GRAPH EVIDENCE]; the LLM must stay within graph facts.</p>
       <p><span class="r1t">R1:</span> per-channel ranks and the fused score are recorded per candidate in eval_trace, the first column of the planned evidence ledger.</p>
-      <p><b>Roadmap:</b> R2 benchmark · R3 search order &amp; HyDE · R4 feature fit &amp; LLM judge · R5 labels &amp; review aspects.</p>
+      <p><b>Roadmap:</b> R2a metrics, CLARIFY fix &amp; run archive (done) · R2b benchmark v2 · R3 search order &amp; HyDE · R4 feature fit &amp; LLM judge · R5 labels &amp; review aspects.</p>
     </div>
   </div>
 </div>

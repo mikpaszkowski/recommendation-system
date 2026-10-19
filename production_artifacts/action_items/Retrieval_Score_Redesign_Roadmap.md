@@ -2,7 +2,7 @@
 
 **Date**: 2026-10-17
 **Branch**: `feature/afp-002-vector-aggregation`
-**Status**: Roadmap agreed with the user. **R1 implemented 2026-10-17** (audit PASS WITH FIXES, `production_artifacts/Audit_Report.md`; live eval `evaluations/eval_2026-10-17_1937`). Next: R2.
+**Status**: Roadmap agreed with the user. **R1 implemented 2026-10-17** (audit PASS WITH FIXES, `production_artifacts/Audit_Report.md`; live eval `evaluations/eval_2026-10-17_1937`). **R2a implemented 2026-10-18** (RS-23, RS-20 rest, run archive; audit PASS WITH FIXES, exit gate PASS: spurious CLARIFY 0/21 in three citable live runs at `88cdbdf`, `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`; Vision decisions 2026-10-18-014 … 017). Next: **R2b** (RS-21 benchmark v2, RS-02 evidence).
 **Source**: Brainstorm session 2026-10-10 → 2026-10-17. The full record is in `_bmad-output/brainstorming/brainstorm-retrieval-score-relevance-2026-10-10/.memlog.md` (192 entries).
 **Supersedes**: The fusion design in `Proposed_Fix_Vector_Aggregation.md` §3.1–3.2 (adaptive late fusion). See the revision note in that document.
 **Tracked in**: `production_artifacts/Implementation_Plan.md` (items tagged `RS-xx` and `R1`–`R5`).
@@ -88,7 +88,7 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 | ID | Change | Group | Size | Status | Release | Related |
 |---|---|---|---|---|---|---|
 | RS-01 | Replace `sum(score)` with one ranked list per channel (each product once) fused by **RRF** | Fusion | S | ✅ Done (R1) | R1 | AI-01 |
-| RS-02 | Remove the review index from candidate finding (reviews verify only); run as ablation first | Fusion | S | ✅ Ablation done (R1: `rrf2`); removal decided in R2 | R1 | AI-01 |
+| RS-02 | Remove the review index from candidate finding (reviews verify only); run as ablation first | Fusion | S | ✅ Ablation done (R1: `rrf2`); default decided on the R2b tuning split (rule in Vision 2026-10-18-015 §4), confirmed on test in R3 | R1 / R2b | AI-01 |
 | RS-03 | Attribute channel as a precise finder: IDF/rarity weighting, AND-matching inside the resolved category | Fusion | M | Decided role; method is an idea | R3 | — |
 | RS-04 | Tiered ranking: feature fit → RRF agreement → review experience | Fusion | M–L | Decided | R4 | — |
 | RS-05 | Rescale the soft-preference bonus to the RRF scale, or fuse it as its own list | Fusion | S | ✅ Done (R1) | R1 | — |
@@ -106,10 +106,10 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 | RS-17 | Batched LLM listwise rerank (`evaluate_candidate_tradeoffs`) with the powers in P-5 | Rerank | M | Decided | R4 | AI-08 |
 | RS-18 | Per-product evidence ledger written during ranking; used for contrastive ("why this, not that") and uncertainty-honest explanations | Explanation | M | Idea | R5 (seeded in R1) | A5 |
 | RS-19 | Two lanes ("what you asked for" / "you might also want"), alternatives that each trade off a different requirement, "we don't carry it" response | Conversation | M | Decided | Later | B3 |
-| RS-20 | Label-free metrics: type-precision@K, constraint-satisfaction@K, popularity-bias@K | Evaluation | S–M | ✅ R1: popularity-bias@K, type-precision@K; R2: constraint-satisfaction@K | R1 / R2 | — |
-| RS-21 | Benchmark split into hard cases (no reviews, brand+model titles, accessory traps, many-feature trade-offs) + tuning/test split + title-token leakage check | Evaluation | M | Decided | R2 | — |
+| RS-20 | Label-free metrics: type-precision@K, constraint-satisfaction@K, popularity-bias@K | Evaluation | S–M | ✅ Done. R1: popularity-bias@K (since R2a reported as `review-coverage-bias@K`, code key `popularity_bias@k`), type-precision@K; R2a: three-valued constraint-satisfaction@K against gold constraints | R1 / R2a | — |
+| RS-21 | Benchmark split into hard cases (no reviews, brand+model titles, accessory traps, many-feature trade-offs) + tuning/test split + title-token leakage check. _Amended by Vision 2026-10-18-014: strata S0–S4 plus an ambiguous set, about 230 queries, hashed split, measured leakage._ | Evaluation | M | Decided, open | R2b | — |
 | RS-22 | Ablation arms: each query version, 3 vs 2 channels, deterministic vs + LLM rerank, correct-abstention rate | Evaluation | with others | Idea | R1–R4 | AI-10 |
-| RS-23 | Spurious CLARIFY from missed category extraction: in `eval_2026-10-17_1846`, 4 of 21 queries (`live_eval_charger_01`, `mouse_02`, `keyboard_01`, `keyboard_02`) name the product type plainly, yet `LLMPreferenceParser` extracted no `category`, so the guardrail asked a clarifying question and every arm scored a miss. The 2026-10-09 run had none. Measure extraction recall per query; report retrieval metrics on SEARCH-only queries next to all queries; fix the extraction prompt or merge with AI-07 | Evaluation | S–M | Decided | R2 | AI-07 |
+| RS-23 | Spurious CLARIFY from missed category extraction: in `eval_2026-10-17_1846`, 4 of 21 queries (`live_eval_charger_01`, `mouse_02`, `keyboard_01`, `keyboard_02`) name the product type plainly, yet `LLMPreferenceParser` extracted no `category`, so the guardrail asked a clarifying question and every arm scored a miss. The 2026-10-09 run had none. Measure extraction recall per query; report retrieval metrics on SEARCH-only queries next to all queries; fix the extraction prompt or merge with AI-07. _Done in R2a (2026-10-18): head-noun prompt rule and category recovery gated by `product_type_decided`; gate 0/21 spurious CLARIFY in three citable runs. Open: clarification recall on the ambiguous stratum (R2b), deterministic vocabulary fallback (RS-24), parser merge (AI-07)._ | Evaluation | S–M | ✅ Done (R2a) | R2a | AI-07 |
 | RS-24 | Domain-agnostic product-type matching, replacing the word-regex category filter: (1) text normalisation with a configurable language analyzer or lemmas on both sides (P-9); (2) catalogue-derived product-type vocabulary and synonym sets built at ingestion (with RS-11); (3) product type as a ranked signal with a hard filter only on confident matches (with RS-09, RS-17). Trigger: `ret_021`, where "Webcams" rejects the C920 (title "Webcam", category "Computers"; 22 vs 742 eligible products). A rule-based English plural fix was rejected 2026-10-17: it does not extend to fashion or cosmetics (glasses/glass, jeans, synonyms, compounds) | Retrieval | M–L | Decided | R3 | RS-07, RS-09, RS-11 |
 
 ---
@@ -119,7 +119,8 @@ All packages discussed in the session. **Decided** = chosen by the user; **Idea*
 | Release | Scope | Depends on | Exit gate |
 |---|---|---|---|
 | **R1, this branch** | RS-01, RS-05, RS-02 (as ablation), RS-20 (popularity-bias@K, type-precision@K), per-channel ranks in `eval_trace` (seed of RS-18) | — | Live eval vs `eval_2026-10-09_1336` |
-| R2 | RS-21, RS-20 (constraint-satisfaction@K), RS-23 (category extraction recall) | R1 metrics | Benchmark frozen **before** any weight tuning; no query lost to a spurious CLARIFY |
+| **R2a** (done 2026-10-18) | RS-23 (category extraction recall, fix), RS-20 (constraint-satisfaction@K), paired statistics, citable-run provenance, `evaluations_archive/` | R1 metrics | **PASS**: zero spurious CLARIFY on legacy-21 in each of three citable live runs at one clean commit |
+| R2b | RS-21 (benchmark v2), RS-02 evidence (`rrf2` default rule) | R2a | Benchmark frozen **before** any weight tuning; clarification recall on the ambiguous stratum not below its pre-fix value |
 | R3 | RS-07, RS-24, RS-03, RS-08 (incl. AI-10 HyDE arm), RS-10 | R1 fuser, R2 benchmark | Per-arm ablation on the R2 test split |
 | R4 | RS-12 → RS-04, RS-09, RS-17 (AI-08), RS-06 | R3 | type-precision@K, constraint-satisfaction@K, correct-abstention rate |
 | R5 | RS-11 (replaces RS-12 inputs), RS-13, RS-18 | R4; decision D-2 | Label precision/recall audit |
@@ -146,7 +147,7 @@ Why this order:
 | R1-4 | Rescale the soft-preference bonus (`graph_search_tool.py` additive scoring block) so it cannot outweigh an RRF score of ~0.016–0.033, or fuse it as its own ranked list. |
 | R1-5 | Ablation switch: RRF over three channels vs two (without the review channel). |
 | R1-6 | Each candidate's per-channel ranks, per-channel best similarity and RRF score are written into the result and `eval_trace`. This is the first column of the evidence ledger (RS-18). |
-| R1-7 | `scripts/evaluate_retrieval.py` adds **popularity-bias@K** (share of top-K from the 5,715 review-embedded products vs their 2.2% catalog share) and **type-precision@K** (share of top-K in the requested category/product type). |
+| R1-7 | `scripts/evaluate_retrieval.py` adds **popularity-bias@K** (share of top-K from the 5,715 review-embedded products vs their 2.2% catalog share; _since R2a named `review-coverage-bias@K`, with a second, titled-products base rate of 0.52% next to the 2.15% all-node rate, audit M-1_) and **type-precision@K** (share of top-K in the requested category/product type). |
 | R1-8 | Parameterized Cypher only. MACS, Critic, KECR and the router are unchanged in R1. |
 
 ### Acceptance
@@ -175,8 +176,9 @@ Feature labels, tiers, the gate, LLM rerank, query versions, review aspects.
 
 ## 6. Evaluation Plan
 
-- **New metrics**: popularity-bias@K and type-precision@K (R1), constraint-satisfaction@K (R2), correct-abstention rate (R4), label precision/recall (R5).
-- **Benchmark strata** (R2): cold products (no reviews), sparse titles (brand+model only), accessory traps, many-feature trade-offs. Plus a tuning/test split and a title-token leakage check per query.
+- **New metrics**: popularity-bias@K (renamed `review-coverage-bias@K` in R2a, because it measures review-embedding coverage, not popularity) and type-precision@K (R1), constraint-satisfaction@K (R2a), correct-abstention rate (R4), label precision/recall (R5).
+- **Statistics and citable runs** (R2a, Vision 2026-10-18-015): paired tests with Holm correction, three repeated runs for end-to-end claims, and only archived `citable: true` runs (`evaluations_archive/`) are cited in the thesis.
+- **Benchmark strata** (R2b): cold products (no reviews), sparse titles (brand+model only), accessory traps, many-feature trade-offs. Plus a tuning/test split and a title-token leakage check per query.
 - **Ablation arms** (thesis evidence):
 
   | Arm | Release |

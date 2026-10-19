@@ -5,6 +5,271 @@
 
 ---
 
+## 📅 2026-10-19 (R2a — fundament ewaluacji, poprawka fałszywego CLARIFY RS-23, archiwum cytowalnych przebiegów)
+
+### Changelog (względem stanu z 2026-10-17, po wdrożeniu R1)
+
+> **Kontekst**: Realizacja wydania R2a z mapy drogowej `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` (pipeline `/implement`, gałąź `feature/afp-002-vector-aggregation`, zakres `git log 9cbf426..HEAD`). R2 dzieli się na R2a (metryki, poprawka RS-23, archiwum) i R2b (stratyfikowany benchmark); ten wpis opisuje wyłącznie **R2a**. Podstawa: `production_artifacts/Research_Report.md` (R2, zatwierdzony 2026-10-18 na Gate #1), `production_artifacts/Technical_Specification.md` (R2a wraz z poprawkami A-1 … A-13 w §13) oraz decyzje Vision Report **2026-10-18-014 … 017**. R1 pokazał, że wyniki 21 zapytań nie pozwalają odróżnić wariantów fuzji (warianty różniły się w 2 z 21 zapytań), szum między przebiegami LLM jest tak duży jak mierzone efekty (liczba CLARIFY: 0 / 4 / 5), a hash commita w manifeście nie identyfikował ocenianego kodu. R2a usuwa te trzy przeszkody po stronie narzędzi pomiarowych i naprawia przyczynę fałszywych CLARIFY.
+>
+> **Zakres commitów** (`9cbf426..HEAD`):
+>
+> | Commit | Opis |
+> |---|---|
+> | `5446dcf` | `feat(eval)`: fundament ewaluacji R2a i poprawka fałszywego CLARIFY (RS-23), wraz z FR-007a |
+> | `93ce435` | archiwizacja przebiegów R1 jako nie-cytowalnego dowodu historycznego |
+> | `f3ed804` | dokumenty: raport badawczy R2, specyfikacja R2a, audyt, decyzje Vision 014–017, dokument tezy 10 |
+> | `471d77c` | usunięcie nieosiągalnego duplikatu `return` w `_recover_category` (L-10), re-audyt FR-007a |
+> | `88cdbdf` | poprawki specyfikacji A-12 i A-13 po re-audycie (**commit bramki**) |
+> | `96874f3` | archiwizacja trzech cytowalnych przebiegów bramki R2a i raport bramki |
+> | `7fc2d8b` | dokumenty tezy: wkłady 11–12 oraz datowana korekta dokumentu 10 |
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **RS-23, warstwa 1: reguły ekstrakcji kategorii (`src/llm_interface/prompts/preference_extract_prompt.py`, `src/llm_interface/preference_parser.py`):**
+    *   **Przyczyna (trzy warstwy działające razem).** Pięć fałszywych CLARIFY z `eval_2026-10-17_1937` (`charger_01`, `mouse_02`, `keyboard_01`, `keyboard_02`, `keyboard_03`) miało wspólny wzorzec: rzeczownik określający typ produktu był głową długiej frazy z wieloma modyfikatorami („compact 65W GaN wall charger”). (1) `LLMPreferenceParser` przenosił modyfikatory do `soft_preferences`, a głowę frazy zostawiał tylko w `situational_context`. (2) `DialogueManager._evaluate_dialogue_state` przeliczał gotowość deterministycznie z `category` jako atrybutem krytycznym i nadpisywał własne `ready=true` parsera. (3) Guardrail w `AgentOrchestrator._decide_next_step` zmieniał SEARCH routera na CLARIFY, ignorując `has_category` i uruchamiając się przed `_generate_search_params`, który kategorię by znalazł. Router wybierał SEARCH za każdym razem. Każda warstwa działała zgodnie z projektem; błąd był właściwością ich złożenia.
+    *   `PRODUCT_TYPE_RULE`: rzeczownik będący głową frazy z nazwą żądanego produktu jest twardym ograniczeniem `category` (`operator: "include"`, wartość w słowach użytkownika), a wszystkie modyfikatory trafiają do `soft_preferences`. Reguła nie zawiera list kategorii ani reguł fleksji (zgodnie z odrzuceniem reguły liczby mnogiej 2026-10-17).
+    *   `CATEGORY_CONSISTENCY_RULE`: jeżeli wiadomość lub własny `situational_context` parsera nazywa typ produktu, `category` jest wymagane i nie może figurować w `missing_critical_attributes`; może być brakujące tylko wtedy, gdy użytkownik nie zdecydował, jaki rodzaj produktu kupić.
+    *   `LONG_MODIFIER_EXAMPLE` (`<example_7>`): kurtka turystyczna z siedmioma modyfikatorami, głowa frazy `jacket` staje się `category`. Przykład jest spoza katalogu elektroniki i nie używa żadnego typu produktu z legacy-21 (reguła kontaminacji).
+    *   `PRODUCT_TYPE_SCHEMA_HINT` (`preference_parser.py`): jedno zdanie w bloku `<schema_injection>` równoważące istniejące „ALL other specifications MUST be classified as soft_preferences”.
+2.  **RS-23, warstwa 2: odzyskiwanie kategorii przed CLARIFY (`src/agents/orchestrator.py`, `src/agents/state.py`):**
+    *   `AgentOrchestrator._recover_category()`: gdy guardrail miałby zmienić SEARCH na CLARIFY, najpierw sprawdza źródła kategorii, a dopiero potem pyta. Wywołuje `_generate_search_params` **raz**; wynik jest zapisywany w `state["search_params"]` i ponownie używany przez gałąź SEARCH w `_execute_step` (NFR-001: tura odzyskana kosztuje tyle samo wywołań LLM, co zwykły SEARCH, czyli 3).
+    *   Pomocnicze: `_present_category()` (pierwsza użyteczna wartość: ograniczenia twarde sesji → `active_filters` → `current_context.category`; wspólna dla guardraila, immunizacji marki i `parser_category`), `_category_from_hard_constraints()`, `_category_from_filters()`, `_search_history_text()` (wspólny tekst historii dla obu miejsc wywołania), `_resolution_for_trace()`. Stałe `CATEGORY_FILTER_KEYS`, `NULL_CATEGORY_VALUES` (znaczniki pustki: `""`, `none`, `null`, `unknown`, `n/a`, `any`; nie słownik domenowy) i `CLARIFY_REASONS`.
+    *   Przełącznik: argument `AgentOrchestrator(category_recovery=...)`, a przy `None` zmienna `ORCH_CATEGORY_RECOVERY` (domyślnie `1`; udokumentowana w `.env.example`). Wyłączenie odtwarza guardrail sprzed R2 z `clarify_reason = "parser_missing_category"` i daje punkt odniesienia dla czułości klaryfikacji w R2b.
+    *   Atrybucja w `eval_trace`: `clarify_reason` ∈ {`router`, `router_fallback`, `parser_missing_category`, `recovery_failed`, `recovery_error`} (`null` dla SEARCH) oraz `category_resolution` (`parser_category`, `category`, `source`, `guardrail_triggered`, `recovery_attempted`, `recovery_outcome`, `recovery_product_type_decided`, `recovery_discarded_category`); SEARCH dodatkowo `search_params_source`, `search_params_fallback`, `relaxed_constraints`.
+3.  **H-1 i flaga `product_type_decided` (opcja c, FR-007a):**
+    *   **H-1 (audyt, High).** W pierwszej wersji odzyskiwania jedyną ochroną przed zgadywaniem była instrukcja w `SEARCH_GENERATION_PROMPT`: ustaw `category = null`, gdy użytkownik nie zdecydował. Dla wypowiedzi „I need a gift for my dad who likes gadgets, around $50.” model zwrócił `category = "gadget"` w 2 z 3 przebiegów QA, a tura kończyła się wyszukiwaniem zamiast pytaniem (naruszenie Vision §2: „does not guess”). Użytkownik wybrał opcję (c) (spec §13 A-11).
+    *   `PRODUCT_TYPE_DECIDED_RULE` oraz nowe pole wyjściowe `product_type_decided` (typu boolean, na najwyższym poziomie JSON, między `thought` a `structured_filters`, żeby model deklarował decyzję przed zapisaniem `category`). Ta sama odpowiedź LLM, brak dodatkowego wywołania.
+    *   `_recover_category` zwraca `{"category", "outcome", "product_type_decided", "discarded_category"}`; wyniki sprawdzane w kolejności: `error` (wyjątek lub `param_source == "fallback"`) → `undecided` (flaga nie jest literalnie `True`: `false`, brak klucza, `null`, `"true"`, `1`) → `null_category` (flaga `True`, brak użytecznej kategorii) → `found`. Test to tożsamość `raw_flag is not True`, więc system zamyka się bezpiecznie (fail closed). `undecided` i `null_category` kończą się CLARIFY z `clarify_reason = "recovery_failed"`; `CLARIFY_REASONS` bez zmian.
+    *   Zakres: flagę czyta wyłącznie `_recover_category`. Gałąź SEARCH scala tylko `structured_filters`, więc flaga nie trafia do `active_filters`, partycji katalogu ani Cypher. Tura z kategorią od parsera wyszukuje niezależnie od flagi.
+    *   `recovery_discarded_category` ujawnia każdą zablokowaną „zgadniętą” kategorię (w przypadku H-1: `'gadget'`).
+4.  **Metryki dialogu (`src/evaluation/dialogue_metrics.py`, nowy moduł):**
+    *   `build_query_record`, `compute_dialogue_metrics`, `search_intersection`, `annotate_target_admission`, `category_from_hard_constraints`, `format_share`.
+    *   **Category-extraction recall (CER)** w dwóch wariantach: *parser-only* (ograniczenie twarde `category` w sesji; liczba regresyjna dla AI-07) i *pipeline* (dowolne źródło po odzyskiwaniu).
+    *   **Współczynnik fałszywych CLARIFY** (`numerator`, `n`, `query_ids`, `by_reason`) oraz `type_explicit_non_search` (akcje inne niż SEARCH i CLARIFY na zapytaniach z jawnym typem).
+    *   **Target-admitting category rate**: czy zastosowany filtr kategorii dopuszcza produkt docelowy (łapie przypadek „obecna, ale zła”), wraz z liczbą kategorii porzuconych przez MACS.
+    *   **Czułość i precyzja klaryfikacji** dla zapytań z `gold_action = "CLARIFY"` (na legacy-21 `n/a (n=0)`).
+    *   `category_source_counts` (`parser`, `active_filters`, `session_context`, `search_params`, `search_request`, `null`).
+5.  **constraint-satisfaction@K, trójwartościowe (`src/evaluation/constraint_satisfaction.py`, nowy moduł, czyste funkcje bez I/O):**
+    *   `GoldConstraint`, `parse_gold_constraints`, `validate_gold_annotations`, `constraints_from_search_request`, `brand_matches`, `judge`, `verdict_matrix`, `cs_scores_at_k`, `attribute_names_for`.
+    *   Werdykt dla pary (produkt, ograniczenie): `satisfied` / `violated` / `unknown`. Brak faktu (cena `NULL` lub ≤ 0, brak krawędzi marki, brak `numeric_value`) daje `unknown` i **nigdy nie jest liczony jako naruszenie** (zasada P-2). Kategoria jest wyłączona (pokrywa ją `type-precision@K`).
+    *   Klucze: `cs_sat`, `cs_viol`, `cs_unk`, `cs_known` (`sat / (sat + viol)`), `violation_free`, `cs_coverage`; wariant żądania (diagnostyka adherencji wyszukiwania) z prefiksem `cs_req_`. Wariant *gold* liczy się od ograniczeń z wypowiedzi, więc braki ekstrakcji i rozszerzenie budżetu przez MACS liczą się przeciw systemowi; wariant *request* liczy się od faktycznie wykonanego `search_request`.
+    *   `GraphSearchTool.fetch_constraint_facts()`: jedno sparametryzowane zapytanie Cypher na zapytanie benchmarkowe, na sumie top-20 wszystkich wariantów.
+    *   **Pokrycie numeryczne wynosi 0**, bo w grafie żaden węzeł `Attribute` nie ma `numeric_value` (patrz sekcja wyników). Opcja 1 ze specyfikacji: werdykty tylko z `numeric_value`, `graph_attribute_names` puste dla wszystkich 19 ograniczeń numerycznych.
+6.  **Adnotacje złotego standardu w `live_eval_dataset.json`:** pola `type_explicit`, `gold_action`, `gold_product_type`, `gold_constraints`, `gold_annotation` dla wszystkich 21 zapytań legacy-21 (12 ograniczeń ceny, 7 marki, 19 numerycznych, razem 38). Adnotacje wyprowadzone **wyłącznie z tekstu wypowiedzi**, nigdy z pól pochodzących z produktu docelowego; istniejące pola bez zmian. `validate_gold_annotations` zwraca błędy, a `scripts/evaluate_retrieval.py` kończy się kodem 1 przy ich wystąpieniu.
+7.  **Statystyka sparowana (`src/evaluation/stats.py`, nowy moduł; tylko NumPy i biblioteka standardowa, bez SciPy):**
+    *   `paired_randomization_test` (dokładny rozkład po odwróceniu znaków dla ≤ 16 niezerowych różnic, w przeciwnym razie Monte Carlo z ziarnem), `paired_bootstrap_ci`, `mcnemar_exact`, `wilson_ci`, `holm_correction`, `build_comparisons`, `format_comparison`.
+    *   Wstępnie zarejestrowane porównania (decyzja 2026-10-18-015): **pierwotne** `rrf3` vs `sum_legacy` oraz `rrf2` vs `rrf3` (RR i NDCG@10, bez korekty); **wtórne** pozostałe pary wariantów (RR, korekta Holma). Populacja: tylko zapytania SEARCH, parowanie po `query_id`, ziarno `20261018`. Wyniki w `summary.json["comparisons"]` i w logu.
+    *   Niezależna weryfikacja w audycie: zgodność z `scipy.stats.binomtest`, Wilson i Holm ze `statsmodels`, pełnym wyliczeniem odwróceń znaków.
+8.  **Pochodzenie przebiegów i flaga `citable` (`src/evaluation/provenance.py`, nowy moduł):**
+    *   `collect_git_provenance`, `collect_benchmark_provenance`, `collect_runtime_provenance`, `evaluate_citable`, `offending_paths`, `file_sha256`. Manifest (`manifest["provenance"]`): `git_commit`, wynik `git describe --always --dirty`, `git_dirty`, `git_dirty_paths`, `git_scope` (`src`, `scripts`), SHA-256 różnicy `git diff HEAD -- src scripts`, pliki nieśledzone, ścieżka / SHA-256 / liczba zapytań benchmarku, alias LLM i **rozwiązane identyfikatory modelu** zwrócone przez API, wersja i edycja Neo4j, migawka grafu (produkty, kategorie, recenzje, produkty z osadzoną recenzją), wersja i ścieżka interpretera Pythona.
+    *   `manifest["citable"] = true` tylko gdy: tryb `live`, brak `--sample-size`, brak zmian w `src/` i `scripts/`, benchmark śledzony i niezmodyfikowany. Powody w `citable_reasons`, ostrzeżenia w `citable_warnings`.
+    *   Opcja `--require-clean` w `scripts/evaluate_retrieval.py`: odmowa uruchomienia z kodem wyjścia 2 **przed** zbudowaniem orkiestratora, z listą ścieżek.
+    *   `SimpleLLMHandler.record_response_model()` i `resolved_model_ids` (`src/llm/simple_llm_handler.py`); `LLMPreferenceParser.extract_preferences` zapisuje identyfikator modelu, tolerując atrapy bez tej metody.
+9.  **Archiwum przebiegów (`evaluations_archive/`, `scripts/archive_eval_run.py`):**
+    *   Śledzony w git katalog `evaluations_archive/<run_id>/` z `manifest.json`, `summary.json`, `retrieval_metrics.csv`, `per_query.jsonl` (generowany przez `tracker.write_per_query_jsonl`) i `ARCHIVE.json` (SHA-256 każdego pliku, SHA-256, rozmiar i liczba linii niekopiowanego `execution_trace.log`, `archived_at`, `archived_from_commit`). Dodatkowo `evaluations_archive/index.json` i `evaluations_archive/README.md` (polityka: **teza cytuje wyłącznie zarchiwizowane przebiegi**).
+    *   Skrypt odmawia archiwizacji przebiegów nie-cytowalnych bez `--legacy --note "<powód>"`, odmawia nadpisania bez `--force`, nie modyfikuje przebiegu źródłowego. Przyjmuje identyfikator przebiegu (np. `eval_2026-10-18_2340`), nie ścieżkę.
+    *   Trzy przebiegi z R1 zarchiwizowane wstecznie jako `citable: false`, `legacy: true`, `legacy_reconstructed: true`: `eval_2026-10-09_1336`, `eval_2026-10-17_1846`, `eval_2026-10-17_1937`.
+10. **Sprawdzanie bramki (`scripts/check_eval_gate.py`):** `--runs <id> <id> <id> --max-spurious-clarify 0`; sprawdza G-3 … G-6 (≥ 3 przebiegi, `citable`, ten sam commit i hash benchmarku, zero fałszywych CLARIFY, wszystkie akcje SEARCH, `hybrid == hybrid@rrf3`, obecność pięciu wariantów), drukuje tabelę i rozmiar przecięcia zapytań SEARCH; kod wyjścia 0 (PASS) lub 1 (FAIL).
+11. **Nowe testy** (zestaw na commicie bramki: **654 zaliczone, 5 pominiętych** (testy live); przed R2a: 453):
+    *   `tests/test_preference_prompt_r2.py`, `tests/test_category_recovery.py` (w tym klasy `TestDecidedPrompt`, `TestDecidedGate`, `TestRecoverCategoryDirect`, `TestDecidedScope`), `tests/test_live_eval_gold_annotations.py`, `tests/test_dialogue_metrics.py`, `tests/test_retrieval_metrics_r2.py`, `tests/test_constraint_satisfaction.py`, `tests/test_eval_stats.py`, `tests/test_provenance.py`, `tests/test_archive_eval_run.py`, `tests/test_r2a_audit_fixes.py`.
+    *   `tests/integration/test_category_recovery_live.py` (uruchamiany przy `RUN_LIVE_TESTS=1`): `test_decided_gate_fresh_vague_set` i `test_decided_gate_type_explicit_legacy` (AC-039, po 3 przebiegi na zestaw) oraz `test_ambiguous_smoke_recovery_on_and_off` (diagnostyka §7.4, 5 wypowiedzi, z odzyskiwaniem i bez).
+12. **Dokumenty tezy:** `thesis/11-doc-evaluation-protocol.md` (protokół ewaluacji ograniczający twierdzenia: trójwartościowe CS, statystyki sparowane, przebiegi cytowalne) i `thesis/12-doc-clarification-gating.md` (diagnoza trzech warstw, instrumentacja atrybucji, bramka fail-closed, wynik negatywny H-1); w obu rozdzielono dowody cytowalne od kontekstu.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`AgentOrchestrator._decide_next_step` (`src/agents/orchestrator.py`):**
+    *   Guardrail SEARCH → CLARIFY (dawniej bezwarunkowy przy `"category"` w `missing`) uwzględnia teraz `has_category` i odzyskiwanie (FR-006). Powód każdego CLARIFY zapisuje w `clarify_reason`.
+    *   `has_category` jest bardziej rygorystyczne niż w pierwotnym tekście specyfikacji (poprawka A-1): wartości-znaczniki pustki i operator `exclude` są ignorowane, a ta sama wartość zasila guardrail, immunizację marki (AFP-004) i `parser_category`. Skutek uboczny: immunizacja marki działa tylko dla użytecznej, niewykluczonej kategorii (wcześniej `{"attribute": "category", "value": null}` mogło ją uruchomić). Test AFP-004 `test_orchestrator_routes_affirmative_brand_to_search` przechodzi bez modyfikacji.
+2.  **`SEARCH_GENERATION_PROMPT` (`src/agents/orchestrator.py`):** poprawiony wiersz „actually under 1500” (wcześniej uczył `price_max = 150`, teraz 1500), reguła „Copy numbers exactly as the user states them”, reguła `category = null` przy braku decyzji, pole `product_type_decided`. Pierwszy wiersz promptu pozostał bez zmian (atrapy testowe dopasowują po nim). Funkcja zapasowa `_generate_search_params` zwraca `"param_source": "fallback"` (wyjątek, niepoprawny JSON lub łańcuch `"Error: ..."`), w przeciwnym razie `"llm"`.
+3.  **`<example_1>` promptu ekstrakcji:** ograniczenie `operating_system` usunięte z `hard_constraints` i przeniesione do `soft_preferences` (`value: "ChromeOS"`, `polarity: -1.0`), co usuwa sprzeczność z regułą taksonomii; po zmianie każde ograniczenie twarde w przykładach przechodzi `validate_hard_constraint`.
+4.  **`GraphSearchTool` (`src/tools/graph_search_tool.py`):** `search()` zapisuje `result["metadata"]["normalized_filters"]` (kopia filtrów po `_normalize_filters`, przed relaksacją MACS); `match_category(asins, category, raw_category=None)` przyjmuje opcjonalnie surową kategorię z żądania (wywołanie bez niej niezmienione); nowa metoda `fetch_constraint_facts()`.
+5.  **`src/evaluation/metrics.py`:** każdy blok strategii w `aggregates_by_strategy` ma `n_all`, `n_search` i podblok `search_only`; każda średnia pomijająca `None` ma licznik `n_<metryka>@k`; CLARIFY na zapytaniu z jawnym typem jest pudłem, a CLARIFY na zapytaniu `gold_action = "CLARIFY"` trafieniem (`scored_as: "clarify_gold"`: nadpisane `hit@k`, `strict_hit@k`, `strict_ndcg@k`, `mrr`); `aggregate_rows` przelicza blok dla dowolnego podzbioru; `by_target_review_embedded` (slice `true` / `false` z `n`); mapowania `CS_GOLD_KEYS` / `CS_REQ_KEYS`. Klucze i znaczenie dotychczasowych agregatów R1 bez zmian.
+6.  **Etykieta `popularity_bias@K` (`src/evaluation/metrics.py`, `scripts/evaluate_retrieval.py`):** klucz bez zmian, ale `summary.json["metric_labels"]` i logi (`RevCovBias@K`) nazywają ją teraz **review-coverage-bias@K** (udział top-K z produktów mających ≥ 1 osadzoną recenzję; nie jest to popularność). Docstring `compute_popularity_bias_at_k` zaktualizowany.
+7.  **`scripts/evaluate_retrieval.py`:** walidacja adnotacji złotego standardu; wstępna kontrola „złoty standard kontra produkt docelowy” (`manifest.configuration.gold_target_check`: sprawdzono 17 produktów docelowych, 38 ograniczeń, 0 naruszeń, 19 nieznanych (wszystkie numeryczne)); werdykty CS dla każdego wariantu i obu wariantów (gold / request); porównania statystyczne i opcje `--stats-resamples`, `--stats-seed`; `per_query.jsonl`; dane uruchomieniowe (identyfikatory modelu, Neo4j, migawka grafu) zbierane **po** pętli zapytań, bo identyfikatory modelu są znane dopiero po wywołaniach LLM; `--require-clean` sprawdza także benchmark (dirty / untracked).
+8.  **Dwie stopy bazowe zamiast jednej (poprawka audytu M-1, `compute_review_coverage_base_rates`):** manifest zawiera obok niezmienionego `catalog_popular_share` także `catalog_titled_products`, `review_embedded_products_titled` i `catalog_popular_share_titled`. Zweryfikowane na żywym grafie: 104 281 z 265 307 węzłów `ParentProduct` (39,3%) to „duchy” (bez tytułu, ceny i kategorii, tylko z osadzeniem), a 4 874 z 5 715 produktów z osadzoną recenzją (85,3%) to duchy. Stopa bazowa wynosi więc **2,15%** dla wszystkich węzłów, ale **0,52%** (841 / 161 026) dla produktów z tytułem. **Korekta względem wpisu z 2026-10-17**: tamto porównanie z 2,15% zaniżało siłę obciążenia około 4-krotnie.
+9.  **`scripts/archive_eval_run.py` (poprawka audytu M-2):** `--force` usuwał istniejące archiwum, zanim skrypt odmówił archiwizacji przebiegu bez `per_query.jsonl`; wszystkie odmowy następują teraz przed usunięciem (test regresyjny `TestForceDoesNotDeleteOnRefusal`).
+10. **Zmiana statusu dowodów z R1 (korekta względem wpisu z 2026-10-17):** przebiegi `eval_2026-10-17_1846` i `eval_2026-10-17_1937` mają w manifeście `git_commit 989c1cd`, ale oceniany kod R1 działał niezatwierdzony i został zatwierdzony później jako `99b8506`. Zarchiwizowano je jako `citable: false` z notą. Wpis R1 pozostaje bez zmian; jego liczby z `eval_2026-10-17_1937` mają od teraz status kontekstu, a tezę cytuje się z przebiegów R2a tam, gdzie mierzą tę samą wielkość.
+11. **Pliki konfiguracyjne:** `.env.example` (`ORCH_CATEGORY_RECOVERY=1`), `.gitignore` (`!/evaluations_archive/**/*.csv`, bo globalna reguła `*.csv` ukrywałaby archiwalne pliki CSV; `scripts/graph_ingestion/.ingest_checkpoint.json`, bo nieśledzony plik czasu wykonania oznaczałby każdy przebieg jako nie-cytowalny; `/evaluations/*` pozostaje ignorowane).
+12. **Decyzje Vision Report zapisane w ramach R2** (`production_artifacts/Vision_Report.md`):
+    *   **2026-10-18-015**: protokół ewaluacji R2 (zamrożony podział, statystyki sparowane, CS@K, reguła RS-02, przebiegi cytowalne). Wdrożone w R2a w części dotyczącej metryk, statystyk, pochodzenia i archiwum; podział i zamrożenie benchmarku czekają na R2b.
+    *   **2026-10-18-016**: poprawka fałszywego CLARIFY (RS-23). Wdrożone w całości, z rozszerzeniem o flagę `product_type_decided` (spec A-11).
+    *   **2026-10-18-014**: stratyfikowany benchmark v2 (zmiana 2026-10-06-002). **Niewdrożone**, to zakres R2b.
+    *   **2026-10-18-017**: nota korygująca. Dynamiczne schematy domen (2026-09-29-007) nie zostały zaimplementowane (`scripts/extract_domain_schemas.py` ani `dynamic_domain_schemas.json` nie istnieją; parser wstrzykuje statyczny `src/llm_interface/domain_schemas.json` z trzema domenami), a warstwa „Lucene full-text” z 2026-09-28-006 jest zastąpiona warstwą z wyrażeniem regularnym na granicach słów (2026-10-07-009).
+
+#### 📊 Wyniki bramki wyjściowej R2a (`88cdbdf`, `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`)
+
+Trzy kolejne przebiegi na jednym czystym commicie `88cdbdf`, wszystkie `citable: true` (`citable_reasons == []`, `citable_warnings == []`), ten sam SHA-256 benchmarku (`cbbf3621bdfc64f5…`), `gpt-4o-2024-08-06`, Neo4j 5.14.0 community. Raportowano wszystkie przebiegi wykonane na tym commicie (wybór 3 z N jest niedozwolony), żaden nie był powtarzany, brak błędów API. Źródło: `production_artifacts/Audit_Report.md`, sekcja „R2a exit gate (2026-10-18)”. Wszystkie 21 zapytań legacy-21 to SEARCH, więc populacja „wszystkie zapytania” i „tylko SEARCH” pokrywają się (n = 21).
+
+**Bramka:**
+
+| Bramka | Wynik | Dowód |
+|---|---|---|
+| G-1 | PASS | `pytest tests/`: 654 zaliczone, 5 pominiętych (testy `RUN_LIVE_TESTS`) |
+| AC-039 | PASS | (i) świeży zbiór niejednoznaczny: `undecided` w 3/3 przebiegach dla każdej z 8 wypowiedzi; (ii) jawne typy: `found` w 3/3 dla każdej z 8 pozycji |
+| G-2 | PASS | `test_fusion_live_regression.py`: 2 zaliczone |
+| G-3 | PASS | 3 przebiegi `citable: true`, ten sam commit i hash benchmarku |
+| G-4 | PASS | fałszywe CLARIFY 0/21 w każdym przebiegu |
+| G-5 | PASS | `type_explicit_non_search` 0/21; wszystkie 21 linii `per_query.jsonl` to SEARCH z `clarify_reason == null` |
+| G-6 | PASS | `hybrid == hybrid@rrf3` dla 21/21 zapytań, pięć wariantów obecnych |
+| `check_eval_gate.py --max-spurious-clarify 0` | **PASS**, kod 0 | przecięcie zapytań SEARCH: 21 |
+| G-7 | PASS | przebiegi zarchiwizowane i zatwierdzone w `96874f3` |
+| G-8 | PASS | trzy archiwa legacy (`citable: false`) |
+
+**Dialog (RS-23):**
+
+| Przebieg | Fałszywe CLARIFY | CER parser-only | CER pipeline | Wywołania odzyskiwania | `category_source_counts` | Kategoria dopuszcza cel |
+|---|---:|---:|---:|---:|---|---:|
+| `eval_2026-10-18_2340` | 0/21 | 21/21 | 21/21 | 0 | parser 21 | 20/21 |
+| `eval_2026-10-18_2349` | 0/21 | 21/21 | 21/21 | 0 | parser 21 | 20/21 |
+| `eval_2026-10-18_2358` | 0/21 | 21/21 | 21/21 | 0 | parser 21 | 20/21 |
+
+*   **Fałszywe CLARIFY: 4–5 z 21 (R1: `_1846` 4/21, `_1937` 5/21; CER parser-only 17/21 i 16/21) → 0/21 w trzech przebiegach cytowalnych; CER 21/21.** Poprawkę tę w całości tłumaczy reguła promptu (warstwa 1): odzyskiwanie nie zostało wywołane w żadnym przebiegu na legacy-21, bo parser dostarczył każdą kategorię. Ścieżka odzyskiwania jest potwierdzona na żywo wyłącznie przez AC-039 i test dymny.
+*   Jedyne chybienie „kategoria dopuszcza cel” to `camera_02` we wszystkich przebiegach (zastosowana kategoria „smart home security bundle” nie dopuszczała celu, MACS porzucił kategorię).
+*   **Bez testu istotności przed/po**, celowo: liczby sprzed poprawki pochodzą z nie-cytowalnych przebiegów na różnych stanach kodu, poprawkę opracowano na tych samych 21 zapytaniach (dane strojenia), a przebiegi po poprawce są prawie deterministyczne, nie niezależne. Opis jest czysto opisowy: 9 fałszywych CLARIFY w 42 przebiegach zapytań przed poprawką, 0 w 63 po poprawce.
+*   **Diagnostyka dymna §7.4** (nie bramkowa), po każdym przebiegu bramki: CLARIFY **5/5 z odzyskiwaniem i 5/5 bez** (3 z 3 razy). Wypowiedź „gift … gadgets” kończy się `recovery_failed` (`undecided`), bez zablokowanej kategorii; przed FR-007a objaw H-1 (SEARCH dla `'gadget'`) wystąpił w 2 z 3 przebiegów QA.
+*   AC-039 (jedyny nieskażony przebieg, `N_PASSES = 3`): w 24/24 wywołaniach zbioru (i) model zwrócił `category: null` i flagę `false`, a w 24/24 wywołaniach zbioru (ii) flagę `true` z oczekiwaną kategorią. Brak wywołania, w którym flaga `false` towarzyszyłaby zgadniętej kategorii, więc **mechanizm fail-closed nie został uruchomiony na żywo**; jego zachowanie potwierdzają tylko testy jednostkowe. Live pokazuje, że samo dodanie pola decyzji zmieniło wyjście kategorii modelu. Zbiór (i) powstał w `5446dcf` przed raportowanym przebiegiem; repozytorium nie może wykluczyć wcześniejszego, nieraportowanego przebiegu live.
+
+**Wyszukiwanie według wariantu** (ścisłe trafienie celu, n = 21; HR bez zmian we wszystkich trzech przebiegach, MRR i NDCG@10 jako średnia z trzech przebiegów):
+
+| Wariant | HR@10 (trafienia, Wilson 95%) | HR@20 (trafienia, Wilson 95%) | MRR R_a / R_b / R_c (średnia) | NDCG@10 (średnia) |
+|---|---|---|---|---:|
+| `rrf3` (= `hybrid`) | 8/21 [0,208, 0,591] | 9/21 (0,429) [0,245, 0,635] | 0,234 / 0,234 / 0,210 (0,226) | 0,259 |
+| `rrf2` | 9/21 [0,245, 0,635] | 9/21 (0,429) [0,245, 0,635] | 0,237 / 0,237 / 0,237 (0,237) | 0,280 |
+| `wrrf3` | 11/21 [0,324, 0,717] | 12/21 (0,571) [0,365, 0,755] | 0,361 / 0,337 / 0,337 (0,345) | 0,387 |
+| `cc3` | 10/21 [0,283, 0,676] | 10/21 (0,476) [0,283, 0,676] | 0,298 / 0,298 / 0,298 (0,298) | 0,340 |
+| `sum_legacy` | 7/21 [0,172, 0,546] | 9/21 (0,429) [0,245, 0,635] | 0,182 / 0,174 / 0,174 (0,176) | 0,208 |
+| `vector_only` (kontekst) | 5/21 | 7/21 | 0,162 | 0,174 |
+| `cypher_only` (kontekst) | 4/21 | 4/21 | 0,148 | 0,157 |
+
+*   Przebiegi są prawie deterministyczne: w 3 przebiegach × 5 wariantów × 21 zapytań zmieniają się tylko trzy pozycje celu (`phone_03` w `rrf3`, `laptop_02` w `sum_legacy`, `keyboard_02` w `wrrf3`).
+*   **Wartości bezwzględne nie są porównywalne z tabelą R1** (np. HR@20 `rrf3` 0,286 w R1): w R1 pięć zapytań kończyło się CLARIFY i liczyło jako pudła, a przebiegi R1 nie są cytowalne. Wzrost nie jest twierdzeniem o fuzji.
+
+**Porównania pierwotne** (wstępnie zarejestrowane; dokładny sparowany test randomizacji; bootstrap 95% CI; ziarno 20261018):
+
+| Porównanie | Przebieg | ΔRR [95% CI] | p (RR) | p (NDCG@10) | HR@20: rozbieżne, McNemar p |
+|---|---|---|---:|---:|---|
+| `rrf3` − `sum_legacy` | R_a | +0,052 [−0,099, +0,196] | 0,500 | 0,516 | 1–1, 1,0 |
+| | R_b | +0,060 [−0,094, +0,209] | 0,469 | 0,492 | 1–1, 1,0 |
+| | R_c | +0,036 [−0,109, +0,179] | 0,688 | 0,625 | 1–1, 1,0 |
+| `rrf2` − `rrf3` | R_a | +0,003 [0,000, +0,006] | 0,250 | 0,250 | 0–0, 1,0 |
+| | R_b | +0,003 [0,000, +0,006] | 0,250 | 0,250 | 0–0, 1,0 |
+| | R_c | +0,027 [0,000, +0,075] | 0,125 | 0,125 | 0–0, 1,0 |
+
+*   **Żadne porównanie pierwotne nie jest istotne w żadnym przebiegu**, zgodnie z analizą mocy z raportu R2 (n = 21 nie pozwala odróżnić wariantów; przy 3 różnych niezerowych różnicach najmniejsze osiągalne dokładne p to 0,25). ΔHR@20 dla `rrf2` − `rrf3` wynosi 0 w każdym przebiegu; to dowód wyłącznie po stronie strojenia dla reguły RS-02, której rozstrzygnięcie nastąpi na benchmarku v2 (R2b), a potwierdzenie na zbiorze testowym w R3.
+*   **Rodzina wtórna (RR, korekta Holma na 8 testach):** `wrrf3` vs `sum_legacy` odrzucone we wszystkich trzech przebiegach (ΔRR +0,180 / +0,164 / +0,164, p = 0,0039, p_Holm = 0,031); tylko w R_c także `wrrf3` > `rrf3` (p_Holm 0,031) i `wrrf3` > `rrf2` (p_Holm 0,047).
+*   **`wrrf3` (wagi 0,60 / 0,25 / 0,15 z AFP-002) prowadzi we wszystkich metrykach, ale pozostaje hipotezą dla R2b, nie twierdzeniem tezy.** Wagi ustalono a priori przed R1 i nie strojono, ale R1 pokazał to samo na tych samych 21 zapytaniach, a trzy przebiegi to powtórzenia tego samego wyniku, nie niezależne potwierdzenia. `rrf3` pozostaje domyślnym wariantem. **n = 21 jest zbiorem wyłącznie po stronie strojenia** (nie jest zamrożonym podziałem testowym, który powstanie w R2b).
+
+**constraint-satisfaction@20** (wariant gold, `rrf3`; pokrycie R_a / R_b / R_c):
+
+| Rodzaj | Pokrycie | satisfied / violated / unknown (R_a) | Przyczyna nieznanych |
+|---|---|---|---|
+| Cena | 0,539 / 0,541 / 0,528 | 124 / 0 / 106 | cena `NULL` (duchy oraz 48 037 produktów z tytułem bez ceny) |
+| Marka | 1,000 / 1,000 / 1,000 | 130 / 0 / 0 | |
+| Numeryczne | **0,000 / 0,000 / 0,000** | 0 / 0 / 370 | **brak `Attribute.numeric_value` w całym grafie** |
+
+*   `mean_cs_known@20 = 1,0` (n = 15; n = 14 dla `wrrf3` i `cc3`) i `violation_free@20 = 1,0` (n = 17) dla każdego wariantu w każdym przebiegu; w wariancie żądania `cs_req_known@20 = 1,0` i `cs_req_violation_free@20 = 1,0` (n = 15).
+*   **System nie może zweryfikować ani jednej specyfikacji numerycznej względem grafu** (370 z 370 werdyktów to `unknown`). Grafem opartym na faktach można uzasadnić tylko cenę i markę. To dowód na potrzebę RS-11, nie wada metryki.
+*   CS@K nie rozróżnia tu wariantów: cena i marka są twardymi filtrami Cypher, MACS nie poszerzył budżetu, a ekstrakcja nie pominęła ceny ani marki, więc `cs_viol = 0` wynika w dużej mierze z konstrukcji. Metryka stanie się informatywna, gdy ekstrakcja coś pominie lub relaksacja poszerzy ograniczenie (zaprojektowane w benchmarku R2b).
+*   Odczyt trójwartościowy a dwuwartościowy (kontrfaktyczny odczyt z archiwalnych linii `per_query.jsonl`, wyliczony na potrzeby `thesis/11-doc-evaluation-protocol.md`): przy zliczaniu `unknown` jako naruszeń tylko 17–21% list top-20 jest wolnych od naruszeń, a kolejność wariantów odwraca się (`rrf3` pierwszy, `wrrf3` ostatni), podczas gdy żaden wariant nie narusza żadnego znanego ograniczenia.
+
+**review-coverage-bias@K** (średnia z trzech przebiegów; stopy bazowe 2,15% dla wszystkich węzłów i **0,52%** dla produktów z tytułem):
+
+| Wariant | RCB@5 (× baza wszystkich węzłów / × baza z tytułem) | RCB@20 (× / ×) |
+|---|---|---|
+| `sum_legacy` | 0,502 (23× / 96×) | 0,239 (11× / 46×) |
+| `rrf3` | 0,216 (10× / 41×) | 0,192 (9× / 37×) |
+| `cc3` | 0,143 (7× / 27×) | 0,140 (7× / 27×) |
+| `rrf2` | 0,054 (2,5× / 10×) | 0,051 (2,4× / 10×) |
+| `wrrf3` | 0,038 (1,8× / 7×) | 0,021 (1,0× / 4×) |
+
+*   Replikacja ustalenia R1 na przebiegach cytowalnych: `rrf3` obniża obciążenie na czele listy (0,502 → 0,216 przy K = 5), ale nie przy K = 20 (0,239 → 0,192).
+*   Względem bazy dla produktów z tytułem każdy wariant nadal nadreprezentuje produkty z recenzjami (4–10× nawet dla `rrf2` i `wrrf3`). Wariant `rrf2` (bez kanału recenzji) jest lepszą hipotezą zerową niż jakakolwiek stopa bazowa katalogu; nadwyżka nad `rrf2` (+0,162 dla `rrf3`, +0,448 dla `sum_legacy`) szacuje obciążenie wnoszone przez sam kanał recenzji.
+*   Tylko 1 z 21 celów (`charger_02`) ma osadzoną recenzję i każdy wariant stawia go na pierwszym miejscu, więc benchmark legacy-21 prawie nie pozwala testować kanału recenzji.
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Moduł fuzji `src/tools/score_fusion.py` i warianty `FUSION_ARMS` z R1; `hybrid == hybrid@rrf3` na 21/21 zapytań w każdym przebiegu bramki.
+*   `CriticAgent`, `KnowledgePathExtractor` (KECR), router dialogowy, MACS, `PromptConstructor`, indeksy wektorowe i schemat grafu.
+*   `DialogueManager._evaluate_dialogue_state` (poprawka odbywa się w guardrailu i w prompcie, nie w tej klasie).
+*   `requirements.txt` bez zmian (NFR-003); zapytania Cypher dodane w R2a są sparametryzowane i działają na Neo4j 5.14.
+*   453 testy sprzed R2a przechodzą bez modyfikacji. Zmieniono trzy testy z samego R2a w `tests/test_category_recovery.py` (flaga `product_type_decided: True` w atrapach testów AC-004, AC-005 i NFR-001 oraz dwa nowe klucze w oczekiwanym słowniku AC-004), uznane w audycie za zachowujące intencję (poprawka specyfikacji A-12).
+*   Wybór domyślnego wariantu fuzji: `rrf3` pozostaje domyślny (żaden wynik R2a nie spełnia wstępnie zarejestrowanej reguły zmiany).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **R2b (następny krok):** generator benchmarku v2 (strata S0–S4 i A, ok. 200 + 30 zapytań z ≥ 12 kategorii, generowanie bez tytułu, kontrola wycieków), zamrożony podział (`sha256(sól + parent_asin) mod 100 < 60` → test, `--split` / `--confirm-test`), przegląd wypowiedzi testowych przez użytkownika, linia bazowa na zbiorze strojenia z r = 3 oraz rozstrzygnięcie RS-02 (reguła z 2026-10-18-015). `wrrf3` czeka tam na test jako wstępnie zarejestrowane porównanie pierwotne na danych wstrzymanych. RS-21 w `Implementation_Plan.md` pozostaje otwarte.
+*   **Czułość klaryfikacji na zapytaniach niejednoznacznych nie jest mierzona** (na legacy-21 `n/a (n=0)`). Ochrona Vision §2 („does not guess”) jest na razie tylko diagnostyczna: 5 wypowiedzi dymnych, z których 4 router klaryfikuje, zanim odzyskiwanie mogłoby zadziałać, oraz 8 świeżych wypowiedzi AC-039. Bramka formalna (czułość na warstwie A przy włączonym i wyłączonym odzyskiwaniu nie niższa niż przed poprawką) to R2b. Flaga `product_type_decided` pochodzi z tego samego wywołania LLM co kategoria, więc jest miękką ochroną, nie niezależną weryfikacją.
+*   **A-13 (audyt M-4), odroczone do R2b i wymagane przed pierwszym pomiarem warstwy A:** `recovery_product_type_decided` i `recovery_discarded_category` w `per_query.jsonl` oraz `summary.dialogue.recovery_outcome_counts`. Dziś zablokowaną kategorię widać tylko w linii `[STEP 2] Category recovery` pliku `execution_trace.log` (ignorowanego przez git, archiwizowanego jedynie jako SHA-256).
+*   **L-12:** `tests/test_session_adapter.py::test_live_eval_phone_01_candidate_recovery` wywołuje OpenAI bez znacznika pomijania; bez środków kończy się błędem 429, a ze środkami domyślny zestaw zużywa tokeny. Dodanie znacznika `RUN_LIVE_TESTS` wymaga zgody użytkownika (AC-009 zabrania edycji testów sprzed R2a).
+*   **L-13:** jeśli model umieści `product_type_decided` wewnątrz `structured_filters`, na turze z kategorią od parsera klucz trafiłby do `active_filters` jako miękka preferencja; potrzebny strażnik w scalaniu gałęzi SEARCH (niezaobserwowane).
+*   **L-11 / A-12:** test `test_null_like_category_values_do_not_count` (AC-006) nie ćwiczy już markerów pustki od początku do końca (`"N/A"`, `"unknown"`, `"any"` są pokryte tylko testem jednostkowym `_category_from_filters`); poprawka w R2b.
+*   **L-14:** `git_describe` ma sufiks `88cdbdf-dirty` we wszystkich trzech manifestach przy `git_dirty: false` i `citable: true` (jedyna zmiana śledzona leży poza zakresem `src/` i `scripts/`). Przebiegi są poprawnie cytowalne, ale czytelnik może źle odczytać sufiks; zalecenie: zawęzić `git describe` do tych samych ścieżek lub opisać różnicę w `evaluations_archive/README.md`.
+*   **M-3 i K-3 (duchy):** 104 281 węzłów `ParentProduct` bez tytułu, ceny i kategorii może trafiać do wyników zapytań bez filtra kategorii (np. `camera_02` po porzuceniu kategorii przez MACS; w `vector_only` duchy zajmują 102 z 420 miejsc). Wykluczenie duchów z wyszukiwania (K-3) nie zostało zatwierdzone, w kodzie wyszukiwania nic nie zmieniono.
+*   **Otwarte decyzje A-3 / L-1:** `soft_hit@k`, `graded_ndcg@k` i `recall@k` nie są nadpisywane na wierszach `clarify_gold`; rekomendowane nadpisanie tak jak pozostałych metryk, do rozstrzygnięcia przed warstwą A.
+*   **RS-11:** pokrycie werdyktów numerycznych wynosi 0%, bo żaden `Attribute` nie ma `numeric_value`.
+*   **RS-24 (R3)** — dopasowanie typu produktu niezależne od domeny („present but wrong”, `camera_02`; zapasowe dopasowanie do słownika kategorii katalogu czeka na RS-24). **AI-07**: parser i `_generate_search_params` nadal niezależnie ekstrahują kategorię, a odzyskana kategoria nie jest zapisywana z powrotem do sesji (kolejna tura bez kategorii odzyskuje ją ponownie); CER parser-only jest jego bramką regresyjną. **AI-11**: interpolowany warunek tytułu kategorii w Cypher. Pozostałe uwagi niskiego priorytetu L-2, L-4 … L-9 w `production_artifacts/Audit_Report.md`.
+*   **Dokumenty planistyczne:** w `production_artifacts/Implementation_Plan.md` pozycje RS-20 (reszta) i RS-23 w momencie pisania nie mają zaznaczonego statusu ukończenia; aktualizacja wymaga zgody użytkownika.
+*   **D-2 … D-4** (Vision Report) oraz wydania R3–R5 mapy drogowej bez zmian. Dynamiczne schematy domen (2026-09-29-007) pozostają niezaimplementowane (nota 2026-10-18-017).
+*   **Powiązany kolejny krok (osobny nurt, poza R2a):** decyzje Vision Report 2026-10-19-018 … 021 przebudowują graf jako v2 z surowych plików Amazon Reviews 2023; wszystkie wyniki w tym wpisie są dowodem dla grafu v1.
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+*   **Bezwarunkowy guardrail SEARCH → CLARIFY** w `_decide_next_step` (zastąpiony przez `has_category` i odzyskiwanie kategorii); odtwarzalny tylko przez `ORCH_CATEGORY_RECOVERY=0`.
+*   **Sprzeczność w `<example_1>`** (`operating_system` jako ograniczenie twarde) oraz wiersz „UPDATE `price_max` to 150” w `SEARCH_GENERATION_PROMPT`.
+*   **Nieosiągalny duplikat `return`** na końcu `_recover_category` (usunięty w `471d77c`, L-10).
+*   **Status dowodowy trzech przebiegów sprzed R2** (`eval_2026-10-09_1336`, `eval_2026-10-17_1846`, `eval_2026-10-17_1937`): od teraz `citable: false`, wyłącznie kontekst.
+*   **Filary 1–2 i rozmiar „14–21 pozycji” z decyzji 2026-10-06-002** są zastąpione decyzją 2026-10-18-014 (zakres R2b; w R2a benchmark legacy-21 zmieniono wyłącznie przez dodanie adnotacji złotego standardu).
+*   **Procedura bramki z pierwszego audytu** (`Audit_Report.md`, „Gate Procedure”) jest zastąpiona procedurą z re-audytu FR-007a.
+
+### Zaktualizowana Architektura
+
+**Przepływ decyzji o klaryfikacji (RS-23):**
+
+```mermaid
+flowchart TD
+    U[Tura użytkownika] --> P["LLMPreferenceParser<br/>reguła głowy frazy, spójność, example_7"]
+    P --> D["DialogueManager<br/>ready, missing (bez zmian)"]
+    U --> R[Router LLM: akcja]
+    D --> G{"SEARCH, not ready,<br/>category w missing?"}
+    R --> G
+    G -->|nie| A[Zachowaj akcję routera<br/>po immunizacji marki]
+    G -->|tak| H{"has_category?<br/>parser → active_filters → kontekst sesji"}
+    H -->|tak| S[SEARCH]
+    H -->|nie, odzyskiwanie wyłączone| C1["CLARIFY<br/>parser_missing_category"]
+    H -->|nie, odzyskiwanie włączone| RC["_recover_category<br/>jedno wywołanie _generate_search_params"]
+    RC -->|error / fallback| C2["CLARIFY<br/>recovery_error"]
+    RC -->|flaga ≠ True| C3["CLARIFY recovery_failed<br/>undecided, zgadnięta kategoria odrzucona"]
+    RC -->|flaga True, brak kategorii| C4["CLARIFY recovery_failed<br/>null_category"]
+    RC -->|flaga True, kategoria| S2["SEARCH<br/>source = search_params"]
+    S --> T["eval_trace:<br/>clarify_reason, category_resolution"]
+    S2 --> T
+    C1 --> T
+    C2 --> T
+    C3 --> T
+    C4 --> T
+```
+
+**Przepływ ewaluacji R2a:**
+
+```mermaid
+flowchart TD
+    B["live_eval_dataset.json<br/>gold_constraints, type_explicit, gold_action"] --> V["validate_gold_annotations<br/>kod 1 przy błędzie"]
+    V --> PV["provenance: git, benchmark SHA-256"]
+    PV -->|"--require-clean i brudne drzewo"| X["kod 2, przed zbudowaniem orkiestratora"]
+    PV --> PF["wstępna kontrola: gold vs cel"]
+    PF --> O["AgentOrchestrator na zapytanie<br/>eval_trace.search_request"]
+    O --> RP["powtórzenie tego samego żądania:<br/>rrf3, rrf2, wrrf3, cc3, sum_legacy"]
+    RP --> F["fetch_constraint_facts<br/>jedno zapytanie Cypher"]
+    F --> J["judge: satisfied / violated / unknown"]
+    J --> AG["agregaty z n_all, n_search, n_metryki"]
+    AG --> ST["stats: randomizacja, bootstrap, McNemar, Wilson, Holm"]
+    ST --> M["manifest (citable), summary.json, per_query.jsonl"]
+    M --> GC["check_eval_gate.py (≥ 3 przebiegi)"]
+    M --> AR["archive_eval_run.py → evaluations_archive/"]
+```
+
+---
+
 ## 📅 2026-10-17 (R1 — fuzja rankingowa, AFP-002 przez RRF)
 
 ### Changelog (względem stanu z 2026-10-09, po wdrożeniu AFP-005)

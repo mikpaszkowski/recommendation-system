@@ -7,7 +7,7 @@ Work-driving documents: audits that produce action items, and Architectural Fix 
 | [Live_Graph_Audit_2026-10-10.md](Live_Graph_Audit_2026-10-10.md) | AI-01 … AI-13 | Open |
 | [Proposed_Fix_Benchmark_Alignment.md](Proposed_Fix_Benchmark_Alignment.md) | AFP-001 | Implemented (Vision Report decision 2026-10-07-010) |
 | [Proposed_Fix_Vector_Aggregation.md](Proposed_Fix_Vector_Aggregation.md) | AFP-002 | Implemented 2026-10-17 via RRF (release R1, Vision decision 2026-10-17-013). |
-| [Retrieval_Score_Redesign_Roadmap.md](Retrieval_Score_Redesign_Roadmap.md) | RS-01 … RS-24, R1 … R5 | **R1 done** (branch `feature/afp-002-vector-aggregation`); R2 next. D-1 recorded (Vision decision 2026-10-17-013); D-2 … D-4 pending. |
+| [Retrieval_Score_Redesign_Roadmap.md](Retrieval_Score_Redesign_Roadmap.md) | RS-01 … RS-24, R1 … R5 | **R1 and R2a done** (branch `feature/afp-002-vector-aggregation`; R2a exit gate PASS 2026-10-18, citable runs in `evaluations_archive/`); R2b (RS-21, RS-02 evidence) next. D-1 recorded (Vision decision 2026-10-17-013); R2 evaluation decisions recorded as Vision 2026-10-18-014 … 017; D-2 … D-4 pending. |
 | [Proposed_Fix_Category_Resolution.md](Proposed_Fix_Category_Resolution.md) | AFP-003 | Implemented (decision 2026-10-07-009) |
 | [Proposed_Fix_Prompt_Constraint_Inversion.md](Proposed_Fix_Prompt_Constraint_Inversion.md) | AFP-004 | Implemented (decision 2026-10-09-011) |
 | [Proposed_Fix_Cypher_Ranking_and_Typing.md](Proposed_Fix_Cypher_Ranking_and_Typing.md) | AFP-005 | Implemented (decision 2026-10-09-012) |
