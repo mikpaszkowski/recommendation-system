@@ -1,0 +1,20 @@
+{
+  "accepted_untitled_count": 8,
+  "accepted_catalogue_missing": 0,
+  "expected_review_count": 3382248,
+  "expected_embed_reviews": 1081137,
+  "review_embedding_scope": "top5_nonblank_by_cap_rank",
+  "review_cap": 20,
+  "embedding_device": "mps",
+  "build_profile": {
+    "NEO4J_HEAP": "4G",
+    "NEO4J_PAGECACHE": "1G",
+    "NEO4J_TX_TIMEOUT": "600s",
+    "NEO4J_TX_LOG_RETENTION": "500M size",
+    "EMBED_BATCH_SIZE": "32"
+  },
+  "preflight_report_sha256": "3c2804ff49968f6490a04e300ee0c4ddfbe8c269c053caf0afe442fdfc03f5d1",
+  "approved_by": "user",
+  "approved_on": "2026-10-20",
+  "product_content_rule": "title_description"
+}

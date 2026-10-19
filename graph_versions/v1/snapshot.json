@@ -1,0 +1,32 @@
+{
+  "neo4j_version": "5.14.0",
+  "nodes": {
+    "Aspect": 0,
+    "Attribute": 47335,
+    "Brand": 40998,
+    "Category": 71,
+    "CoPurchaseSet": 0,
+    "ParentProduct": 265307,
+    "PriceRange": 3,
+    "Product": 25,
+    "Review": 1629426,
+    "User": 471474,
+    "Variant": 31
+  },
+  "products_untitled": 104281,
+  "relationships": {
+    "ABOUT_PRODUCT": 1634273,
+    "BELONGS_TO_CATEGORY": 159475,
+    "HAS_ATTRIBUTE": 111015,
+    "HAS_BRAND": 160135,
+    "IN_PRICE_RANGE": 38,
+    "IS_VARIANT_OF": 6,
+    "RATED": 16,
+    "REVIEWS": 4847,
+    "SUBCATEGORY_OF": 33,
+    "WROTE": 1624586
+  },
+  "review_embedded_products": 5715,
+  "reviews_embedded": 76814,
+  "taken_at": "2026-10-19T17:41:52Z"
+}

@@ -1,0 +1,294 @@
+[
+  {
+    "brands": [
+      "NexiGo"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 49.99,
+    "query_id": "live_eval_camera_01",
+    "review_nodes": 79,
+    "target_asin": "B0BGXS26QL",
+    "title": "NexiGo N620E 60FPS AutoFocus ePTZ Webcam, 2X Digital Zoom, Ring Light & Privacy Cover, [Software Included], 1080P FHD Streaming Web Camera, Dual Stereo Mics, for Zoom Skype Teams"
+  },
+  {
+    "brands": [
+      "Blink"
+    ],
+    "categories": [
+      "Amazon Devices"
+    ],
+    "present": true,
+    "price": 219.96,
+    "query_id": "live_eval_camera_02",
+    "review_nodes": 160,
+    "target_asin": "B08F6GPRH6",
+    "title": "Blink Whole Home Bundle | Video Doorbell System, Outdoor camera, and Mini camera | HD video, motion detection, Works with Alexa"
+  },
+  {
+    "brands": [
+      "Fujifilm"
+    ],
+    "categories": [
+      "Camera & Photo"
+    ],
+    "present": true,
+    "price": 98.0,
+    "query_id": "live_eval_camera_03",
+    "review_nodes": 164,
+    "target_asin": "B014TUZ92U",
+    "title": "Fujifilm Instax Mini 8 Instant Film Camera (Black) (Discontinued by Manufacturer)"
+  },
+  {
+    "brands": [
+      "Samsung Electronics"
+    ],
+    "categories": [
+      "Cell Phones & Accessories"
+    ],
+    "present": true,
+    "price": 758.39,
+    "query_id": "live_eval_phone_01",
+    "review_nodes": 69,
+    "target_asin": "B08GNRGB67",
+    "title": "Samsung Galaxy S20+ Plus 5G Factory Unlocked New Android Cell Phone US Version, 128GB of Storage, Fingerprint ID and Facial Recognition, Long-Lasting Battery, Black, SM-G986UZKAXAA"
+  },
+  {
+    "brands": [
+      "SAMSUNG"
+    ],
+    "categories": [
+      "Cell Phones & Accessories"
+    ],
+    "present": true,
+    "price": 555.35,
+    "query_id": "live_eval_phone_02",
+    "review_nodes": 116,
+    "target_asin": "B07VV9HSGL",
+    "title": "SAMSUNG Galaxy S9+ Factory Unlocked Smartphone 64GB - Midnight Black"
+  },
+  {
+    "brands": [
+      "Amazon Renewed"
+    ],
+    "categories": [
+      "Cell Phones & Accessories"
+    ],
+    "present": true,
+    "price": 195.0,
+    "query_id": "live_eval_phone_03",
+    "review_nodes": 116,
+    "target_asin": "B089SRK8VQ",
+    "title": "Apple iPhone 8 Plus, US Version, 64GB, Gold - AT&T (Renewed)"
+  },
+  {
+    "brands": [
+      "UGREEN"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 55.99,
+    "query_id": "live_eval_charger_01",
+    "review_nodes": 12,
+    "target_asin": "B088FHJLR1",
+    "title": "UGREEN 65W USB C Charger 4 Ports USB C Power Adapter GaN PD Fast Wall Charger Compatible with MacBook Pro/Air M2, Dell XPS 13, iPad Pro/Air, iPhone 14 Pro Max/13, Galaxy S23, Steam Deck, and More"
+  },
+  {
+    "brands": [
+      "Apple"
+    ],
+    "categories": [],
+    "present": true,
+    "price": 18.99,
+    "query_id": "live_eval_charger_02",
+    "review_nodes": 53,
+    "target_asin": "B08L5M9BTJ",
+    "title": "Apple 20W USB-C Power Adapter - iPhone Charger with Fast Charging Capability, Type C Wall Charger"
+  },
+  {
+    "brands": [
+      "HAOZI"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 17.97,
+    "query_id": "live_eval_charger_03",
+    "review_nodes": 81,
+    "target_asin": "B095LLDH4H",
+    "title": "HaoZi SLIronM-01 All-in-One Universal Travel Adapter with 3.4A 4 USB, Europe Multifunctional Power Adapter Wall Charger, Black"
+  },
+  {
+    "brands": [
+      "seenda"
+    ],
+    "categories": [
+      "Computers"
+    ],
+    "present": true,
+    "price": 11.99,
+    "query_id": "live_eval_mouse_01",
+    "review_nodes": 360,
+    "target_asin": "B0B4SWZTZ1",
+    "title": "seenda Wireless Mouse, 2.4G Noiseless Mouse with USB Receiver Portable Computer Mice for PC, Tablet, Laptop with Windows System (Olive Green)"
+  },
+  {
+    "brands": [
+      "seenda"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 26.98,
+    "query_id": "live_eval_mouse_02",
+    "review_nodes": 27,
+    "target_asin": "B0B4KJRD1C",
+    "title": "seenda Ergonomic Mouse, Wireless Vertical Mouse - Rechargeable Optical Mice for Multi-Purpose (Bluetooth 5.0 + Bluetooth 3.0 + USB Connection) Compatible Apple Mac and Windows Computers - Black"
+  },
+  {
+    "brands": [
+      "Logitech"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 26.9,
+    "query_id": "live_eval_mouse_03",
+    "review_nodes": 83,
+    "target_asin": "B006MCDUZM",
+    "title": "Logitech Wireless Mouse M525 - Red/Black"
+  },
+  {
+    "brands": [
+      "Aftershokz"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 169.95,
+    "query_id": "live_eval_headphone_01",
+    "review_nodes": 98,
+    "target_asin": "B08BG7J2MN",
+    "title": "Aftershokz Aeropex Mini (Rebranded as Shokz OpenRun Mini) Bone Conduction Wireless Bluetooth Headphones"
+  },
+  {
+    "brands": [
+      "Soundcore"
+    ],
+    "categories": [
+      "All Electronics"
+    ],
+    "present": true,
+    "price": 65.99,
+    "query_id": "live_eval_headphone_02",
+    "review_nodes": 60,
+    "target_asin": "B08PFW1S1V",
+    "title": "Soundcore Anker Life Q20 Hybrid Active Noise Cancelling Headphones, Wireless Over Ear Bluetooth Headphones, 40H Playtime, Hi-Res Audio, Deep Bass, Memory Foam Ear Cups, for Travel, Home Office"
+  },
+  {
+    "brands": [
+      "Panasonic"
+    ],
+    "categories": [
+      "Home Audio & Theater"
+    ],
+    "present": true,
+    "price": 13.99,
+    "query_id": "live_eval_headphone_03",
+    "review_nodes": 472,
+    "target_asin": "B07S764D9V",
+    "title": "Panasonic ErgoFit Wired Earbuds, In-Ear Headphones with Microphone and Call Controller, Ergonomic Custom-Fit Earpieces (S/M/L), 3.5mm Jack for Phones and Laptops - RP-TCM125-A (Blue)"
+  },
+  {
+    "brands": [
+      "Apple"
+    ],
+    "categories": [
+      "Apple Products"
+    ],
+    "present": true,
+    "price": 849.0,
+    "query_id": "live_eval_laptop_01",
+    "review_nodes": 85,
+    "target_asin": "B0BRZ6VK9N",
+    "title": "Apple 2020 MacBook Air Laptop M1 Chip, 13\" Retina Display, 8GB RAM, 256GB SSD Storage, Backlit Keyboard, FaceTime HD Camera, Touch ID. Works with iPhone/iPad; Silver"
+  },
+  {
+    "brands": [
+      "HP"
+    ],
+    "categories": [
+      "Computers"
+    ],
+    "present": true,
+    "price": 179.83,
+    "query_id": "live_eval_laptop_02",
+    "review_nodes": 33,
+    "target_asin": "B08CSHM6L3",
+    "title": "HP Chromebook 14-inch Laptop with 180-Degree Swivel, AMD Dual-Core A4-9120 Processor, 4 GB SDRAM, 32 GB eMMC Storage, Chrome OS (14-db0020nr, Chalkboard Gray)"
+  },
+  {
+    "brands": [
+      "Acer"
+    ],
+    "categories": [
+      "Computers"
+    ],
+    "present": true,
+    "price": 730.01,
+    "query_id": "live_eval_laptop_03",
+    "review_nodes": 20,
+    "target_asin": "B0BWV4MXQG",
+    "title": "Acer Nitro 5 AN515-55-53E5 Gaming Laptop | Intel Core i5-10300H | NVIDIA GeForce RTX 3050 GPU | 15.6\" FHD 144Hz IPS Display | 8GB DDR4 | 256GB NVMe SSD | Intel Wi-Fi 6 | Backlit Keyboard"
+  },
+  {
+    "brands": [
+      "Perixx"
+    ],
+    "categories": [
+      "Computers"
+    ],
+    "present": true,
+    "price": 44.99,
+    "query_id": "live_eval_keyboard_01",
+    "review_nodes": 60,
+    "target_asin": "B08JZZ4TK7",
+    "title": "Perixx Periboard-512 Ergonomic Split Keyboard - Natural Ergonomic Design - Black - Bulky Size 19.09\"x9.29\"x1.73\", US English Layout"
+  },
+  {
+    "brands": [
+      "iClever"
+    ],
+    "categories": [
+      "Computers"
+    ],
+    "present": true,
+    "price": 56.99,
+    "query_id": "live_eval_keyboard_02",
+    "review_nodes": 40,
+    "target_asin": "B084G4GY2N",
+    "title": "iClever Bluetooth Keyboard, BK08 Folding Keyboard with Sensitive Touchpad (Sync Up to 3 Devices), Pocket-Sized Tri-Folded Fodable Keyboard for Windows Mac Android iOS"
+  },
+  {
+    "brands": [
+      "Amazon Renewed"
+    ],
+    "categories": [
+      "Computers"
+    ],
+    "present": true,
+    "price": 21.95,
+    "query_id": "live_eval_keyboard_03",
+    "review_nodes": 20,
+    "target_asin": "B00SK0FOHG",
+    "title": "Logitech Wireless Touch Keyboard K400 with Built-In Multi-Touch Touchpad, Black (Renewed)"
+  }
+]
