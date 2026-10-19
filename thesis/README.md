@@ -33,12 +33,17 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 | 8 | [`8-doc-catalog-stratification.md`](./8-doc-catalog-stratification.md) | `catalog-stratification` | $\mathbf{RQ_8}$: To what extent does retrieval accuracy degrade on long-tail items? | Chapter 4: Experimental Methodology | ✅ Documented |
 | 9 | [`9-doc-pipeline-alignment.md`](./9-doc-pipeline-alignment.md) | `pipeline-alignment` | $\mathbf{RQ_9}$: To what extent does aligning the evaluation execution pipeline with the live multi-agent conversational architecture improve metric integrity and edge-case telemetry compared to bypassed single-turn IR evaluation? | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
 | 10 | [`10-doc-fusion-ablation.md`](./10-doc-fusion-ablation.md) | `fusion-ablation` | $\mathbf{RQ_{10}}$: In multi-index GraphRAG retrieval with graph-node fan-out, to what extent do per-channel MaxP and rank-based fusion reduce hub bias in the top-K, and does ranking quality change when the LLM-extracted request is held fixed? (Methodological Artifact; coverage bias reduced, no measurable hit-rate change on n = 21) | Chapter 4: Hybrid Semantic-Structural Retrieval; Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
+| 11 | [`11-doc-evaluation-protocol.md`](./11-doc-evaluation-protocol.md) | `evaluation-protocol` | $\mathbf{RQ_{11}}$: Which conclusions about multi-channel fusion and constraint adherence in an LLM-driven GraphRAG CRS remain supportable under same-request pre-registered paired tests, three-valued (satisfied / violated / unknown) constraint verdicts and provenance-verified citable runs? (Methodological Artifact; no primary comparison significant on n = 21 tuning-side queries, as predicted; two-valued scoring would reverse the arm order) | Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
+| 12 | [`12-doc-clarification-gating.md`](./12-doc-clarification-gating.md) | `clarification-gating` | $\mathbf{RQ_{12}}$: Are clarification turns caused by extraction failure rather than underspecification, and can a domain-agnostic head-noun rule plus a fail-closed, self-declared `product_type_decided` flag remove spurious CLARIFY without guessing on vague requests? (Methodological Artifact, narrow; spurious CLARIFY 0/21 in 3 citable runs, in-sample; null-rule negative result; clarification recall not yet measured) | Chapter 3: Dialogue State Modeling; Chapter 5: Empirical Evaluation & Comparative Analysis | ✅ Documented |
 
 ## Evaluation Summary
-- **Total Thesis Documents**: 10
-- **Active Research Questions**: $\mathbf{RQ_1}$, $\mathbf{RQ_2}$, $\mathbf{RQ_3}$, $\mathbf{RQ_4}$, $\mathbf{RQ_5}$, $\mathbf{RQ_6}$, $\mathbf{RQ_7}$, $\mathbf{RQ_8}$, $\mathbf{RQ_9}$, $\mathbf{RQ_{10}}$
-- **Latest Evaluated Scope**: Retrieval Score Redesign R1 — fan-out-invariant multi-channel fusion (MaxP + RRF, AFP-002) and same-request fusion ablation
+- **Total Thesis Documents**: 12
+- **Active Research Questions**: $\mathbf{RQ_1}$ … $\mathbf{RQ_{12}}$
+- **Latest Evaluated Scope**: Retrieval Score Redesign R2a (2026-10-19) — evaluation foundation (three-valued constraint satisfaction, pre-registered paired statistics, citable-run archive) and the spurious-CLARIFY fix RS-23 with the FR-007a decision flag. Citable evidence: `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (commit `88cdbdf`).
+- **Citation rule (Vision 2026-10-18-015)**: thesis text cites only archived runs with `citable: true`. The R1-era runs in `evaluations_archive/` (`eval_2026-10-09_1336`, `_2026-10-17_1846`, `_2026-10-17_1937`) are `citable: false` legacy context.
+- **Assessed in R2a, not registered as a standalone contribution**: the R2a exit-gate retrieval results (no pre-registered comparison significant; `wrrf3` vs `sum_legacy` significant after Holm but with untuned weights on tuning-side data). They are reported as the results section of contribution 11 and as the citable replication in contribution 10's correction note.
 - **Note on contribution 4**: The unbounded vector term $S_{vec}$ (multi-index `sum(score)`) described in `4-doc-hybrid-scoring.md` is superseded by the bounded fused score of contribution 10. It survives only as the `sum_legacy` control arm.
+- **Correction to contribution 10 (2026-10-19)**: its coverage-bias base rate (2.15%, all nodes) is dominated by ghost nodes; the titled base rate is 0.52% (841 / 161,026), so the R1 bias is about 4× stronger than stated. A dated correction note (C-1 … C-6, including the graph-v1 scope of decision 2026-10-19-021) was added; the original numbers are unchanged.
 
 ---
 
@@ -54,6 +59,7 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
   * Session Context modeling & Pydantic state representations (`session_schema.py`).
   * Bidirectional downstream adapters (`session_adapter.py`).
   * Dialogue State Management & Multi-turn preference accumulation (`dialogue_manager.py`).
+  * Attribution and gating of clarification decisions: head-noun extraction rule, category recovery before clarifying, fail-closed `product_type_decided` flag (`orchestrator.py`, contribution 12).
 * **Chapter 4: Hybrid GraphRAG Retrieval & Multi-Agent Verification**
   * Dense vector embedding of graph nodes + dynamic Cypher structural constraints.
   * Critic Agent & Knowledge-Enhanced Conversational Reasoning (KECR).
@@ -61,6 +67,8 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
   * Fan-out-invariant multi-channel fusion (per-channel MaxP, Reciprocal Rank Fusion, bounded soft-preference bonus) and channel-level retrieval provenance (`score_fusion.py`).
 * **Chapter 5: Empirical Evaluation & Comparative Analysis**
   * Same-request fusion arm replay (`eval_trace.search_request`) and the label-free coverage-bias@K metric with catalogue base rate.
+  * Claim-bounded evaluation protocol: three-valued constraint-satisfaction@K (gold and request flavours), pre-registered paired randomization / bootstrap / McNemar / Wilson / Holm statistics with explicit denominators, citable-run provenance and the git-tracked `evaluations_archive/` (contribution 11).
+  * Clarification attribution metrics: category-extraction recall (parser-only, pipeline), spurious-CLARIFY rate by reason, target-admitting category rate (contribution 12).
   * Two-Tiered Evaluation Architecture (`src/evaluation/`, `scripts/evaluate_*.py`).
   * Full pipeline alignment and edge-case telemetry (telemetry capture of conversational actions without artificially corrupting IR ranking metrics).
   * Tier 1 Recommendation & Retrieval Quality ($NDCG@K$, $HitRate@K$, $MRR@K$, $MAP@K$ across $K \in \{1, 3, 5, 10, 20\}$).
