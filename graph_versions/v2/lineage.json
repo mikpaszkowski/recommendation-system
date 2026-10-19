@@ -1,0 +1,1088 @@
+{
+  "schema_version": 1,
+  "graph_version": "v2",
+  "created_at": "2026-10-19T22:41:54Z",
+  "code": {
+    "git_commit": "75c5c0acb850ef2a3ff448344b5bc7f5ab9e1bc7",
+    "git_dirty": false,
+    "script": "scripts/graph_ingestion/build_graph_v2.py"
+  },
+  "sources": {
+    "meta": {
+      "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/meta_Electronics.jsonl",
+      "sha256": "5eb4dabd539586c49654297319ef178b62a2fe8e43108376feda125f04455d93",
+      "verified_against": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/SHA256SUMS",
+      "lines": 1610012
+    },
+    "reviews": {
+      "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/Electronics.jsonl",
+      "sha256": "bf11cf9c94c23ead7d3ffb174d18231fad8fcd76e72ad167f538a5599a38de8e",
+      "verified_against": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/SHA256SUMS",
+      "lines": 43886944
+    },
+    "splits": {
+      "train": {
+        "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/Electronics.train.csv",
+        "sha256": "b7415672b510e4a6ada7fe642e5c468b2e06818aca77745671c7d948d48c8625",
+        "rows": 12191484
+      },
+      "valid": {
+        "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/Electronics.valid.csv",
+        "sha256": "c7ae96f03c670f8b7ca7b38350502bc20be3d6c868de93d112be77c5c8c7b3f7",
+        "rows": 1641026
+      },
+      "test": {
+        "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/Electronics.test.csv",
+        "sha256": "73ceadbc1b6a99abb18f8e91f5543c4478e4215380a04c9bbec888fbccc5ca24",
+        "rows": 1641026
+      },
+      "combined_sha256": "27835771f8c3000802703ae90ba902b4f50964f5ef23a55679215a1603de9005"
+    },
+    "catalogue": {
+      "path": "/Users/mikolajpaszkowski/recommendation-system/graph_versions/v2/catalogue_asins.txt.gz",
+      "sha256_content": "76d882abd470978c97e060ab6b640315b1f3b3d5fa827c2832b307568c34f528",
+      "count": 265307,
+      "sampled_count": null
+    }
+  },
+  "parameters": {
+    "review_cap": 20,
+    "rank_key": [
+      "helpful_vote DESC",
+      "verified_purchase DESC",
+      "timestamp DESC",
+      "review_id ASC"
+    ],
+    "duplicate_rule": "same review_id: better rank_key, then lower byte offset",
+    "review_id": "md5(f'{user_id}-{asin}-{timestamp}')",
+    "exclusion_rule": "(user_id, parent_asin) in Electronics.valid.csv ∪ Electronics.test.csv",
+    "embed_top_n": 5,
+    "embed_rule": "first 5 non-blank reviews in cap_rank order",
+    "attribute_keys": [
+      "Material",
+      "Color",
+      "Style",
+      "Size"
+    ],
+    "brand_rule": "store if non-blank else details['Brand'] if non-blank; exact name",
+    "taxon_separator": " > ",
+    "array_delimiter": "U+001F",
+    "text_normalization": [
+      "U+0000->space",
+      "U+001F->space",
+      "\\r\\n|\\r->\\n",
+      "blank->null"
+    ],
+    "sample_mod": null
+  },
+  "columns": {
+    "meta": {
+      "read": [
+        "parent_asin",
+        "title",
+        "price",
+        "average_rating",
+        "rating_number",
+        "description",
+        "features",
+        "details",
+        "categories",
+        "main_category",
+        "store"
+      ],
+      "dropped": [
+        "images",
+        "videos",
+        "bought_together",
+        "subtitle",
+        "author"
+      ]
+    },
+    "reviews": {
+      "read": [
+        "user_id",
+        "parent_asin",
+        "asin",
+        "timestamp",
+        "helpful_vote",
+        "verified_purchase",
+        "rating",
+        "title",
+        "text"
+      ],
+      "dropped": [
+        "images"
+      ]
+    }
+  },
+  "counts": {
+    "meta": {
+      "lines": 1610012,
+      "json_errors": 0,
+      "not_in_catalogue": 1344705,
+      "duplicate_parent_asin": 0,
+      "products_written": 265307,
+      "catalogue_missing_in_meta": 0,
+      "title_empty": 8,
+      "description_empty": 112791,
+      "features_empty": 50275,
+      "content_empty": 3,
+      "features_only_content": 1,
+      "categories_empty": 17254,
+      "main_category_empty": 3643,
+      "price_null": 151262,
+      "price_unparseable": 22,
+      "price_non_positive": 0,
+      "brand_missing": 1033,
+      "attribute_non_string": 0
+    },
+    "reviews": {
+      "lines": 43886944,
+      "json_errors": 0,
+      "missing_ids": 0,
+      "not_in_catalogue": 8537757,
+      "product_missing": 0,
+      "valid_test_pair": 2828276,
+      "duplicate_review_id": 60521,
+      "beyond_cap": 29078142,
+      "kept": 3382248,
+      "kept_in_train_split": 1269946,
+      "kept_no_split": 2112302,
+      "missing_timestamp": 0,
+      "empty_text": 0,
+      "embed_selected": 1081137
+    },
+    "nodes": {
+      "ParentProduct": 265307,
+      "Review": 3382248,
+      "User": 2594661,
+      "Brand": 49663,
+      "Category": 38,
+      "Attribute": 36187,
+      "Taxon": 1183
+    },
+    "relationships": {
+      "HAS_BRAND": 264274,
+      "BELONGS_TO_CATEGORY": 261664,
+      "HAS_ATTRIBUTE": 190043,
+      "IN_TAXON": 248053,
+      "BROADER": 1180,
+      "ABOUT_PRODUCT": 3382248,
+      "WROTE": 3382248
+    },
+    "taxonomy": {
+      "roots": 3,
+      "max_depth": 7,
+      "inner_node_assignments": 22684,
+      "products_without_taxon_by_main_category": {
+        "All Electronics": 7832,
+        "Amazon Devices": 1156,
+        "Amazon Fire TV": 13,
+        "Apple Products": 466,
+        "Camera & Photo": 685,
+        "Car Electronics": 336,
+        "Computers": 5351,
+        "GPS & Navigation": 109,
+        "Home Audio & Theater": 1190,
+        "Portable Audio & Accessories": 116
+      }
+    },
+    "brand_case_duplicate_groups": 925,
+    "sanitized": {
+      "nul": 0,
+      "unit_separator": 6,
+      "carriage_return": 0,
+      "blank_to_null": 3213,
+      "empty_array_items": 0
+    }
+  },
+  "duplicates": {
+    "parent_asin_conflicting": [],
+    "brand_case_groups": [
+      [
+        "1Mii",
+        "1mii"
+      ],
+      [
+        "3PLUS",
+        "3Plus"
+      ],
+      [
+        "8Wireless",
+        "8wireless"
+      ],
+      [
+        "ABCPOW",
+        "AbcPow"
+      ],
+      [
+        "ABLY",
+        "Ably"
+      ],
+      [
+        "ACE Seller",
+        "Ace Seller"
+      ],
+      [
+        "ACEGUARDER",
+        "Aceguarder"
+      ],
+      [
+        "ACEGUARDER TECH",
+        "Aceguarder TECH"
+      ],
+      [
+        "ACMAXX",
+        "Acmaxx"
+      ],
+      [
+        "ACOMPATIBLE",
+        "acompatible"
+      ],
+      [
+        "ACOODE",
+        "Acoode"
+      ],
+      [
+        "ADATA",
+        "Adata"
+      ],
+      [
+        "AEAPYAR",
+        "AeapYar"
+      ],
+      [
+        "AGOUNOD",
+        "agounod"
+      ],
+      [
+        "AILI",
+        "AiLi"
+      ],
+      [
+        "AINOPE",
+        "Ainope"
+      ],
+      [
+        "AKAI",
+        "Akai"
+      ],
+      [
+        "AKALE",
+        "Akale"
+      ],
+      [
+        "AKEN TECH",
+        "Aken Tech"
+      ],
+      [
+        "AKWOR",
+        "AKwor"
+      ],
+      [
+        "AKWOX",
+        "Akwox"
+      ],
+      [
+        "ALFA",
+        "Alfa"
+      ],
+      [
+        "ALPINE",
+        "Alpine"
+      ],
+      [
+        "ALPTOP",
+        "Alptop"
+      ],
+      [
+        "ANDERSON POWER PRODUCTS",
+        "Anderson Power Products"
+      ],
+      [
+        "ANDHOT",
+        "AndHot"
+      ],
+      [
+        "ANDREA",
+        "Andrea"
+      ],
+      [
+        "ANGIEHAIE",
+        "Angiehaie"
+      ],
+      [
+        "ANGROX",
+        "Angrox"
+      ],
+      [
+        "ANTIER",
+        "antier"
+      ],
+      [
+        "ANTOBLE",
+        "antoble"
+      ],
+      [
+        "ANTOP ANTENNA",
+        "ANTOP Antenna"
+      ],
+      [
+        "APOGEE",
+        "Apogee"
+      ],
+      [
+        "ARCHEER",
+        "Archeer"
+      ],
+      [
+        "ARION",
+        "Arion"
+      ],
+      [
+        "ARKON",
+        "Arkon"
+      ],
+      [
+        "ARMOR",
+        "Armor"
+      ],
+      [
+        "ARRIS",
+        "Arris"
+      ],
+      [
+        "ART",
+        "Art"
+      ],
+      [
+        "ARTIX",
+        "Artix"
+      ],
+      [
+        "ASIAHORSE",
+        "AsiaHorse"
+      ],
+      [
+        "ASUS",
+        "Asus"
+      ],
+      [
+        "ATC",
+        "Atc"
+      ],
+      [
+        "ATHENA POWER",
+        "Athena Power"
+      ],
+      [
+        "ATIVA",
+        "Ativa"
+      ],
+      [
+        "AU Optronics",
+        "au optronics"
+      ],
+      [
+        "AUAUA",
+        "auaua"
+      ],
+      [
+        "AUDIOTEK",
+        "Audiotek"
+      ],
+      [
+        "AURUM CABLES",
+        "Aurum Cables"
+      ],
+      [
+        "AVITAL",
+        "Avital"
+      ],
+      [
+        "AXION",
+        "Axion",
+        "axion"
+      ],
+      [
+        "AXIS",
+        "Axis"
+      ],
+      [
+        "AYANGYANG",
+        "ayangyang"
+      ],
+      [
+        "Abode",
+        "abode"
+      ],
+      [
+        "Acer",
+        "acer"
+      ],
+      [
+        "Aiworth",
+        "aiworth"
+      ],
+      [
+        "AllSmartLife",
+        "Allsmartlife"
+      ],
+      [
+        "Allytech",
+        "allytech"
+      ],
+      [
+        "Amar",
+        "amar"
+      ],
+      [
+        "Amasing",
+        "amasing"
+      ],
+      [
+        "AngLink",
+        "Anglink"
+      ],
+      [
+        "Angeloken",
+        "angeloken"
+      ],
+      [
+        "AnoKe",
+        "anoke"
+      ],
+      [
+        "Anrain",
+        "anrain"
+      ],
+      [
+        "Anttrades",
+        "anttrades"
+      ],
+      [
+        "Archgon",
+        "archgon"
+      ],
+      [
+        "Aurosports",
+        "aurosports"
+      ],
+      [
+        "AutumnFall",
+        "autumnfall"
+      ],
+      [
+        "AwesomeToner",
+        "Awesometoner"
+      ],
+      [
+        "Axiom",
+        "axiom"
+      ],
+      [
+        "BBInfinite",
+        "BBinfinite"
+      ],
+      [
+        "BBeegod",
+        "Bbeegod"
+      ],
+      [
+        "BEBEBAO",
+        "bebebao"
+      ],
+      [
+        "BEPACK",
+        "Bepack"
+      ],
+      [
+        "BEST",
+        "Best"
+      ],
+      [
+        "BEST DEAL",
+        "Best Deal"
+      ],
+      [
+        "BEST4ONE",
+        "best4one"
+      ],
+      [
+        "BESTTRENDY",
+        "BestTrendy"
+      ],
+      [
+        "BITDEFENDER",
+        "Bitdefender"
+      ],
+      [
+        "BLACK DIAMOND",
+        "Black Diamond"
+      ],
+      [
+        "BLOODY",
+        "Bloody"
+      ],
+      [
+        "BLUE PANDA",
+        "Blue Panda"
+      ],
+      [
+        "BLUREX",
+        "Blurex",
+        "blurex"
+      ],
+      [
+        "BNBKFD",
+        "bnbkfd"
+      ],
+      [
+        "BOBLOV",
+        "Boblov"
+      ],
+      [
+        "BOE",
+        "Boe"
+      ],
+      [
+        "BONAMART",
+        "Bonamart"
+      ],
+      [
+        "BOPAI",
+        "BOPai"
+      ],
+      [
+        "BORIYUAN",
+        "Boriyuan"
+      ],
+      [
+        "BOSE",
+        "Bose"
+      ],
+      [
+        "BOWER",
+        "Bower"
+      ],
+      [
+        "BOYISEN",
+        "Boyisen"
+      ],
+      [
+        "BRADY",
+        "Brady"
+      ],
+      [
+        "BRIDGECOM SYSTEMS",
+        "BridgeCom Systems"
+      ],
+      [
+        "BROOKSTONE",
+        "Brookstone"
+      ],
+      [
+        "BTC",
+        "btc"
+      ],
+      [
+        "BUFFALO",
+        "Buffalo"
+      ],
+      [
+        "BUSlink",
+        "Buslink"
+      ],
+      [
+        "Banshee",
+        "banshee"
+      ],
+      [
+        "BargainCell",
+        "Bargaincell"
+      ],
+      [
+        "BattPit™",
+        "battpit™"
+      ],
+      [
+        "Besiva",
+        "besiva"
+      ],
+      [
+        "BestPriceCenter",
+        "Bestpricecenter"
+      ],
+      [
+        "Bestfavor",
+        "bestfavor"
+      ],
+      [
+        "Bestkong",
+        "bestkong"
+      ],
+      [
+        "BigFish",
+        "Bigfish"
+      ],
+      [
+        "BingoBuy",
+        "bingobuy"
+      ],
+      [
+        "Birgus",
+        "birgus"
+      ],
+      [
+        "Blackweb",
+        "blackweb"
+      ],
+      [
+        "BlueFinger",
+        "Bluefinger"
+      ],
+      [
+        "BlueLark",
+        "Bluelark"
+      ],
+      [
+        "BlueMall",
+        "Bluemall"
+      ],
+      [
+        "BlueTech",
+        "Bluetech"
+      ],
+      [
+        "Blurams",
+        "blurams"
+      ],
+      [
+        "BoomBa",
+        "Boomba"
+      ],
+      [
+        "BoxWave",
+        "Boxwave"
+      ],
+      [
+        "BrainyDeal",
+        "Brainydeal"
+      ],
+      [
+        "Brave troops",
+        "brave troops"
+      ],
+      [
+        "Bright Stone",
+        "bright stone"
+      ],
+      [
+        "Buyonline",
+        "buyonline"
+      ],
+      [
+        "C-Zone",
+        "C-zone"
+      ],
+      [
+        "CAI",
+        "Cai"
+      ],
+      [
+        "CAR ROVER",
+        "Car Rover"
+      ],
+      [
+        "CASE STAR",
+        "Case Star",
+        "case star"
+      ],
+      [
+        "CASEKEY",
+        "Casekey"
+      ],
+      [
+        "CBoner",
+        "Cboner"
+      ],
+      [
+        "CCT",
+        "Cct"
+      ],
+      [
+        "CELLBELL",
+        "Cellbell"
+      ],
+      [
+        "CENSI",
+        "Censi"
+      ],
+      [
+        "CESS",
+        "cess"
+      ],
+      [
+        "CHENDUOMI",
+        "Chenduomi"
+      ],
+      [
+        "CHERRY",
+        "Cherry"
+      ],
+      [
+        "CHILL pILL auDIO",
+        "Chill Pill Audio"
+      ],
+      [
+        "CHINA",
+        "China"
+      ],
+      [
+        "CHIULOIAN",
+        "chiuloian"
+      ],
+      [
+        "CHUANGDI",
+        "Chuangdi"
+      ],
+      [
+        "CISOO",
+        "CiSoo"
+      ],
+      [
+        "CLANMOU",
+        "Clanmou"
+      ],
+      [
+        "CLEAR",
+        "Clear"
+      ],
+      [
+        "COACH",
+        "Coach"
+      ],
+      [
+        "CODi",
+        "Codi"
+      ],
+      [
+        "COLEMAN",
+        "Coleman"
+      ],
+      [
+        "COMPLY",
+        "Comply"
+      ],
+      [
+        "COMSUN",
+        "Comsun"
+      ],
+      [
+        "COMTREND",
+        "Comtrend"
+      ],
+      [
+        "COOLMAX",
+        "Coolmax"
+      ],
+      [
+        "COOPERS",
+        "Coopers"
+      ],
+      [
+        "COPARTNER",
+        "Copartner"
+      ],
+      [
+        "CORNMI",
+        "Cornmi"
+      ],
+      [
+        "COROS",
+        "Coros"
+      ],
+      [
+        "COSMOS",
+        "Cosmos"
+      ],
+      [
+        "COSTIN",
+        "Costin"
+      ],
+      [
+        "COUGAR",
+        "Cougar"
+      ],
+      [
+        "CRAIG",
+        "Craig"
+      ],
+      [
+        "CRUCIAL TECHNOLOGY",
+        "Crucial Technology"
+      ],
+      [
+        "CS Battery",
+        "cs battery"
+      ],
+      [
+        "CURTIS",
+        "Curtis"
+      ],
+      [
+        "CUSTOM",
+        "Custom"
+      ],
+      [
+        "CYPHER.V",
+        "Cypher.V"
+      ],
+      [
+        "Cable",
+        "cable"
+      ],
+      [
+        "CablesFrLess (TM)",
+        "Cablesfrless (Tm)"
+      ],
+      [
+        "Calvas",
+        "calvas"
+      ],
+      [
+        "Canvaslife",
+        "canvaslife"
+      ],
+      [
+        "CarXtc",
+        "Carxtc"
+      ],
+      [
+        "Caseable",
+        "caseable"
+      ],
+      [
+        "Caseling",
+        "caseling"
+      ],
+      [
+        "Changeshopping",
+        "changeshopping"
+      ],
+      [
+        "Chenyang",
+        "chenyang"
+      ],
+      [
+        "Cherrry",
+        "cherrry"
+      ],
+      [
+        "Chromo Inc",
+        "chromo inc"
+      ],
+      [
+        "CiNgK",
+        "Cingk"
+      ],
+      [
+        "Cimo",
+        "cimo"
+      ],
+      [
+        "Climberer",
+        "climberer"
+      ],
+      [
+        "CoCube+",
+        "Cocube+"
+      ],
+      [
+        "ColorCase",
+        "Colorcase"
+      ],
+      [
+        "ColorfulCase",
+        "colorfulcase"
+      ],
+      [
+        "CompuLab",
+        "Compulab"
+      ],
+      [
+        "Coms",
+        "coms"
+      ],
+      [
+        "Coodio",
+        "coodio"
+      ],
+      [
+        "CoolBELL",
+        "CoolBell"
+      ],
+      [
+        "Coolgear",
+        "coolgear"
+      ],
+      [
+        "Cotsoco",
+        "cotsoco"
+      ],
+      [
+        "Crazy Cart",
+        "Crazy cart"
+      ],
+      [
+        "CrazyOnDigital",
+        "Crazyondigital",
+        "crazyondigital"
+      ],
+      [
+        "Custom House Trading",
+        "Custom house trading"
+      ],
+      [
+        "DAHUA",
+        "Dahua"
+      ],
+      [
+        "DAISEN",
+        "daisen"
+      ],
+      [
+        "DAVIS & SANFORD",
+        "Davis & Sanford"
+      ],
+      [
+        "DB ROTH",
+        "db roth"
+      ],
+      [
+        "DBillionDa",
+        "DbillionDa"
+      ],
+      [
+        "DCO",
+        "dco"
+      ],
+      [
+        "DEEGO",
+        "Deego"
+      ],
+      [
+        "DELL",
+        "Dell"
+      ],
+      [
+        "DEMACIA",
+        "Demacia"
+      ],
+      [
+        "DENPETEC",
+        "Denpetec"
+      ],
+      [
+        "DERUI",
+        "Derui"
+      ],
+      [
+        "DIABLOTEK",
+        "Diablotek"
+      ],
+      [
+        "DIAOTEC",
+        "Diaotec"
+      ],
+      [
+        "DICAPAC",
+        "DiCAPac",
+        "Dicapac"
+      ],
+      [
+        "DICE",
+        "dICE"
+      ]
+    ]
+  },
+  "outputs": {
+    "nodes_attribute.csv": {
+      "rows": 36187,
+      "bytes": 2335514,
+      "sha256": "ff705ff2d45d77341f5738a0fffbaa1bcd5c91d17f1105212fc7783a9cef91c0"
+    },
+    "nodes_brand.csv": {
+      "rows": 49663,
+      "bytes": 465839,
+      "sha256": "dbca78a62a4987eebd6b07de9812645d9c4e9883ddcadc193e32a009443c1850"
+    },
+    "nodes_category.csv": {
+      "rows": 38,
+      "bytes": 602,
+      "sha256": "fa9258a9375c6f526f7027e04ba3c13abaea9881cb8c4b5a8bdd0a15c77e156f"
+    },
+    "nodes_product.csv": {
+      "rows": 265307,
+      "bytes": 595784427,
+      "sha256": "83c1cee75d8ec7adecbba311693a3c60a96a2bc609df78bd3706222de891a2c7"
+    },
+    "nodes_review.csv": {
+      "rows": 3382248,
+      "bytes": 1904163949,
+      "sha256": "d38da9f859ee30906347e664179ff058df743ee4450f5d9e651625889ca45698"
+    },
+    "nodes_taxon.csv": {
+      "rows": 1183,
+      "bytes": 205816,
+      "sha256": "df30872109552f17a4f164ff1a77524536a93149316620be5993bade0f887f95"
+    },
+    "nodes_user.csv": {
+      "rows": 2594661,
+      "bytes": 75245328,
+      "sha256": "4650ef5b043a5556466823b0cc99295b3ff3a5b911cf93333df941ccb0f0e1dd"
+    },
+    "rels_about_product.csv": {
+      "rows": 3382248,
+      "bytes": 148818953,
+      "sha256": "8cfd85af88527dc4752364b0ddc7fde353ed48cd51099b22adc14a41cbb79ae5"
+    },
+    "rels_belongs_to_category.csv": {
+      "rows": 261664,
+      "bytes": 7035945,
+      "sha256": "8707aadaca602da1267d413ff8f9bbd1077a78b185b0b2a341f12450d2cd0011"
+    },
+    "rels_broader.csv": {
+      "rows": 1180,
+      "bytes": 157465,
+      "sha256": "f7524dbac0cfba01540a5a0ddc57cb06521b608a40ad68874db0ef831b8c6d9f"
+    },
+    "rels_has_attribute.csv": {
+      "rows": 190043,
+      "bytes": 9882280,
+      "sha256": "6d11eee3e2105207a8a6fb53b03b621bf2ea15bd46d8f4dd495ebe202629ce0e"
+    },
+    "rels_has_brand.csv": {
+      "rows": 264274,
+      "bytes": 5219196,
+      "sha256": "a41e68bdfabe8848b17d4c2494478698984c66e035163136e81a581ff69ea816"
+    },
+    "rels_in_taxon.csv": {
+      "rows": 248053,
+      "bytes": 23815238,
+      "sha256": "b033aed5ed676346aed7cf13bec7bc87847cef9b0a8e96ad0c5fdefcc54b7c15"
+    },
+    "rels_wrote.csv": {
+      "rows": 3382248,
+      "bytes": 209703468,
+      "sha256": "81a75e9650a1893dfb2cc60450c06d989e58a4d34eba4119fd8de6a83c1f117d"
+    }
+  },
+  "timing_s": {
+    "meta": 39.519,
+    "write": 14.114,
+    "pass1_reviews": 389.85,
+    "train_mark": 17.009,
+    "pass2_reviews": 131.946
+  }
+}

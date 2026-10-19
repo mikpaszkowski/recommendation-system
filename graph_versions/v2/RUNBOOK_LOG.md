@@ -46,3 +46,10 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
   2,717,863,893 bytes, SHA-256 `51db81286ef04f4a780a37833ed5d6d47d1ecc9737ea16ca9043c20af6c0026f`
   (re-checked independently with `shasum`). Record: `graph_versions/v1/DUMP.json`. Optional restore test not run.
 - The v1 volume `knowledge-graph_neo4j_data` was mounted only by the dump container and not modified.
+
+## R-6 transform (2026-10-20)
+
+- `build_graph_v2.py --sample-mod 20 --require-clean` and `build_graph_v2.py --require-clean` at clean commit `75c5c0a`.
+- Pilot: 13,381 products, 171,212 reviews, 54,668 to embed, 790 taxon nodes; 152 MB CSV; 6 min, peak RSS 1.1 GB.
+- Full: 265,307 products, 3,382,248 reviews, 1,081,137 to embed, 2,594,661 users, 49,663 brands, 38 categories,
+  36,187 attributes, 1,183 taxon nodes; 2.9 GB CSV; 10.5 min, peak RSS 4.2 GB. Counts equal `build_params.json`.

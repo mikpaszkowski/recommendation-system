@@ -1,0 +1,456 @@
+{
+  "schema_version": 1,
+  "graph_version": "v2",
+  "created_at": "2026-10-19T22:36:01Z",
+  "code": {
+    "git_commit": "75c5c0acb850ef2a3ff448344b5bc7f5ab9e1bc7",
+    "git_dirty": false,
+    "script": "scripts/graph_ingestion/build_graph_v2.py"
+  },
+  "sources": {
+    "meta": {
+      "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/meta_Electronics.jsonl",
+      "sha256": "5eb4dabd539586c49654297319ef178b62a2fe8e43108376feda125f04455d93",
+      "verified_against": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/SHA256SUMS",
+      "lines": 1610012
+    },
+    "reviews": {
+      "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/Electronics.jsonl",
+      "sha256": "bf11cf9c94c23ead7d3ffb174d18231fad8fcd76e72ad167f538a5599a38de8e",
+      "verified_against": "/Users/mikolajpaszkowski/recommendation-system/datasets/raw/SHA256SUMS",
+      "lines": 43886944
+    },
+    "splits": {
+      "train": {
+        "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/Electronics.train.csv",
+        "sha256": "b7415672b510e4a6ada7fe642e5c468b2e06818aca77745671c7d948d48c8625",
+        "rows": 12191484
+      },
+      "valid": {
+        "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/Electronics.valid.csv",
+        "sha256": "c7ae96f03c670f8b7ca7b38350502bc20be3d6c868de93d112be77c5c8c7b3f7",
+        "rows": 1641026
+      },
+      "test": {
+        "path": "/Users/mikolajpaszkowski/recommendation-system/datasets/Electronics.test.csv",
+        "sha256": "73ceadbc1b6a99abb18f8e91f5543c4478e4215380a04c9bbec888fbccc5ca24",
+        "rows": 1641026
+      },
+      "combined_sha256": "27835771f8c3000802703ae90ba902b4f50964f5ef23a55679215a1603de9005"
+    },
+    "catalogue": {
+      "path": "/Users/mikolajpaszkowski/recommendation-system/graph_versions/v2/catalogue_asins.txt.gz",
+      "sha256_content": "76d882abd470978c97e060ab6b640315b1f3b3d5fa827c2832b307568c34f528",
+      "count": 265307,
+      "sampled_count": 13381
+    }
+  },
+  "parameters": {
+    "review_cap": 20,
+    "rank_key": [
+      "helpful_vote DESC",
+      "verified_purchase DESC",
+      "timestamp DESC",
+      "review_id ASC"
+    ],
+    "duplicate_rule": "same review_id: better rank_key, then lower byte offset",
+    "review_id": "md5(f'{user_id}-{asin}-{timestamp}')",
+    "exclusion_rule": "(user_id, parent_asin) in Electronics.valid.csv ∪ Electronics.test.csv",
+    "embed_top_n": 5,
+    "embed_rule": "first 5 non-blank reviews in cap_rank order",
+    "attribute_keys": [
+      "Material",
+      "Color",
+      "Style",
+      "Size"
+    ],
+    "brand_rule": "store if non-blank else details['Brand'] if non-blank; exact name",
+    "taxon_separator": " > ",
+    "array_delimiter": "U+001F",
+    "text_normalization": [
+      "U+0000->space",
+      "U+001F->space",
+      "\\r\\n|\\r->\\n",
+      "blank->null"
+    ],
+    "sample_mod": 20
+  },
+  "columns": {
+    "meta": {
+      "read": [
+        "parent_asin",
+        "title",
+        "price",
+        "average_rating",
+        "rating_number",
+        "description",
+        "features",
+        "details",
+        "categories",
+        "main_category",
+        "store"
+      ],
+      "dropped": [
+        "images",
+        "videos",
+        "bought_together",
+        "subtitle",
+        "author"
+      ]
+    },
+    "reviews": {
+      "read": [
+        "user_id",
+        "parent_asin",
+        "asin",
+        "timestamp",
+        "helpful_vote",
+        "verified_purchase",
+        "rating",
+        "title",
+        "text"
+      ],
+      "dropped": [
+        "images"
+      ]
+    }
+  },
+  "counts": {
+    "meta": {
+      "lines": 1610012,
+      "json_errors": 0,
+      "not_in_catalogue": 1596631,
+      "duplicate_parent_asin": 0,
+      "products_written": 13381,
+      "catalogue_missing_in_meta": 0,
+      "title_empty": 1,
+      "description_empty": 5672,
+      "features_empty": 2564,
+      "content_empty": 0,
+      "features_only_content": 0,
+      "categories_empty": 842,
+      "main_category_empty": 166,
+      "price_null": 7740,
+      "price_unparseable": 0,
+      "price_non_positive": 0,
+      "brand_missing": 50,
+      "attribute_non_string": 0
+    },
+    "reviews": {
+      "lines": 43886944,
+      "json_errors": 0,
+      "missing_ids": 0,
+      "not_in_catalogue": 42168484,
+      "product_missing": 0,
+      "valid_test_pair": 133303,
+      "duplicate_review_id": 3126,
+      "beyond_cap": 1410819,
+      "kept": 171212,
+      "kept_in_train_split": 63877,
+      "kept_no_split": 107335,
+      "missing_timestamp": 0,
+      "empty_text": 0,
+      "embed_selected": 54668
+    },
+    "nodes": {
+      "ParentProduct": 13381,
+      "Review": 171212,
+      "User": 165732,
+      "Brand": 6928,
+      "Category": 31,
+      "Attribute": 2815,
+      "Taxon": 790
+    },
+    "relationships": {
+      "HAS_BRAND": 13331,
+      "BELONGS_TO_CATEGORY": 13215,
+      "HAS_ATTRIBUTE": 9489,
+      "IN_TAXON": 12539,
+      "BROADER": 787,
+      "ABOUT_PRODUCT": 171212,
+      "WROTE": 171212
+    },
+    "taxonomy": {
+      "roots": 3,
+      "max_depth": 7,
+      "inner_node_assignments": 1126,
+      "products_without_taxon_by_main_category": {
+        "All Electronics": 388,
+        "Amazon Devices": 62,
+        "Amazon Fire TV": 1,
+        "Apple Products": 21,
+        "Camera & Photo": 41,
+        "Car Electronics": 14,
+        "Computers": 248,
+        "GPS & Navigation": 5,
+        "Home Audio & Theater": 57,
+        "Portable Audio & Accessories": 5
+      }
+    },
+    "brand_case_duplicate_groups": 43,
+    "sanitized": {
+      "nul": 0,
+      "unit_separator": 0,
+      "carriage_return": 0,
+      "blank_to_null": 164,
+      "empty_array_items": 0
+    }
+  },
+  "duplicates": {
+    "parent_asin_conflicting": [],
+    "brand_case_groups": [
+      [
+        "ANTOP ANTENNA",
+        "ANTOP Antenna"
+      ],
+      [
+        "Acer",
+        "acer"
+      ],
+      [
+        "COMPLY",
+        "Comply"
+      ],
+      [
+        "COSMOS",
+        "Cosmos"
+      ],
+      [
+        "DURACELL",
+        "Duracell"
+      ],
+      [
+        "ELK",
+        "Elk"
+      ],
+      [
+        "FOSA",
+        "fosa"
+      ],
+      [
+        "GOJA",
+        "Goja"
+      ],
+      [
+        "HP",
+        "hp"
+      ],
+      [
+        "INTOVA",
+        "Intova"
+      ],
+      [
+        "KICKER",
+        "Kicker"
+      ],
+      [
+        "Kircuit",
+        "kircuit"
+      ],
+      [
+        "LFEEY",
+        "Lfeey"
+      ],
+      [
+        "MIGER",
+        "Miger"
+      ],
+      [
+        "MORNEX",
+        "Mornex"
+      ],
+      [
+        "MOSISO",
+        "Mosiso"
+      ],
+      [
+        "MOTONG",
+        "motong"
+      ],
+      [
+        "MSI",
+        "msi"
+      ],
+      [
+        "Magic-T",
+        "magic-t"
+      ],
+      [
+        "NewShine",
+        "Newshine"
+      ],
+      [
+        "OLYMPUS",
+        "Olympus"
+      ],
+      [
+        "PATRIOT",
+        "Patriot"
+      ],
+      [
+        "PHILIPS",
+        "Philips"
+      ],
+      [
+        "PIONEER",
+        "Pioneer"
+      ],
+      [
+        "RedTaro",
+        "Redtaro"
+      ],
+      [
+        "SAMSUNG",
+        "Samsung"
+      ],
+      [
+        "SHARPER IMAGE",
+        "Sharper Image"
+      ],
+      [
+        "SWIFT",
+        "Swift"
+      ],
+      [
+        "TAMRON",
+        "Tamron"
+      ],
+      [
+        "TOOGOO",
+        "Toogoo"
+      ],
+      [
+        "TRADERPLUS",
+        "traderplus"
+      ],
+      [
+        "TRAM",
+        "Tram"
+      ],
+      [
+        "TRANSCEND",
+        "Transcend"
+      ],
+      [
+        "Tiffen",
+        "tiffen"
+      ],
+      [
+        "UHURU",
+        "Uhuru",
+        "uhuru"
+      ],
+      [
+        "UltraPro",
+        "Ultrapro"
+      ],
+      [
+        "UpStart Battery",
+        "Upstart Battery"
+      ],
+      [
+        "VENTION",
+        "Vention"
+      ],
+      [
+        "VINABTY",
+        "Vinabty"
+      ],
+      [
+        "ZOTOYI",
+        "Zotoyi"
+      ],
+      [
+        "ZOVER",
+        "Zover"
+      ],
+      [
+        "ZhiZhu",
+        "Zhizhu"
+      ],
+      [
+        "iGadgitz",
+        "igadgitz"
+      ]
+    ]
+  },
+  "outputs": {
+    "nodes_attribute.csv": {
+      "rows": 2815,
+      "bytes": 178558,
+      "sha256": "720f75a2a63811efcbe07a1ee07c32c87dcd6bf3bbfa8b92506bb08c40b5a021"
+    },
+    "nodes_brand.csv": {
+      "rows": 6928,
+      "bytes": 62311,
+      "sha256": "a8282a1df0f3d109f50c3d2530067b956b576d9738213b953a2b5e49284fa7ab"
+    },
+    "nodes_category.csv": {
+      "rows": 31,
+      "bytes": 507,
+      "sha256": "66b16ee29a903a8412da0e7061c1165abcb91d1c84a077c38311b5e7b33bb6bf"
+    },
+    "nodes_product.csv": {
+      "rows": 13381,
+      "bytes": 29920104,
+      "sha256": "e8f4219693843bddd32f13c6c29c8b1504b490186da36511d86787c885bba46f"
+    },
+    "nodes_review.csv": {
+      "rows": 171212,
+      "bytes": 95167355,
+      "sha256": "b0313d5fa5a582c86f050c43797959c8f0e4411aaa80bbb436cddc70b9d5b0f5"
+    },
+    "nodes_taxon.csv": {
+      "rows": 790,
+      "bytes": 144127,
+      "sha256": "bb098be2fcd855e74b1df97e58ffe7d0e791c5e08a24f5072bbc85039a3d19bd"
+    },
+    "nodes_user.csv": {
+      "rows": 165732,
+      "bytes": 4806325,
+      "sha256": "cbf08cde64009daf3d62ebf9985196e9739c21624957e74a488814b81dfe972e"
+    },
+    "rels_about_product.csv": {
+      "rows": 171212,
+      "bytes": 7533369,
+      "sha256": "ef7d356f8ef4df491d04e0f5d698fc54e351f528e97e548b4a248b5bee5e4969"
+    },
+    "rels_belongs_to_category.csv": {
+      "rows": 13215,
+      "bytes": 356025,
+      "sha256": "df0cff3fd0136afd5bbbee36db5cd1b2c9eb527027790118754d2e8baa71cb4a"
+    },
+    "rels_broader.csv": {
+      "rows": 787,
+      "bytes": 114109,
+      "sha256": "3026e8f7676bd75c2cf4b3be55a04585fed8f27636b56ddd1a125442fa87990e"
+    },
+    "rels_has_attribute.csv": {
+      "rows": 9489,
+      "bytes": 493472,
+      "sha256": "ed5043525de194f237f4f302b4927e1e2f422a8167241e29fc5c575ca205ae85"
+    },
+    "rels_has_brand.csv": {
+      "rows": 13331,
+      "bytes": 262680,
+      "sha256": "3412f7baec306ebe11da9fa835306a13540f75c71655b7e7483bfde3768966a9"
+    },
+    "rels_in_taxon.csv": {
+      "rows": 12539,
+      "bytes": 1207205,
+      "sha256": "de84ee3350d30fd73d8a84b3f806f301bdfe8d4271e621ad5e4b74bf5c85b9f7"
+    },
+    "rels_wrote.csv": {
+      "rows": 171212,
+      "bytes": 10615418,
+      "sha256": "1d98545cdeb93b4cdbc4ad4f8f2048f887ecf3faf0eecf04cab7d3f4b1e70f8f"
+    }
+  },
+  "timing_s": {
+    "meta": 24.608,
+    "write": 0.702,
+    "pass1_reviews": 254.929,
+    "train_mark": 15.026,
+    "pass2_reviews": 20.9
+  }
+}
