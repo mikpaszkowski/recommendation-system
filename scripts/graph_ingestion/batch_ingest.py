@@ -1,3 +1,12 @@
+"""
+LEGACY v1 ingestion pipeline: do not use it to build the Knowledge Graph.
+
+Loads `datasets/processed_data/processed_{metadata,reviews}.csv` into Neo4j with MERGE. These CSVs
+were produced by `AmazonDataProcessor` with independent sampling, which created the v1 ghost
+products. The KG is now built by `scripts/graph_ingestion/build_graph_v2.py` (graph v2, Vision
+2026-10-19-018). Since FR-031 the review step can no longer create a ParentProduct: a review whose
+product does not exist is skipped and counted as unmatched.
+"""
 import argparse
 import logging
 import os
@@ -62,6 +71,40 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 METADATA_CSV = ROOT_DIR / "datasets" / "processed_data" / "processed_metadata.csv"
 REVIEWS_CSV = ROOT_DIR / "datasets" / "processed_data" / "processed_reviews.csv"
 CHECKPOINT_FILE = Path(__file__).resolve().parent / ".ingest_checkpoint.json"
+
+# Review step (FR-031): the product is matched, never merged, so reviews cannot create ghost products.
+REVIEW_QUERY = """
+UNWIND $batch AS row
+OPTIONAL MATCH (p:ParentProduct {parent_asin: coalesce(row.parent_asin, row.asin)})
+WITH row, p WHERE p IS NOT NULL
+MERGE (r:Review {review_id: row.review_id})
+SET r.review_title = row.title,
+    r.review_body = row.text,
+    r.rating = toFloat(row.rating),
+    r.verified = row.verified_purchase
+MERGE (r)-[:ABOUT_PRODUCT]->(p)
+
+// Connect to User
+WITH r, row
+CALL {
+    WITH r, row
+    WITH r, row WHERE row.user_id IS NOT NULL
+    MERGE (u:User {user_id: row.user_id})
+    MERGE (u)-[:WROTE]->(r)
+}
+RETURN count(*) AS written
+"""
+
+
+def ingest_review_batch(session, records) -> int:
+    """Writes one review batch with REVIEW_QUERY; returns the number of rows whose product does not exist (logged)."""
+    record = session.run(REVIEW_QUERY, batch=records).single()
+    written = int(record["written"]) if record is not None else 0
+    unmatched = len(records) - written
+    if unmatched:
+        LOGGER.warning(f"{unmatched} of {len(records)} reviews in this batch reference a missing ParentProduct; skipped.")
+    return unmatched
+
 
 def load_checkpoint():
     if CHECKPOINT_FILE.exists():
@@ -178,6 +221,7 @@ def run_ingest(limit, batch_size):
         rev_chunks = pd.read_csv(REVIEWS_CSV, chunksize=batch_size, skiprows=range(1, rev_start + 1))
         
         current_rev_row = rev_start
+        total_unmatched = 0
         for chunk in rev_chunks:
             if limit > 0 and current_rev_row >= limit:
                 break
@@ -194,40 +238,14 @@ def run_ingest(limit, batch_size):
                 raw_str = f"{r.get('user_id', '')}-{r.get('asin', '')}-{r.get('sort_timestamp', '')}"
                 r["review_id"] = hashlib.md5(raw_str.encode("utf-8")).hexdigest()
                 
-            rev_query = """
-            UNWIND $batch AS row
-            MERGE (r:Review {review_id: row.review_id})
-            SET r.review_title = row.title,
-                r.review_body = row.text,
-                r.rating = toFloat(row.rating),
-                r.verified = row.verified_purchase
-            
-            // Connect to User
-            WITH r, row
-            CALL {
-                WITH r, row
-                WITH r, row WHERE row.user_id IS NOT NULL
-                MERGE (u:User {user_id: row.user_id})
-                MERGE (u)-[:WROTE]->(r)
-            }
-            
-            // Connect to ParentProduct
-            WITH r, row
-            CALL {
-                WITH r, row
-                WITH r, row WHERE coalesce(row.parent_asin, row.asin) IS NOT NULL
-                MERGE (p:ParentProduct {parent_asin: coalesce(row.parent_asin, row.asin)})
-                MERGE (r)-[:ABOUT_PRODUCT]->(p)
-            }
-            """
-            
             with connector.session() as session:
-                session.run(rev_query, batch=records)
+                total_unmatched += ingest_review_batch(session, records)
             
             current_rev_row += len(chunk)
             checkpoint["reviews_index"] = current_rev_row
             save_checkpoint(checkpoint)
             LOGGER.info(f"Checkpoint saved: reviews_index = {current_rev_row}")
+        LOGGER.info(f"Review ingestion finished: {total_unmatched} reviews skipped because their ParentProduct does not exist.")
     else:
         LOGGER.warning(f"Reviews file not found at {REVIEWS_CSV}")
         

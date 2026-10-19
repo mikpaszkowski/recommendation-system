@@ -118,8 +118,19 @@ class TestArchive:
         assert not (target / "execution_trace.log").exists()
         index = json.loads((arch / "index.json").read_text(encoding="utf-8"))
         assert index == [{"run_id": "eval_A", "citable": True, "legacy": False, "timestamp": "2026-10-18T12:00:00",
-                          "git_commit": "c0ffee", "benchmark_sha256": "b" * 64, "note": None}]
+                          "git_commit": "c0ffee", "benchmark_sha256": "b" * 64, "graph_version": None, "note": None}]
         assert _snapshot(run_dir) == before
+
+    def test_index_records_graph_version(self, tmp_path):
+        """Graph v2 FR-030: the index entry carries provenance.graph_snapshot.graph_version.version."""
+        evals, arch = tmp_path / "evaluations", tmp_path / "evaluations_archive"
+        run_dir = _make_run(evals, "eval_V2", [_record("q1")])
+        manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+        manifest["provenance"]["graph_snapshot"] = {"graph_version": {"version": "v2", "validation_passed": True}}
+        (run_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        assert archive.archive_run("eval_V2", evals, arch) == 0
+        index = json.loads((arch / "index.json").read_text(encoding="utf-8"))
+        assert index[0]["graph_version"] == "v2"
 
     def test_refusals(self, tmp_path):
         evals, arch = tmp_path / "evaluations", tmp_path / "evaluations_archive"

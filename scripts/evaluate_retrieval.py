@@ -1051,6 +1051,7 @@ def run_retrieval_evaluation(
         )
         citable, citable_reasons, citable_warnings = evaluate_citable(
             mode, sample_size, git_provenance, benchmark_provenance, runtime_provenance.get("llm") if mode == "live" else None,
+            graph=runtime_provenance.get("graph_snapshot"),
         )
         manifest["citable"] = citable
         manifest["citable_reasons"] = citable_reasons

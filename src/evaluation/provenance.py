@@ -1,5 +1,8 @@
 """
 Run provenance and the citable-run policy (R2a, FR-029 … FR-031; Technical Specification §5.1.5).
+Graph v2 (Technical Specification Graph Rebuild FR-028, FR-029) adds the (:GraphVersion) node and
+two data-quality counts to the graph snapshot, and makes live runs on a graph without a validated
+GraphVersion non-citable.
 
 Collects git, benchmark, LLM, Neo4j, graph-snapshot and Python facts for manifest["provenance"]
 and decides `manifest["citable"]`. Git calls go through an injectable runner (5 s timeout) so the
@@ -140,6 +143,24 @@ def collect_benchmark_provenance(
     }
 
 
+GRAPH_VERSION_QUERY = "MATCH (g:GraphVersion) RETURN properties(g) AS props"
+PRODUCTS_UNTITLED_QUERY = "MATCH (p:ParentProduct) WHERE p.title IS NULL OR trim(p.title) = '' RETURN count(p) AS n"
+REVIEWS_EMBEDDED_QUERY = "MATCH (r:Review) WHERE r.embedding IS NOT NULL RETURN count(r) AS n"
+
+
+def _graph_version(session: Any) -> Optional[Dict[str, Any]]:
+    """properties(g) of the single GraphVersion node; None (logged) for 0 or more than 1 nodes, or on failure."""
+    try:
+        records = list(session.run(GRAPH_VERSION_QUERY))
+        if len(records) != 1:
+            logger.warning(f"[Provenance] Expected exactly one GraphVersion node, found {len(records)}; graph_version = None")
+            return None
+        return dict(records[0]["props"])
+    except Exception as e:
+        logger.warning(f"[Provenance] GraphVersion lookup failed: {e}")
+        return None
+
+
 def _scalar(session: Any, cypher: str) -> Optional[int]:
     """Single count from a read query; None (logged) on failure."""
     try:
@@ -153,7 +174,8 @@ def _scalar(session: Any, cypher: str) -> Optional[int]:
 def collect_runtime_provenance(orchestrator: Any, popular_count: Optional[int]) -> Dict[str, Any]:
     """
     llm {alias, resolved_model_ids}, neo4j {name, version, edition} via dbms.components(),
-    graph_snapshot {products, categories, reviews, review_embedded_products}, python
+    graph_snapshot {products, categories, reviews, review_embedded_products, graph_version,
+    products_untitled, reviews_embedded}, python
     {version, executable} and category_recovery. Each failing query is logged and stored as None.
     Call it after the query loop so the resolved model IDs reported by the API are included.
     """
@@ -165,7 +187,10 @@ def collect_runtime_provenance(orchestrator: Any, popular_count: Optional[int]) 
     }
 
     neo4j: Dict[str, Any] = {"name": None, "version": None, "edition": None}
-    snapshot: Dict[str, Any] = {"products": None, "categories": None, "reviews": None, "review_embedded_products": popular_count}
+    snapshot: Dict[str, Any] = {
+        "products": None, "categories": None, "reviews": None, "review_embedded_products": popular_count,
+        "graph_version": None, "products_untitled": None, "reviews_embedded": None,
+    }
     db = getattr(getattr(orchestrator, "graph_tool", None), "db", None)
     if db is not None:
         try:
@@ -182,6 +207,9 @@ def collect_runtime_provenance(orchestrator: Any, popular_count: Optional[int]) 
                 snapshot["products"] = _scalar(session, "MATCH (p:ParentProduct) RETURN count(p) AS n")
                 snapshot["categories"] = _scalar(session, "MATCH (c:Category) RETURN count(c) AS n")
                 snapshot["reviews"] = _scalar(session, "MATCH (r:Review) RETURN count(r) AS n")
+                snapshot["graph_version"] = _graph_version(session)
+                snapshot["products_untitled"] = _scalar(session, PRODUCTS_UNTITLED_QUERY)
+                snapshot["reviews_embedded"] = _scalar(session, REVIEWS_EMBEDDED_QUERY)
         except Exception as e:
             logger.warning(f"[Provenance] Could not open a Neo4j session for provenance: {e}")
 
@@ -201,11 +229,15 @@ def evaluate_citable(
     git: Mapping[str, Any],
     benchmark: Mapping[str, Any],
     llm: Optional[Mapping[str, Any]] = None,
+    graph: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[bool, List[str], List[str]]:
     """
     Citable policy (FR-030): True only for mode "live", no sample size, a clean src/scripts
     scope and a tracked, unmodified benchmark. Returns (citable, citable_reasons,
     citable_warnings); warnings (model_id_unresolved, multiple_model_ids) never block.
+    Graph v2 (FR-029): in mode "live", `graph` (the runtime graph_snapshot) must carry a
+    GraphVersion with validation_passed true, else graph_version_unknown or
+    graph_version_not_validated is added. Archived runs are never recomputed.
     """
     reasons: List[str] = []
     warnings: List[str] = []
@@ -227,6 +259,13 @@ def evaluate_citable(
         reasons.append("benchmark_status_unavailable")
     elif benchmark.get("git_dirty"):
         reasons.append(f"benchmark_modified: {benchmark.get('path')}")
+
+    if mode == "live":
+        graph_version = graph.get("graph_version") if graph is not None else None
+        if not graph_version:
+            reasons.append("graph_version_unknown")
+        elif graph_version.get("validation_passed") is not True:
+            reasons.append("graph_version_not_validated")
 
     if llm is not None:
         resolved = list(llm.get("resolved_model_ids") or [])

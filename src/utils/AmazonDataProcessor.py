@@ -17,11 +17,28 @@ DATASET_DIR = PROJECT_ROOT / "datasets"
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def _raw_helpful_vote(review: Dict[str, Any]) -> Any:
+    """Amazon Reviews 2023 field `helpful_vote`, falling back to the older `helpful_votes` (FR-035)."""
+    return review.get('helpful_vote', review.get('helpful_votes', 0))
+
+
+def _raw_timestamp(review: Dict[str, Any]) -> Any:
+    """Amazon Reviews 2023 field `timestamp` (unix ms), falling back to `sort_timestamp` (FR-035)."""
+    return review.get('timestamp', review.get('sort_timestamp', 0))
+
+
 class AmazonDataProcessor:
     """
     Processes Amazon review and metadata files for use in recommendation systems.
     Uses DataFrames for efficient data manipulation and filters based on user and product
     review counts.
+
+    Deprecated for Knowledge Graph use: its sampling must not feed the KG, which is built by
+    `scripts/graph_ingestion/build_graph_v2.py` (graph v2). Metadata and reviews are sampled
+    independently, which produces reviews without metadata (the v1 ghost products). The module
+    keeps serving the classic baselines; Meta-Phase C uses the official splits (Vision 2026-10-19-020).
+    Output columns keep their names (`helpful_votes`, `sort_timestamp`) but are filled from the raw
+    fields `helpful_vote` and `timestamp`.
     """
     
     def __init__(
@@ -301,12 +318,12 @@ class AmazonDataProcessor:
                                 'user_id': user_id,
                                 'asin': asin,
                                 'rating': review.get('rating', 0),
-                                'helpful_votes': review.get('helpful_votes', 0),
+                                'helpful_votes': _raw_helpful_vote(review),
                                 'verified_purchase': review.get('verified_purchase', False),
                                 'title': review.get('title', ''),
                                 'text': review.get('text', ''),
                                 'parent_asin': review.get('parent_asin', ''),
-                                'sort_timestamp': review.get('sort_timestamp', 0)
+                                'sort_timestamp': _raw_timestamp(review)
                             }
                             
                             chunk_records.append(processed_review)
@@ -365,7 +382,8 @@ class AmazonDataProcessor:
             # Sort by helpful_votes and verified_purchase for quality
             self.reviews_df = self.reviews_df.sort_values(
                 ['asin', 'helpful_votes', 'verified_purchase'], 
-                ascending=[True, False, False]
+                ascending=[True, False, False],
+                kind="mergesort",  # stable, so ties keep file order (FR-035)
             )
             
             self.reviews_df = self.reviews_df.groupby('asin').head(self.max_reviews_per_item).reset_index(drop=True)
@@ -891,12 +909,12 @@ class AmazonDataProcessor:
                         'user_id': review.get('user_id', ''),
                         'asin': review.get('asin', ''),
                         'rating': review.get('rating', 0),
-                        'helpful_votes': review.get('helpful_votes', 0),
+                        'helpful_votes': _raw_helpful_vote(review),
                         'verified_purchase': review.get('verified_purchase', False),
                         'title': review.get('title', ''),
                         'text': review.get('text', ''),
                         'parent_asin': review.get('parent_asin', ''),
-                        'sort_timestamp': review.get('sort_timestamp', 0)
+                        'sort_timestamp': _raw_timestamp(review)
                     }
                     if processed_review:
                         matching_reviews += 1
@@ -1028,7 +1046,18 @@ def process_and_save_data(
         
     Returns:
         Tuple of (product_texts, product_asins, item_details) ready for HybridContentRecommender
+
+    Note:
+        This sampling must not feed the Knowledge Graph; the KG is built by
+        scripts/graph_ingestion/build_graph_v2.py. With frac < 1.0 metadata and reviews are
+        sampled independently, which produces reviews without metadata.
     """
+    if frac < 1.0:
+        logger.warning(
+            f"process_and_save_data(frac={frac}): metadata and reviews are sampled independently, which "
+            "produces reviews without metadata. Do not load this output into the Knowledge Graph; use "
+            "scripts/graph_ingestion/build_graph_v2.py."
+        )
     processor = AmazonDataProcessor(
         max_reviews_per_item=max_reviews_per_item,
         min_reviews_per_item=min_reviews_per_item,
@@ -1289,7 +1318,7 @@ if __name__ == "__main__":
     metadata_file = DATASET_DIR / "meta_Electronics.jsonl"
     reviews_file = DATASET_DIR / "Electronics.jsonl"
     processed_dir = DATASET_DIR / "processed_data_complete"
-    analyze_metadata_keys(processed_dir / "processed_metadata.csv")1
+    analyze_metadata_keys(processed_dir / "processed_metadata.csv")
     # analyze_processed_data(processed_dir / "processed_metadata.csv", processed_dir / "processed_reviews.csv")
     # analyze_category_distribution(processed_dir / "processed_metadata.csv")
     # processor = AmazonDataProcessor(

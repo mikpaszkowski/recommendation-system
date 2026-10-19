@@ -3,6 +3,8 @@ tests/test_provenance.py
 
 Run provenance, the citable policy and model-ID recording (Technical Specification AC-023, AC-024,
 AC-025). Git is reached only through an injected runner, so no real repository state is asserted.
+Graph v2 (Technical Specification Graph Rebuild AC-031 … AC-033): GraphVersion in the graph snapshot
+and the graph_version_* citable reasons. Live-mode citable checks pass a validated v2 snapshot (G-8).
 """
 from __future__ import annotations
 
@@ -27,6 +29,7 @@ from src.evaluation.provenance import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BENCHMARK = REPO_ROOT / "live_eval_dataset.json"
+V2_GRAPH: Dict = {"graph_version": {"version": "v2", "validation_passed": True}, "products": 10}
 PER_QUERY_KEYS = {
     "query_id", "action", "clarify_reason", "type_explicit", "gold_action", "gold_product_type",
     "parser_category", "pipeline_category", "category_source", "recovery_outcome", "applied_category",
@@ -97,14 +100,14 @@ class TestCitable:
         git, bench = collect_git_provenance(REPO_ROOT, runner=runner), self._bench(runner)
         assert bench["sha256"] == file_sha256(BENCHMARK) and bench["query_count"] == 21
         assert bench["split"] is None and bench["salt"] is None
-        citable, reasons, warnings = evaluate_citable("live", None, git, bench, {"resolved_model_ids": ["gpt-4o-2024-08-06"]})
+        citable, reasons, warnings = evaluate_citable("live", None, git, bench, {"resolved_model_ids": ["gpt-4o-2024-08-06"]}, graph=V2_GRAPH)
         assert (citable, reasons, warnings) == (True, [], [])
         assert offending_paths(git, bench) == []
 
     def test_dirty_source_is_not_citable(self):
         runner, _ = make_runner(status="?? src/evaluation/new.py\n")
         git = collect_git_provenance(REPO_ROOT, runner=runner)
-        citable, reasons, _ = evaluate_citable("live", None, git, self._bench(runner))
+        citable, reasons, _ = evaluate_citable("live", None, git, self._bench(runner), graph=V2_GRAPH)
         assert citable is False
         assert reasons == ["git_dirty: src/evaluation/new.py"]
 
@@ -112,23 +115,38 @@ class TestCitable:
         runner, _ = make_runner(bench_status=" M live_eval_dataset.json\n")
         bench = self._bench(runner)
         assert bench["git_dirty"] is True
-        citable, reasons, _ = evaluate_citable("live", None, collect_git_provenance(REPO_ROOT, runner=runner), bench)
+        citable, reasons, _ = evaluate_citable("live", None, collect_git_provenance(REPO_ROOT, runner=runner), bench, graph=V2_GRAPH)
         assert citable is False and reasons == ["benchmark_modified: live_eval_dataset.json"]
         runner2, _ = make_runner(tracked=False)
-        _, reasons2, _ = evaluate_citable("live", None, collect_git_provenance(REPO_ROOT, runner=runner2), self._bench(runner2))
+        _, reasons2, _ = evaluate_citable("live", None, collect_git_provenance(REPO_ROOT, runner=runner2), self._bench(runner2), graph=V2_GRAPH)
         assert reasons2 == ["benchmark_untracked: live_eval_dataset.json"]
 
     def test_sample_size_and_offline(self):
         runner, _ = make_runner()
         git, bench = collect_git_provenance(REPO_ROOT, runner=runner), self._bench(runner)
-        assert evaluate_citable("live", 5, git, bench)[1] == ["sample_size_set: 5"]
+        assert evaluate_citable("live", 5, git, bench, graph=V2_GRAPH)[1] == ["sample_size_set: 5"]
         assert evaluate_citable("offline", None, git, bench)[1] == ["mode_not_live: offline"]
 
     def test_model_id_warnings(self):
         runner, _ = make_runner()
         git, bench = collect_git_provenance(REPO_ROOT, runner=runner), self._bench(runner)
-        assert evaluate_citable("live", None, git, bench, {"resolved_model_ids": []}) == (True, [], ["model_id_unresolved"])
-        assert evaluate_citable("live", None, git, bench, {"resolved_model_ids": ["a", "b"]})[2] == ["multiple_model_ids"]
+        assert evaluate_citable("live", None, git, bench, {"resolved_model_ids": []}, graph=V2_GRAPH) == (True, [], ["model_id_unresolved"])
+        assert evaluate_citable("live", None, git, bench, {"resolved_model_ids": ["a", "b"]}, graph=V2_GRAPH)[2] == ["multiple_model_ids"]
+
+    def test_graph_version_reasons(self):
+        """AC-032: missing or unvalidated GraphVersion blocks live citability; offline and earlier reasons unchanged."""
+        runner, _ = make_runner()
+        git, bench = collect_git_provenance(REPO_ROOT, runner=runner), self._bench(runner)
+        llm = {"resolved_model_ids": ["gpt-4o-2024-08-06"]}
+        assert evaluate_citable("live", None, git, bench, llm, graph=None) == (False, ["graph_version_unknown"], [])
+        assert evaluate_citable("live", None, git, bench, llm, graph={"graph_version": None})[1] == ["graph_version_unknown"]
+        assert evaluate_citable("live", None, git, bench, llm)[1] == ["graph_version_unknown"]
+        unvalidated = {"graph_version": {"version": "v2", "validation_passed": False}}
+        assert evaluate_citable("live", None, git, bench, llm, graph=unvalidated)[1] == ["graph_version_not_validated"]
+        assert evaluate_citable("live", None, git, bench, llm, graph=V2_GRAPH) == (True, [], [])
+        assert evaluate_citable("offline", None, git, bench, graph=None)[1] == ["mode_not_live: offline"]
+        assert evaluate_citable("live", 5, git, bench, graph=None)[1] == ["sample_size_set: 5", "graph_version_unknown"]
+        assert evaluate_citable("live", None, git, bench, {"resolved_model_ids": []}, graph=None)[2] == ["model_id_unresolved"]
 
 
 def _load_eval_module():
@@ -179,6 +197,7 @@ class TestEvaluationScript:
         assert manifest["provenance"]["benchmark"]["sha256"] == file_sha256(BENCHMARK)
         assert set(manifest["provenance"]) >= {"git_describe", "git_dirty", "git_dirty_paths", "git_diff_sha256",
                                                "untracked_files", "llm", "neo4j", "graph_snapshot", "python"}
+        assert {"graph_version", "products_untitled", "reviews_embedded"} <= set(manifest["provenance"]["graph_snapshot"])
         assert "per_query.jsonl" in manifest["artifacts_generated"]
 
         lines = (run_dir / "per_query.jsonl").read_text(encoding="utf-8").splitlines()
@@ -277,8 +296,95 @@ def test_runtime_provenance():
     runtime = collect_runtime_provenance(orchestrator, 5715)
     assert runtime["llm"] == {"alias": "gpt-4o", "resolved_model_ids": ["gpt-4o-2024-08-06"]}
     assert runtime["neo4j"] == {"name": "Neo4j Kernel", "version": "5.14.0", "edition": "community"}
-    assert runtime["graph_snapshot"] == {"products": 10, "categories": None, "reviews": 3, "review_embedded_products": 5715}
+    assert runtime["graph_snapshot"] == {
+        "products": 10, "categories": None, "reviews": 3, "review_embedded_products": 5715,
+        "graph_version": None, "products_untitled": 10, "reviews_embedded": 3,
+    }
     assert runtime["category_recovery"] is True
     assert set(runtime["python"]) == {"version", "executable"}
     empty = collect_runtime_provenance(None, None)
     assert empty["llm"] == {"alias": None, "resolved_model_ids": []} and empty["neo4j"]["version"] is None
+
+
+class _GraphVersionSession:
+    """Fake session for AC-031: GraphVersion rows are configurable; the count queries can fail."""
+
+    def __init__(self, versions: List[Dict], fail_counts: bool = False):
+        self.versions = versions
+        self.fail_counts = fail_counts
+
+    def run(self, cypher, params=None):
+        if "dbms.components" in cypher:
+            return _Record(name="Neo4j Kernel", version="5.14.0", edition="community")
+        if "GraphVersion" in cypher:
+            return [_Record(props=props) for props in self.versions]
+        if self.fail_counts and ("trim(p.title)" in cypher or "r.embedding" in cypher):
+            raise RuntimeError("count failed")
+        if "trim(p.title)" in cypher:
+            return _Record(n=2)
+        if "r.embedding" in cypher:
+            return _Record(n=7)
+        return _Record(n=1)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _orchestrator_with(session) -> MagicMock:
+    orchestrator = MagicMock()
+    orchestrator.llm_handler.model_name = "gpt-4o"
+    orchestrator.llm_handler.resolved_model_ids = set()
+    orchestrator.graph_tool.db.session.return_value = session
+    orchestrator.category_recovery = True
+    return orchestrator
+
+
+class TestGraphVersionProvenance:
+    """Graph v2 AC-031, AC-033."""
+
+    def test_single_graph_version_and_counts(self):
+        """AC-031: one GraphVersion node is recorded with its properties; products_untitled and reviews_embedded are counted."""
+        props = {"version": "v2", "validation_passed": True, "product_count": 265307}
+        snapshot = collect_runtime_provenance(_orchestrator_with(_GraphVersionSession([props])), None)["graph_snapshot"]
+        assert snapshot["graph_version"] == props
+        assert snapshot["products_untitled"] == 2 and snapshot["reviews_embedded"] == 7
+
+    def test_zero_or_two_graph_versions_give_none(self):
+        """AC-031: 0 or 2 GraphVersion nodes give graph_version None."""
+        for versions in ([], [{"version": "v2"}, {"version": "v3"}]):
+            snapshot = collect_runtime_provenance(_orchestrator_with(_GraphVersionSession(versions)), None)["graph_snapshot"]
+            assert snapshot["graph_version"] is None
+
+    def test_failing_queries_give_none_and_warning(self, caplog):
+        """AC-031: a failing query gives None and a logged warning."""
+        with caplog.at_level("WARNING", logger="src.evaluation.provenance"):
+            snapshot = collect_runtime_provenance(
+                _orchestrator_with(_GraphVersionSession([{"version": "v2"}], fail_counts=True)), None,
+            )["graph_snapshot"]
+        assert snapshot["products_untitled"] is None and snapshot["reviews_embedded"] is None
+        assert any("count failed" in record.getMessage() for record in caplog.records)
+
+    def test_evaluate_retrieval_passes_graph_snapshot(self, monkeypatch, tmp_path):
+        """AC-033: evaluate_retrieval.py passes runtime graph_snapshot to evaluate_citable."""
+        module = _load_eval_module()
+        seen: List[Dict] = []
+        real = module.evaluate_citable
+
+        def _spy(*args, **kwargs):
+            seen.append(kwargs)
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(module, "evaluate_citable", _spy)
+        runner, _ = make_runner()
+        code = module.run_retrieval_evaluation(
+            benchmark_path=BENCHMARK, k_values=[5], strategies=["hybrid"], mode="offline",
+            output_dir=str(tmp_path / "run"), git_runner=runner, stats_resamples=100,
+        )
+        assert code == 0
+        assert len(seen) == 1 and "graph" in seen[0]
+        assert {"graph_version", "products_untitled", "reviews_embedded"} <= set(seen[0]["graph"])
+        manifest = json.loads((tmp_path / "run" / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["provenance"]["graph_snapshot"]["graph_version"] is None

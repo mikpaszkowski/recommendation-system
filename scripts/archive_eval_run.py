@@ -125,7 +125,7 @@ def reconstruct_per_query(run_dir: Path, benchmark: Optional[Sequence[Dict[str, 
 
 
 def update_index(archive_dir: Path, entry: Dict[str, Any]) -> None:
-    """Upserts {run_id, citable, legacy, timestamp, git_commit, benchmark_sha256, note} into index.json, sorted by run_id."""
+    """Upserts {run_id, citable, legacy, timestamp, git_commit, benchmark_sha256, graph_version, note} into index.json, sorted by run_id."""
     index_path = archive_dir / "index.json"
     entries: List[Dict[str, Any]] = []
     if index_path.exists():
@@ -246,6 +246,7 @@ def archive_run(
         "timestamp": manifest.get("timestamp"),
         "git_commit": provenance.get("git_commit") or manifest.get("git_commit"),
         "benchmark_sha256": (provenance.get("benchmark") or {}).get("sha256"),
+        "graph_version": ((provenance.get("graph_snapshot") or {}).get("graph_version") or {}).get("version"),
         "note": note,
     })
     logger.info(f"Archived {run_id} -> {target_dir} ({len(files)} files)")

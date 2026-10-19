@@ -13,18 +13,21 @@ services:
       # Authentication
       - NEO4J_AUTH=none
       
-      # Memory settings (adjust based on your system)
-      - NEO4J_server_memory_heap_initial__size=512m
-      - NEO4J_server_memory_heap_max__size=2G
-      - NEO4J_server_memory_pagecache_size=1G
+      # Memory settings from the environment (graph v2, FR-020). Runtime profile: the defaults
+      # (heap 2G, page cache 2G). Build profile: NEO4J_HEAP=4G NEO4J_PAGECACHE=1G.
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP:-2G}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP:-2G}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE:-2G}
       
       # APOC plugin configuration
       - NEO4J_PLUGINS=["apoc", "graph-data-science"]
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
       - NEO4J_dbms_security_procedures_allowlist=apoc.*,gds.*
       
-      # Performance tuning
-      - NEO4J_dbms_transaction_timeout=60s
+      # Performance tuning (Neo4j 5 setting name db.transaction.timeout; build profile NEO4J_TX_TIMEOUT=600s,
+      # NEO4J_TX_LOG_RETENTION="500M size")
+      - NEO4J_db_transaction_timeout=${NEO4J_TX_TIMEOUT:-60s}
+      - NEO4J_db_tx__log_rotation_retention__policy=${NEO4J_TX_LOG_RETENTION:-2 days}
       - NEO4J_dbms_lock_acquisition_timeout=60s
       
       # Logging
@@ -53,8 +56,12 @@ services:
       - recommendation-network
 
 volumes:
+  # The graph volume is external and must be named explicitly, so compose can neither create nor
+  # remove a graph volume (`docker compose down -v` cannot delete it). Run from the repository root:
+  #   docker compose --env-file .env -f src/knowledge_graph/docker-compose.yml up -d
   neo4j_data:
-    driver: local
+    external: true
+    name: ${NEO4J_DATA_VOLUME:?Set NEO4J_DATA_VOLUME to the graph volume (v1 or v2)}
   neo4j_logs:
     driver: local
   neo4j_import:
