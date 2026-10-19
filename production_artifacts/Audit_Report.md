@@ -3,9 +3,12 @@
 **Date**: 2026-10-18
 **Spec Audited**: `production_artifacts/Technical_Specification.md` (R2a, approved 2026-10-18 at Gate #2; Appendix A approved; open questions 1–8 resolved as recommended; numeric constraints "option 1": verdicts on `Attribute.numeric_value` only, every `graph_attribute_names` empty, coverage reported as 0%)
 **Context**: `production_artifacts/Research_Report.md` (R2), Vision decisions 2026-10-18-014 … 017
-**Status**: PASS WITH FIXES. One High finding (H-1) is open and needs a user decision before the gate commit. The live exit gate (§7) has not run yet.
-**Status update (2026-10-18, re-audit)**: H-1 is **fixed in code** by option (c), FR-007a (commit `5446dcf`). Live verification (AC-039, §7.4 smoke check) is pending restored OpenAI credits. See "Re-audit 2026-10-18: FR-007a (H-1 option c)" below; its gate procedure replaces the one at the end of this report.
-**Branch**: `feature/afp-002-vector-aggregation` (uncommitted working tree on top of `9cbf426`)
+**Status (current, 2026-10-18)**: H-1 is **fixed** by option (c), FR-007a (commit `5446dcf`). The R2a live exit gate **PASSED** at `88cdbdf`. The runs `eval_2026-10-18_2340`, `eval_2026-10-18_2349` and `eval_2026-10-18_2358` are archived in commit `96874f3`. See "R2a exit gate (2026-10-18)" below.
+**Branch**: `feature/afp-002-vector-aggregation`
+**Status history (superseded)**:
+- _Superseded, initial audit_: PASS WITH FIXES. One High finding (H-1) is open and needs a user decision before the gate commit. The live exit gate (§7) has not run yet.
+- _Superseded, re-audit 2026-10-18_: H-1 is **fixed in code** by option (c), FR-007a (commit `5446dcf`). Live verification (AC-039, §7.4 smoke check) is pending restored OpenAI credits. See "Re-audit 2026-10-18: FR-007a (H-1 option c)" below; its gate procedure replaces the one at the end of this report.
+- _Superseded branch line_: `feature/afp-002-vector-aggregation` (uncommitted working tree on top of `9cbf426`)
 **Previous report**: The R1 audit (rank-based multi-channel fusion) previously at this path is preserved in git history (`git show 9cbf426:production_artifacts/Audit_Report.md`).
 
 ## Executive Summary
