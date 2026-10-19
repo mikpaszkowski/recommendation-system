@@ -19,9 +19,14 @@ Usage:
     post_import_v2.py constraints --lineage graph_versions/v2/lineage.json
     post_import_v2.py embed --lineage … --build-params graph_versions/v2/build_params.json
         [--labels Attribute Brand …] [--batch-size 256] [--report graph_versions/v2/embedding_report.json]
+        [--embed-device auto|cpu|mps] [--embed-batch-size 32]
     post_import_v2.py vector-indexes --lineage … [--await-timeout 7200]
     post_import_v2.py fulltext-index --lineage … [--seed 20261019]
-    post_import_v2.py all --lineage … --build-params …
+    post_import_v2.py all --lineage … --build-params … [--embed-device …] [--embed-batch-size …]
+
+Embedding (FR-023) encodes in batches of --embed-batch-size. On a device out-of-memory error the
+batch is halved down to 8 and then that chunk is encoded on the CPU (see graph_v2.embedding_runtime);
+pages already written stay written, and the report is rewritten after every label.
     post_import_v2.py stamp --lineage … --validation-report graph_versions/v2/validation_report.json
         --build-params … --embedding-report … --confirm-validation-sha256 <sha256 reviewed at CP-8>
 """
@@ -43,6 +48,13 @@ if str(REPO_ROOT) not in sys.path:
 from pydantic import ValidationError  # noqa: E402
 
 from src.evaluation.provenance import GitRunner, default_git_runner  # noqa: E402
+from src.knowledge_graph.graph_v2.embedding_runtime import (  # noqa: E402
+    DEFAULT_EMBED_BATCH_SIZE,
+    DEVICE_CHOICES,
+    DeviceUnavailableError,
+    ResilientEmbedder,
+    load_model,
+)
 from src.knowledge_graph.graph_v2.lineage import InputVerificationError, load_lineage, sha256_file  # noqa: E402
 from src.knowledge_graph.graph_v2.models import (  # noqa: E402
     BuildParams,
@@ -164,7 +176,11 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("embed", "all"):
         parsers[name].add_argument("--build-params", type=Path, default=DEFAULT_BUILD_PARAMS)
         parsers[name].add_argument("--labels", nargs="+", choices=EMBED_LABEL_ORDER, default=list(EMBED_LABEL_ORDER))
-        parsers[name].add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+        parsers[name].add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="Neo4j page size (nodes read and written per transaction)")
+        parsers[name].add_argument("--embed-device", choices=DEVICE_CHOICES, default="auto",
+                                   help="SentenceTransformer device (auto picks MPS on Apple silicon)")
+        parsers[name].add_argument("--embed-batch-size", type=int, default=DEFAULT_EMBED_BATCH_SIZE,
+                                   help="Texts per model.encode batch; halved automatically on device out-of-memory")
         parsers[name].add_argument("--report", type=Path, default=DEFAULT_EMBEDDING_REPORT)
     for name in ("vector-indexes", "all"):
         parsers[name].add_argument("--await-timeout", type=int, default=DEFAULT_AWAIT_TIMEOUT_S)
@@ -393,7 +409,7 @@ def _library_versions(embedder: Any) -> Dict[str, Optional[str]]:
         versions["torch_version"] = getattr(torch, "__version__", None)
     except ImportError:
         logger.warning("torch not importable; version not recorded")
-    device = getattr(getattr(embedder, "model", None), "device", None)
+    device = getattr(embedder, "device", None) or getattr(getattr(embedder, "model", None), "device", None)
     versions["device"] = str(device) if device is not None else None
     return versions
 
@@ -417,17 +433,31 @@ def run_embed(
             stats.update(EmbeddingReport.model_validate_json(report_path.read_text(encoding="utf-8")).labels)
         except ValidationError as e:
             logger.warning(f"Ignoring unreadable earlier embedding report {report_path}: {e}")
+    report: Optional[EmbeddingReport] = None
     for label in EMBED_LABEL_ORDER:
         if label in labels:
             stats[label] = embed_label(session_factory, embedder, specs[label], batch_size, clock)
+            # Written after every label, so an interrupted run keeps the finished labels (the graph keeps every written page)
+            report = _write_embedding_report(report_path, embedder, batch_size, stats)
+    return report or _write_embedding_report(report_path, embedder, batch_size, stats)
+
+
+def _write_embedding_report(report_path: Path, embedder: Embedder, batch_size: int,
+                            stats: Mapping[str, LabelEmbeddingStats]) -> EmbeddingReport:
+    """Writes embedding_report.json with the device and the requested and effective encode batch sizes."""
     report = EmbeddingReport(
         created_at=_now(), batch_size=batch_size,
         labels={label: stats[label] for label in EMBED_LABEL_ORDER if label in stats},
+        embed_batch_size=getattr(embedder, "requested_batch_size", None),
+        effective_embed_batch_size=getattr(embedder, "batch_size", None),
+        oom_events=int(getattr(embedder, "oom_events", 0) or 0),
+        cpu_fallback_batches=int(getattr(embedder, "cpu_fallback_batches", 0) or 0),
         **_library_versions(embedder),
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(report.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    logger.info(f"Embedding report written to {report_path}")
+    logger.info(f"Embedding report written to {report_path} (device {report.device}, "
+                f"encode batch {report.embed_batch_size} -> {report.effective_embed_batch_size})")
     return report
 
 
@@ -677,9 +707,7 @@ def main(
             elif step == "embed":
                 build_params = _load_build_params(args.build_params)
                 if embedder is None:
-                    from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
-
-                    embedder = EmbeddingService()
+                    embedder = ResilientEmbedder(load_model(args.embed_device), batch_size=args.embed_batch_size)
                 run_embed(session_factory, embedder, args.labels, args.batch_size, build_params, args.report, time.monotonic)
                 code = EXIT_OK
             elif step == "vector-indexes":
@@ -690,7 +718,7 @@ def main(
                 logger.error(f"Step {step} failed; stopping")
                 return code
         return EXIT_OK
-    except (GuardError, StampRefused, InputVerificationError) as e:
+    except (GuardError, StampRefused, InputVerificationError, DeviceUnavailableError) as e:
         logger.error(f"Refused: {e}")
         return EXIT_GUARD
     except Exception as e:

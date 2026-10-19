@@ -10,25 +10,39 @@ CP-1 before build_params.json is written.
     P-01 meta coverage (+ details key histogram, attribute/Brand key counts)   dry run
     P-02 review funnel (+ distinct users, products with >= 1 / 5 / 20 reviews) dry run
     P-03 top-5 embed scope                                                     dry run
-    P-04 embedding throughput on 10,000 texts at several batch sizes           EmbeddingService
+    P-04 embedding throughput on 10,000 texts at several batch sizes           SentenceTransformer
     P-05 taxonomy shape and collision check                                    dry run
     P-06 brand case-duplicate groups, ISBN-like count                           dry run
     P-07 environment: Docker VM memory, free disk, v1 volume, effective v1 settings   CommandRunner + Cypher
     P-08 v1 counts                                                             read-only Cypher
-    P-09 template conformance against stored v1 vectors                        read-only Cypher + EmbeddingService
-    P-10 wall-clock per dry-run pass                                           timers
+    P-09 template conformance against stored v1 vectors                        read-only Cypher + SentenceTransformer
+    P-10 wall-clock per dry-run pass, dry-run peak RSS                         timers
+
+Error isolation: every section is measured inside its own try/except. A failed section is stored as
+{"error": "<type>: <message>"} and listed in `failed_sections`, the remaining sections still run, and
+the report is always written (exit 0, with a WARNING naming the failed sections; the user judges them
+at CP-1). Only input errors of the dry run (hash mismatch, missing catalogue or split, taxon_id
+collision) exit 2 without a report.
+
+Embedding on Apple silicon (P-04, P-09): --embed-device {auto,cpu,mps} picks the device. The dry-run
+data is released before the model loads, max_seq_length is capped at 256 word pieces, the MPS cache
+is emptied between batch sizes, and a batch size that runs out of device memory is retried once at
+half size and then recorded as an error for that size. P-09 encodes through
+`embedding_runtime.ResilientEmbedder` (halve on out-of-memory, then CPU).
 
 Exit codes: 0 report written; 2 input error.
 
 Usage:
     python scripts/graph_ingestion/preflight_v2.py --out graph_versions/v2/preflight_report.json
-        [--throughput-texts 10000] [--throughput-batch-sizes 32 128 512] [--skip-v1] [--skip-docker]
+        [--throughput-texts 10000] [--throughput-batch-sizes 32 128] [--embed-device auto|cpu|mps]
+        [--skip-v1] [--skip-docker]
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
 import datetime
+import gc
 import json
 import logging
 import shutil
@@ -43,9 +57,20 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import numpy as np  # noqa: E402
+from neo4j.exceptions import DriverError, Neo4jError  # noqa: E402
 
 from src.evaluation.provenance import collect_git_provenance  # noqa: E402
 from src.knowledge_graph.graph_v2.graph_queries import collect_graph_snapshot  # noqa: E402
+from src.knowledge_graph.graph_v2.embedding_runtime import (  # noqa: E402
+    DEFAULT_EMBED_BATCH_SIZE,
+    DEVICE_CHOICES,
+    ResilientEmbedder,
+    device_of,
+    empty_device_cache,
+    ensure_max_seq_length,
+    is_out_of_memory,
+    load_model,
+)
 from src.knowledge_graph.graph_v2.import_command import CommandRunner, build_du_command, default_command_runner  # noqa: E402
 from src.knowledge_graph.graph_v2.lineage import GraphBuildError, read_catalogue  # noqa: E402
 from src.knowledge_graph.graph_v2.models import PreflightReport  # noqa: E402
@@ -78,7 +103,18 @@ DEFAULT_SHA256SUMS = REPO_ROOT / "datasets" / "raw" / "SHA256SUMS"
 DEFAULT_SPLITS_DIR = REPO_ROOT / "datasets"
 DEFAULT_CATALOGUE = REPO_ROOT / "graph_versions" / "v2" / "catalogue_asins.txt.gz"
 DEFAULT_THROUGHPUT_TEXTS = 10_000
-DEFAULT_BATCH_SIZES = (32, 128, 512)
+DEFAULT_BATCH_SIZES = (32, 128)
+# Errors a measurement section records instead of aborting the run (specific families, no bare except)
+SECTION_ERRORS = (
+    RuntimeError, OSError, ValueError, LookupError, TypeError, AttributeError, ArithmeticError, ImportError,
+    MemoryError, Neo4jError, DriverError,
+)
+DRY_RUN_SECTIONS = ("p01", "p02", "p03", "p05", "p06", "p10")
+SECTION_FIELDS: Dict[str, str] = {
+    "p01": "p01_meta_coverage", "p02": "p02_review_funnel", "p03": "p03_embed_scope", "p04": "p04_throughput",
+    "p05": "p05_taxonomy", "p06": "p06_brand_isbn", "p07": "p07_environment", "p08": "p08_v1_snapshot",
+    "p09": "p09_template_conformance", "p10": "p10_timing",
+}
 P09_PRODUCT_SAMPLE = 20
 P09_SEED = 20261019
 P09_MIN_COSINE = 0.999
@@ -102,6 +138,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--catalogue", type=Path, default=DEFAULT_CATALOGUE)
     parser.add_argument("--throughput-texts", type=int, default=DEFAULT_THROUGHPUT_TEXTS)
     parser.add_argument("--throughput-batch-sizes", type=int, nargs="+", default=list(DEFAULT_BATCH_SIZES))
+    parser.add_argument("--embed-device", choices=DEVICE_CHOICES, default="auto",
+                        help="SentenceTransformer device for P-04 and P-09 (auto picks MPS on Apple silicon)")
     parser.add_argument("--skip-v1", action="store_true", help="Skip P-07 Cypher settings, P-08 and P-09")
     parser.add_argument("--skip-docker", action="store_true", help="Skip the Docker parts of P-07")
     return parser
@@ -161,23 +199,64 @@ def sample_throughput_texts(config: TransformConfig, n: int) -> List[str]:
     return products + reviews
 
 
-def measure_throughput(embedder: Any, texts: Sequence[str], batch_sizes: Sequence[int], label_counts: Dict[str, int]) -> Dict[str, Any]:
-    """P-04: device, texts/s per batch size, extrapolated minutes per label."""
-    model = embedder.model
-    rates: Dict[str, float] = {}
+def _error(exc: BaseException) -> Dict[str, Any]:
+    """Section payload for a failed measurement."""
+    return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _time_encode(model: Any, texts: Sequence[str], batch_size: int, device: str) -> float:
+    """Seconds for one model.encode pass over `texts` on `device`."""
+    started = time.perf_counter()
+    model.encode(list(texts), batch_size=batch_size, convert_to_numpy=True, show_progress_bar=False, device=device)
+    return time.perf_counter() - started
+
+
+def _measure_batch_size(model: Any, texts: Sequence[str], batch_size: int, device: str) -> Dict[str, Any]:
+    """One batch size: texts/s, or after an out-of-memory error one retry at half size, or the error."""
+    try:
+        elapsed = _time_encode(model, texts, batch_size, device)
+        return {"batch_size": batch_size, "texts_per_s": round(len(texts) / elapsed, 2) if elapsed > 0 else 0.0}
+    except RuntimeError as first:
+        if not is_out_of_memory(first):
+            raise
+        empty_device_cache(device)
+        half = max(1, batch_size // 2)
+        logger.warning(f"[P-04] out of memory on {device} at batch size {batch_size}; retrying once at {half}")
+        try:
+            elapsed = _time_encode(model, texts, half, device)
+        except RuntimeError as second:
+            if not is_out_of_memory(second):
+                raise
+            empty_device_cache(device)
+            logger.error(f"[P-04] out of memory on {device} again at batch size {half}; recording the error for {batch_size}")
+            return {"batch_size": batch_size, "retried_at": half, **_error(second), "first_error": f"{type(first).__name__}: {first}"}
+        return {"batch_size": half, "requested_batch_size": batch_size, "retried_after_oom": True,
+                "first_error": f"{type(first).__name__}: {first}", "texts_per_s": round(len(texts) / elapsed, 2) if elapsed > 0 else 0.0}
+
+
+def measure_throughput(model: Any, texts: Sequence[str], batch_sizes: Sequence[int], label_counts: Optional[Dict[str, int]],
+                       device: Optional[str] = None) -> Dict[str, Any]:
+    """P-04: device actually used, max_seq_length, per batch size texts/s (or its error), extrapolated minutes per label.
+    Raises RuntimeError when no batch size completed (the section is then recorded as failed)."""
+    device = device or device_of(model)
+    max_seq_length = ensure_max_seq_length(model)
+    per_size: Dict[str, Dict[str, Any]] = {}
     for batch_size in batch_sizes:
-        started = time.perf_counter()
-        model.encode(list(texts), batch_size=batch_size, convert_to_numpy=True)
-        elapsed = time.perf_counter() - started
-        rates[str(batch_size)] = round(len(texts) / elapsed, 2) if elapsed > 0 else 0.0
+        per_size[str(batch_size)] = _measure_batch_size(model, texts, batch_size, device)
+        empty_device_cache(device)
+    rates = {size: entry["texts_per_s"] for size, entry in per_size.items() if "texts_per_s" in entry}
+    if not rates:
+        raise RuntimeError(f"no batch size completed on {device}: {per_size}")
     best_size, best_rate = max(rates.items(), key=lambda item: item[1])
     return {
-        "device": str(getattr(model, "device", "unknown")),
+        "device": device,
+        "max_seq_length": max_seq_length,
         "texts": len(texts),
+        "batch_sizes": per_size,
         "texts_per_s": rates,
-        "best_batch_size": int(best_size),
+        "best_batch_size": int(per_size[best_size]["batch_size"]),
         "minutes_per_label": {
-            label: round(count / best_rate / 60.0, 1) if best_rate else None for label, count in label_counts.items()
+            label: round(count / best_rate / 60.0, 1) if best_rate else None for label, count in (label_counts or {}).items()
         },
     }
 
@@ -277,46 +356,96 @@ def template_conformance(session_factory: SessionFactory, embedder: Any) -> Dict
     }
 
 
-def assemble_report(result: TransformResult, sections: Dict[str, Dict[str, Any]], git_commit: Optional[str], created_at: str) -> PreflightReport:
-    """Maps the dry-run lineage and the measured sections to P-01 … P-10."""
+def dry_run_sections(result: TransformResult) -> Dict[str, Dict[str, Any]]:
+    """P-01, P-02, P-03, P-05, P-06 and the P-10 timing part from the dry-run lineage."""
     lineage = result.lineage
     counts = lineage.counts
-    return PreflightReport(
-        created_at=created_at,
-        git_commit=git_commit,
-        p01_meta_coverage={
+    return {
+        "p01": {
             **counts.meta.model_dump(), "details_key_histogram": result.diagnostics.details_key_histogram,
             "attribute_key_counts": result.diagnostics.attribute_key_counts,
             "sanitized": counts.sanitized.model_dump(), "parent_asin_conflicting": lineage.duplicates.parent_asin_conflicting,
         },
-        p02_review_funnel={
+        "p02": {
             **counts.reviews.model_dump(), "distinct_users": counts.nodes.get("User", 0),
             "products_with_reviews": result.products_with_reviews, "reference_kept_measured": 3388842,
         },
-        p03_embed_scope={"embed_selected": counts.reviews.embed_selected, "empty_text": counts.reviews.empty_text},
-        p04_throughput=sections.get("p04", {"skipped": True}),
-        p05_taxonomy={**counts.taxonomy.model_dump(), "nodes": counts.nodes.get("Taxon", 0),
-                      "broader_edges": counts.relationships.get("BROADER", 0), "collision": False},
-        p06_brand_isbn={
+        "p03": {"embed_selected": counts.reviews.embed_selected, "empty_text": counts.reviews.empty_text},
+        "p05": {**counts.taxonomy.model_dump(), "nodes": counts.nodes.get("Taxon", 0),
+                "broader_edges": counts.relationships.get("BROADER", 0), "collision": False},
+        "p06": {
             "brand_case_duplicate_groups": counts.brand_case_duplicate_groups,
             "brand_case_groups": lineage.duplicates.brand_case_groups,
             "isbn_like_count": len(result.diagnostics.isbn_like_asins), "isbn_like": result.diagnostics.isbn_like_asins,
         },
-        p07_environment=sections.get("p07", {"skipped": True}),
-        p08_v1_snapshot=sections.get("p08", {"skipped": True}),
-        p09_template_conformance=sections.get("p09", {"skipped": True}),
-        p10_timing={"timing_s": lineage.timing_s, "lines": {"meta": counts.meta.lines, "reviews": counts.reviews.lines},
-                    **sections.get("p10", {})},
+        "p10": {"timing_s": lineage.timing_s, "lines": {"meta": counts.meta.lines, "reviews": counts.reviews.lines}},
+    }
+
+
+def embedding_label_counts(result: TransformResult) -> Dict[str, int]:
+    """Texts to embed per label (P-04 extrapolation)."""
+    counts = result.lineage.counts
+    return {
+        "ParentProduct": counts.meta.products_written - counts.meta.content_empty,
+        "Review": counts.reviews.embed_selected,
+        "Brand": counts.nodes.get("Brand", 0), "Category": counts.nodes.get("Category", 0),
+        "Attribute": counts.nodes.get("Attribute", 0),
+    }
+
+
+def assemble_report(sections: Mapping[str, Dict[str, Any]], failed: Sequence[str], git_commit: Optional[str], created_at: str) -> PreflightReport:
+    """Maps the measured (or failed) sections to P-01 … P-10; sections never measured are {"skipped": True}."""
+    return PreflightReport(
+        created_at=created_at, git_commit=git_commit, failed_sections=list(failed),
+        **{field: dict(sections.get(key, {"skipped": True})) for key, field in SECTION_FIELDS.items()},
     )
+
+
+def run_section(name: str, sections: Dict[str, Dict[str, Any]], failed: List[str], measure: Callable[[], Dict[str, Any]]) -> None:
+    """Runs one measurement; a SECTION_ERRORS exception is recorded as the section's error and does not stop the run."""
+    try:
+        sections[name] = measure()
+    except SECTION_ERRORS as e:
+        logger.error(f"[{name.upper()}] measurement failed: {type(e).__name__}: {e}")
+        sections[name] = _error(e)
+        failed.append(name)
+
+
+class _ModelHolder:
+    """Loads the embedding model once, on first use; a load error is remembered and re-raised for every later section."""
+
+    def __init__(self, device_choice: str, model: Optional[Any] = None) -> None:
+        self.device_choice = device_choice
+        self._model = model
+        self._error: Optional[BaseException] = None
+
+    def get(self) -> Any:
+        if self._model is None:
+            if self._error is not None:
+                raise self._error
+            try:
+                self._model = load_model(self.device_choice)
+            except SECTION_ERRORS as e:
+                self._error = e
+                raise
+        return self._model
+
+
+def write_report(report: PreflightReport, path: Path) -> None:
+    """Writes the report JSON (indented, UTF-8, trailing newline)."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(report.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def main(
     argv: Optional[Sequence[str]] = None,
     session_factory: Optional[SessionFactory] = None,
     runner: Optional[CommandRunner] = None,
-    embedder: Optional[Any] = None,
+    model: Optional[Any] = None,
+    dry_run: Optional[Callable[[TransformConfig], TransformResult]] = None,
 ) -> int:
-    """CLI entry point; returns 0 / 2."""
+    """CLI entry point; returns 0 when the report is written (even with failed sections), 2 on a dry-run input error.
+    `model` (a SentenceTransformer-like object) and `dry_run` are injectable for tests."""
     args = build_parser().parse_args(argv)
     config = TransformConfig(
         meta_path=args.meta, reviews_path=args.reviews, sha256sums_path=args.sha256sums, splits_dir=args.splits_dir,
@@ -324,56 +453,88 @@ def main(
         lineage_path=REPO_ROOT / "datasets" / "graph_build" / "preflight_unused" / "lineage.json",
         dry_run=True, repo_root=REPO_ROOT,
     )
-    try:
-        result = run_dry_transform(config)
-    except (GraphBuildError, TaxonIdCollisionError) as e:
-        logger.error(f"Pre-flight dry run failed: {e}")
-        return EXIT_INPUT_ERROR
-
     sections: Dict[str, Dict[str, Any]] = {}
-    # Measured before the embedding model is loaded, so it reflects the transform passes (NFR-002: <= 3 GB)
-    sections["p10"] = {"dry_run_peak_rss_bytes": peak_rss_bytes()}
-    if embedder is None:
-        from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
+    failed: List[str] = []
+    label_counts: Optional[Dict[str, int]] = None
+    try:
+        result = (dry_run or run_dry_transform)(config)
+    except (GraphBuildError, TaxonIdCollisionError) as e:
+        logger.error(f"Pre-flight dry run failed on its inputs: {e}")
+        return EXIT_INPUT_ERROR
+    except SECTION_ERRORS as e:
+        logger.error(f"Pre-flight dry run failed: {type(e).__name__}: {e}")
+        for name in DRY_RUN_SECTIONS:
+            sections[name] = _error(e)
+        failed.extend(DRY_RUN_SECTIONS)
+    else:
+        sections.update(dry_run_sections(result))
+        label_counts = embedding_label_counts(result)
+        # Release the dry-run data before the embedding model loads (the 16 GB host shares memory with MPS)
+        del result
+        gc.collect()
+    if "p10" in sections and "error" not in sections["p10"]:
+        # Measured before the embedding model is loaded, so it reflects the transform passes (NFR-002)
+        sections["p10"]["dry_run_peak_rss_bytes"] = peak_rss_bytes()
 
-        embedder = EmbeddingService()
-    counts = result.lineage.counts
-    label_counts = {
-        "ParentProduct": counts.meta.products_written - counts.meta.content_empty,
-        "Review": counts.reviews.embed_selected,
-        "Brand": counts.nodes.get("Brand", 0), "Category": counts.nodes.get("Category", 0),
-        "Attribute": counts.nodes.get("Attribute", 0),
-    }
-    texts = sample_throughput_texts(config, args.throughput_texts)
-    sections["p04"] = measure_throughput(embedder, texts, args.throughput_batch_sizes, label_counts)
+    holder = _ModelHolder(args.embed_device, model)
+
+    def _p04() -> Dict[str, Any]:
+        texts = sample_throughput_texts(config, args.throughput_texts)
+        loaded = holder.get()
+        return measure_throughput(loaded, texts, args.throughput_batch_sizes, label_counts)
+
+    run_section("p04", sections, failed, _p04)
 
     owned = None
+    connect_error: Optional[BaseException] = None
     if not args.skip_v1 and session_factory is None:
         from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 
-        owned = Neo4jConnector()
         try:
+            owned = Neo4jConnector()
             owned.connect()
             session_factory = owned.session
-        except Exception as e:
-            logger.error(f"Cannot connect to v1 Neo4j: {e}")
-            return EXIT_INPUT_ERROR
+        except SECTION_ERRORS as e:
+            logger.error(f"Cannot connect to v1 Neo4j: {type(e).__name__}: {e}")
+            connect_error = e
+            session_factory = None
     try:
         docker_runner = None if args.skip_docker else (runner or default_command_runner())
-        sections["p07"] = collect_environment(docker_runner, None if args.skip_v1 else session_factory, REPO_ROOT)
+        env_session = None if args.skip_v1 else session_factory
+        run_section("p07", sections, failed, lambda: {
+            **collect_environment(docker_runner, env_session, REPO_ROOT),
+            **({"v1_settings_error": f"{type(connect_error).__name__}: {connect_error}"} if connect_error else {}),
+        })
         if not args.skip_v1:
-            with session_factory() as session:
-                sections["p08"] = collect_graph_snapshot(session)
-            sections["p09"] = template_conformance(session_factory, embedder)
+            def _require_session() -> SessionFactory:
+                if session_factory is None:
+                    raise connect_error or RuntimeError("no v1 Neo4j session")
+                return session_factory
+
+            def _p08() -> Dict[str, Any]:
+                with _require_session()() as session:
+                    return collect_graph_snapshot(session)
+
+            run_section("p08", sections, failed, _p08)
+
+            def _p09() -> Dict[str, Any]:
+                factory = _require_session()
+                loaded = holder.get()
+                empty_device_cache(device_of(loaded))
+                return template_conformance(factory, ResilientEmbedder(loaded, batch_size=DEFAULT_EMBED_BATCH_SIZE))
+
+            run_section("p09", sections, failed, _p09)
     finally:
         if owned is not None:
             owned.close()
 
     git = collect_git_provenance(REPO_ROOT)
-    report = assemble_report(result, sections, git.get("git_commit"), datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(report.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    logger.info(f"Pre-flight report written to {args.out}; review it at CP-1 before writing build_params.json")
+    report = assemble_report(sections, failed, git.get("git_commit"), datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    write_report(report, args.out)
+    if failed:
+        logger.warning(f"Pre-flight report written to {args.out} with FAILED sections {failed}; review them at CP-1")
+    else:
+        logger.info(f"Pre-flight report written to {args.out}; review it at CP-1 before writing build_params.json")
     return EXIT_OK
 
 

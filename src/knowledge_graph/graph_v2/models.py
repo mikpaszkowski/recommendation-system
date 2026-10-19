@@ -258,7 +258,8 @@ class BuildParams(_Strict):
 
 
 class PreflightReport(_Strict):
-    """graph_versions/v2/preflight_report.json (FR-001). Each pNN section is free-form (documented in preflight_v2.py)."""
+    """graph_versions/v2/preflight_report.json (FR-001). Each pNN section is free-form (documented in preflight_v2.py).
+    A section whose measurement failed holds {"error": "<type>: <message>"} and is listed in `failed_sections`."""
 
     created_at: str
     git_commit: Optional[str]
@@ -272,6 +273,7 @@ class PreflightReport(_Strict):
     p08_v1_snapshot: Dict[str, Any]
     p09_template_conformance: Dict[str, Any]
     p10_timing: Dict[str, Any]
+    failed_sections: List[str] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------- embeddings
@@ -298,8 +300,12 @@ class EmbeddingReport(_Strict):
     sentence_transformers_version: Optional[str]
     torch_version: Optional[str]
     device: Optional[str]
-    batch_size: int
+    batch_size: int                                   # Neo4j page size (--batch-size)
     labels: Dict[str, LabelEmbeddingStats]
+    embed_batch_size: Optional[int] = None            # requested encode batch (--embed-batch-size)
+    effective_embed_batch_size: Optional[int] = None  # after out-of-memory halving
+    oom_events: int = 0
+    cpu_fallback_batches: int = 0
 
 
 # ------------------------------------------------------------------------------------ import / dump

@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Mapping
 
 import pytest
 
+from src.knowledge_graph.graph_v2 import embedding_runtime
 from src.knowledge_graph.graph_v2.models import (
     BuildParams,
     EmbeddingReport,
@@ -24,6 +25,7 @@ from src.knowledge_graph.graph_v2.models import (
 )
 
 from .conftest import FakeEmbedder, FakeSession, make_clean_git_runner
+from .fakes_embedding import FakeModel
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SECTION_5_6_KEYS = {
@@ -366,3 +368,135 @@ def test_stamp_writes_exact_properties(fixture_build, tmp_path: Path, monkeypatc
     assert props["neo4j_version"] == "5.14.0" and props["review_cap"] == 20
     assert all(isinstance(v, (str, int, bool)) or (isinstance(v, list) and all(isinstance(x, str) for x in v)) for v in props.values())
     json.dumps(props)
+
+
+# ------------------------------------------------------------- embed step on Apple MPS (OOM resilience)
+
+
+class TwoLabelGraph(ReviewGraph):
+    """ReviewGraph plus Brand nodes, to check that the report keeps finished labels."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.brands: Dict[str, Any] = {"Anker": None, "Sony": None}
+
+    def __call__(self, cypher: str, params: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        if "MATCH (n:Brand) WHERE n.embedding IS NULL" in cypher:
+            keys = sorted(k for k, e in self.brands.items() if e is None and k > params["after0"])
+            return [{"k0": k, "name": k} for k in keys[:params["batch"]]]
+        if "MATCH (n:Brand {name: row.k0})" in cypher:
+            for row in params["rows"]:
+                self.brands[row["k0"]] = row["e"]
+            return []
+        if cypher == "MATCH (n:Brand) RETURN count(n) AS n":
+            return [{"n": len(self.brands)}]
+        if cypher == "MATCH (n:Brand) WHERE n.embedding IS NOT NULL RETURN count(n) AS n":
+            return [{"n": sum(1 for e in self.brands.values() if e is not None)}]
+        return super().__call__(cypher, params)
+
+
+@pytest.fixture
+def no_cache(monkeypatch) -> List[str]:
+    calls: List[str] = []
+    monkeypatch.setattr(embedding_runtime, "empty_device_cache", lambda device: calls.append(device))
+    return calls
+
+
+def _params() -> BuildParams:
+    return BuildParams(accepted_untitled_count=0, accepted_catalogue_missing=0, expected_review_count=9, expected_embed_reviews=8,
+                       embedding_device="mps", build_profile={}, preflight_report_sha256="x", approved_on="2026-10-19")
+
+
+def test_embed_survives_mps_oom_by_halving(no_cache) -> None:
+    """Embed step: MPS OOM halves the encode batch; every eligible review is still embedded exactly once."""
+    graph = ReviewGraph()
+    embedder = embedding_runtime.ResilientEmbedder(FakeModel(oom_above=2), batch_size=8, min_batch_size=2)
+    stats = _embed(graph, embedder, batch_size=3)
+    assert stats.embedded == 7 and embedder.batch_size == 2 and embedder.oom_events == 2
+    assert embedder.cpu_fallback_batches == 0 and no_cache == ["mps:0", "mps:0"]
+
+
+def test_embed_falls_back_to_cpu_and_keeps_written_pages(no_cache) -> None:
+    """Embed step: at the floor a chunk is encoded on the CPU; when even that fails, pages already written stay written and a rerun only does the rest."""
+    graph = ReviewGraph()
+    model = FakeModel(oom_always=True)
+    embedder = embedding_runtime.ResilientEmbedder(model, batch_size=4, min_batch_size=4)
+    model.cpu_error_on_call = 4  # first page: mps OOM -> cpu ok (calls 1-2); second page: mps OOM -> cpu fails (calls 3-4)
+    with pytest.raises(RuntimeError, match="cpu encode failed"):
+        _embed(graph, embedder, batch_size=3)
+    written = {k for k, n in graph.nodes.items() if n["embedding"] is not None}
+    assert written == {"r0", "r1", "r2"} and embedder.cpu_fallback_batches == 1
+    healthy = embedding_runtime.ResilientEmbedder(FakeModel(device="cpu"), batch_size=4)
+    stats = _embed(graph, healthy, batch_size=3)
+    assert stats.embedded == 7 and sum(n for n, _, _ in healthy.model.calls) == 4
+
+
+def test_run_embed_report_records_device_and_batches(tmp_path: Path, no_cache) -> None:
+    """The embedding report records the device, the requested and effective encode batch, OOM events and CPU fallbacks."""
+    module = _module()
+    embedder = embedding_runtime.ResilientEmbedder(FakeModel(oom_above=8), batch_size=32)
+    graph = ReviewGraph()
+    report = module.run_embed(lambda: FakeSession(graph), embedder, ["Review"], 256, _params(), tmp_path / "er.json", time.monotonic)
+    loaded = EmbeddingReport.model_validate_json((tmp_path / "er.json").read_text(encoding="utf-8"))
+    assert loaded == report and loaded.device == "mps:0" and loaded.batch_size == 256
+    assert (loaded.embed_batch_size, loaded.effective_embed_batch_size, loaded.oom_events, loaded.cpu_fallback_batches) == (32, 8, 2, 0)
+
+
+def test_run_embed_writes_report_after_each_label(tmp_path: Path, no_cache) -> None:
+    """A failure in a later label keeps the finished labels in embedding_report.json."""
+    module = _module()
+    graph = TwoLabelGraph()
+    model = FakeModel(device="cpu", cpu_error_on_call=2)
+    embedder = embedding_runtime.ResilientEmbedder(model, batch_size=8)
+    with pytest.raises(RuntimeError, match="cpu encode failed"):
+        module.run_embed(lambda: FakeSession(graph), embedder, ["Brand", "Review"], 256, _params(), tmp_path / "er.json", time.monotonic)
+    partial = EmbeddingReport.model_validate_json((tmp_path / "er.json").read_text(encoding="utf-8"))
+    assert set(partial.labels) == {"Brand"} and partial.labels["Brand"].embedded == 2
+
+
+def test_embed_flags_on_embed_and_all() -> None:
+    """--embed-device {auto,cpu,mps} (default auto) and --embed-batch-size (default 32) exist on embed and all, not on other sub-commands."""
+    parser = _module().build_parser()
+    for command in ("embed", "all"):
+        defaults = parser.parse_args([command])
+        assert (defaults.embed_device, defaults.embed_batch_size, defaults.batch_size) == ("auto", 32, 256)
+        custom = parser.parse_args([command, "--embed-device", "cpu", "--embed-batch-size", "16"])
+        assert (custom.embed_device, custom.embed_batch_size) == ("cpu", 16)
+    with pytest.raises(SystemExit):
+        parser.parse_args(["embed", "--embed-device", "cuda"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["constraints", "--embed-device", "cpu"])
+
+
+def test_main_embed_builds_resilient_embedder(fixture_build, tmp_path: Path, monkeypatch, no_cache) -> None:
+    """post_import_v2 embed loads the model on the requested device and wraps it in ResilientEmbedder with --embed-batch-size."""
+    result, base = fixture_build
+    module = _module()
+    requested: List[str] = []
+
+    def fake_load(choice):
+        requested.append(choice)
+        return FakeModel(oom_above=4)
+
+    monkeypatch.setattr(module, "load_model", fake_load)
+    (tmp_path / "bp.json").write_text(_params().model_dump_json(), encoding="utf-8")
+    graph = ReviewGraph()
+    counts = result.lineage.counts
+
+    def respond(cypher: str, params: Mapping[str, Any]):
+        if cypher == "MATCH (p:ParentProduct) RETURN count(p) AS n":
+            return [{"n": counts.meta.products_written}]
+        if cypher == "MATCH (g:GraphVersion) RETURN count(g) AS n":
+            return [{"n": 0}]
+        if "Taxon" in cypher and "count" in cypher:
+            return [{"n": counts.nodes["Taxon"]}]
+        return graph(cypher, params)
+
+    code = module.main(["embed", "--lineage", str(base / "lineage.json"), "--build-params", str(tmp_path / "bp.json"),
+                        "--labels", "Review", "--embed-device", "mps", "--embed-batch-size", "16",
+                        "--report", str(tmp_path / "er.json")], session_factory=lambda: FakeSession(respond))
+    assert code == 0 and requested == ["mps"]
+    report = EmbeddingReport.model_validate_json((tmp_path / "er.json").read_text(encoding="utf-8"))
+    assert (report.embed_batch_size, report.effective_embed_batch_size, report.device) == (16, 8, "mps:0")  # floor 8, then CPU
+    assert report.cpu_fallback_batches == 1 and report.oom_events == 2
+    assert report.labels["Review"].embedded == 7
