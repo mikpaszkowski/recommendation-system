@@ -191,7 +191,7 @@ def test_collect_h12_h13_index_states_and_smoke() -> None:
     )
     indexes, found, token, asin, fields = VG.collect_h12_h13(lambda: session, 20261019)
     assert indexes[1] == gates.IndexState("review_embedding_index", "VECTOR", "POPULATING", 0.0, ())
-    assert (found, token, asin) == (True, "reinforced", "T1")
+    assert (found, token, asin) == (True, '"Kevlar reinforced"', "T1")
     assert fields == ["title", "description", "features", "details_text"]
     assert gates.gate_indexes_online(indexes).passed is False
 

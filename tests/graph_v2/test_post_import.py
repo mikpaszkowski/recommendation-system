@@ -53,17 +53,23 @@ class ReviewGraph:
         self.nodes["r_blank"] = {"title": " ", "body": "", "embed_rank": 9, "embedding": None}
         self.nodes["r_unranked"] = {"title": "Has text", "body": "but no embed_rank", "embed_rank": None, "embedding": None}
         self.after_values: List[str] = []
+        self.unwritable: set = set()
 
     def __call__(self, cypher: str, params: Mapping[str, Any]) -> List[Dict[str, Any]]:
         if cypher.startswith("MATCH (n:Review) WHERE n.embed_rank IS NOT NULL AND n.embedding IS NULL"):
             self.after_values.append(params["after0"])
             keys = sorted(k for k, n in self.nodes.items()
                           if n["embed_rank"] is not None and n["embedding"] is None and k > params["after0"])
-            return [{"k0": k, "title": self.nodes[k]["title"], "body": self.nodes[k]["body"]} for k in keys[:params["batch"]]]
-        if cypher.startswith("UNWIND $rows"):
+            return [{"eid": f"4:db:{k}", "k0": k, "title": self.nodes[k]["title"], "body": self.nodes[k]["body"]}
+                    for k in keys[:params["batch"]]]
+        if cypher.startswith("UNWIND $rows AS row MATCH (n:Review) WHERE elementId(n) = row.id"):
+            written = 0
             for row in params["rows"]:
-                self.nodes[row["k0"]]["embedding"] = row["e"]
-            return []
+                key = row["id"].split(":", 2)[2]
+                if key in self.nodes and key not in self.unwritable:
+                    self.nodes[key]["embedding"] = row["e"]
+                    written += 1
+            return [{"written": written}]
         if "n.embed_rank IS NOT NULL RETURN count" in cypher:
             return [{"n": sum(1 for n in self.nodes.values() if n["embed_rank"] is not None)}]
         if "n.embedding IS NOT NULL RETURN count" in cypher:
@@ -196,6 +202,8 @@ def test_fulltext_fallback() -> None:
         if cypher == module.SMOKE_QUERY:
             state["smoke_calls"] += 1
             return [] if state["smoke_calls"] == 1 else [{"parent_asin": "T1"}]
+        if cypher == module.FEATURES_TEXT_COUNT_QUERY:
+            return [{"n": 0}]
         return []
 
     session = FakeSession(respond)
@@ -206,8 +214,9 @@ def test_fulltext_fallback() -> None:
     creates = [q for q in queries if q.startswith("CREATE FULLTEXT INDEX")]
     assert "p.features]" not in creates[1] and "p.features_text" in creates[1] and "p.features," in creates[0]
     assert "'english'" in creates[0]
-    smoke_tokens = [params["token"] for cypher, params in session.calls if cypher == module.SMOKE_QUERY]
-    assert smoke_tokens == ["nylonsheath", "nylonsheath"]
+    smoke_queries = [params["query"] for cypher, params in session.calls if cypher == module.SMOKE_QUERY]
+    assert smoke_queries == ['"Braided nylonsheath jacket"', '"Braided nylonsheath jacket"']
+    assert module.REMOVE_FEATURES_TEXT_QUERY not in queries
 
 
 def _guard_session(products: int, versions: int, taxa: int) -> FakeSession:
@@ -383,11 +392,11 @@ class TwoLabelGraph(ReviewGraph):
     def __call__(self, cypher: str, params: Mapping[str, Any]) -> List[Dict[str, Any]]:
         if "MATCH (n:Brand) WHERE n.embedding IS NULL" in cypher:
             keys = sorted(k for k, e in self.brands.items() if e is None and k > params["after0"])
-            return [{"k0": k, "name": k} for k in keys[:params["batch"]]]
-        if "MATCH (n:Brand {name: row.k0})" in cypher:
+            return [{"eid": f"4:db:{k}", "k0": k, "name": k} for k in keys[:params["batch"]]]
+        if "MATCH (n:Brand) WHERE elementId(n) = row.id" in cypher:
             for row in params["rows"]:
-                self.brands[row["k0"]] = row["e"]
-            return []
+                self.brands[row["id"].split(":", 2)[2]] = row["e"]
+            return [{"written": len(params["rows"])}]
         if cypher == "MATCH (n:Brand) RETURN count(n) AS n":
             return [{"n": len(self.brands)}]
         if cypher == "MATCH (n:Brand) WHERE n.embedding IS NOT NULL RETURN count(n) AS n":
@@ -500,3 +509,156 @@ def test_main_embed_builds_resilient_embedder(fixture_build, tmp_path: Path, mon
     assert (report.embed_batch_size, report.effective_embed_batch_size, report.device) == (16, 8, "mps:0")  # floor 8, then CPU
     assert report.cpu_fallback_batches == 1 and report.oom_events == 2
     assert report.labels["Review"].embedded == 7
+
+
+# ------------------------------------------------- full-text: phrase smoke test and recovery of a fallback run
+
+
+def _fulltext_responder(module, *, existing_fields, features_text_counts, hits_by_call):
+    """Scripted full-text session: SHOW INDEXES answer, successive features_text counts, and smoke hits per index build.
+    hits_by_call[i] is the set of products the i-th index build can find; a probe finds its product if listed."""
+    state = {"counts": list(features_text_counts), "smoke": list(hits_by_call), "build": -1}
+
+    def respond(cypher: str, params: Mapping[str, Any]):
+        if cypher == module.FULLTEXT_PROPERTIES_QUERY:
+            return [] if existing_fields is None else [{"properties": existing_fields}]
+        if cypher == module.FEATURES_TEXT_COUNT_QUERY:
+            return [{"n": state["counts"].pop(0) if state["counts"] else 0}]
+        if cypher == module.SMOKE_CANDIDATES_QUERY:
+            return [
+                {"parent_asin": "B00006HC8Q", "title": "Powered Subwoofer", "description": "Deep bass", "details_text": None,
+                 "features": ["Corner-loading optimization provides maximum bass performance"]},
+                {"parent_asin": "P3", "title": "Cable", "description": None, "details_text": None, "features": ["Kevlar reinforced jacket"]},
+            ]
+        if cypher.startswith("CREATE FULLTEXT INDEX"):
+            state["build"] += 1
+            return []
+        if cypher == module.SMOKE_QUERY:
+            build = max(state["build"], 0)
+            findable = state["smoke"][build] if build < len(state["smoke"]) else []
+            target = "P3" if "Kevlar" in params["query"] else "B00006HC8Q"
+            return [{"parent_asin": target}] if target in findable else [{"parent_asin": "X"}] * 50
+        return []
+    return respond
+
+
+def test_fulltext_smoke_uses_escaped_phrase_and_tries_next_candidate() -> None:
+    """The smoke test queries quoted, escaped phrases (limit 50) and passes when any probe finds its own product."""
+    module = _module()
+    session = FakeSession(_fulltext_responder(module, existing_fields=list(module.FULLTEXT_FIELDS), features_text_counts=[0],
+                                              hits_by_call=[["P3"]]))
+    found, query, asin = module.fulltext_smoke_test(lambda: session, 20261019)
+    probes = [params for cypher, params in session.calls if cypher == module.SMOKE_QUERY]
+    assert all(p["limit"] == 50 and p["query"].startswith('"') and p["query"].endswith('"') for p in probes)
+    assert {p["query"] for p in probes} <= {'"Corner\\-loading optimization provides maximum bass performance"', '"Kevlar reinforced jacket"'}
+    assert (found, query, asin) == (True, '"Kevlar reinforced jacket"', "P3") and probes[-1]["query"] == query
+    failing = FakeSession(_fulltext_responder(module, existing_fields=None, features_text_counts=[0], hits_by_call=[[]]))
+    found, query, asin = module.fulltext_smoke_test(lambda: failing, 20261019)
+    assert found is False and query is not None and len([1 for c, _ in failing.calls if c == module.SMOKE_QUERY]) == 2
+
+
+def test_fulltext_recovers_previous_fallback_run() -> None:
+    """An index over the fallback fields is dropped, features_text is removed in paged transactions, the primary index is rebuilt and passes."""
+    module = _module()
+    session = FakeSession(_fulltext_responder(module, existing_fields=list(module.FULLTEXT_FALLBACK_FIELDS),
+                                              features_text_counts=[215032, 0], hits_by_call=[["B00006HC8Q", "P3"]]))
+    code, fields = module.run_fulltext_index(lambda: session, 20261019, 30)
+    assert code == 0 and fields == list(module.FULLTEXT_FIELDS)
+    queries = [cypher for cypher, _ in session.calls]
+    drop, remove = queries.index(module.DROP_FULLTEXT_QUERY), queries.index(module.REMOVE_FEATURES_TEXT_QUERY)
+    create = next(i for i, q in enumerate(queries) if q.startswith("CREATE FULLTEXT INDEX"))
+    assert drop < remove < create and "p.features, p.details_text]" in queries[create]
+    assert "IN TRANSACTIONS OF 10000 ROWS" in module.REMOVE_FEATURES_TEXT_QUERY and "REMOVE p.features_text" in module.REMOVE_FEATURES_TEXT_QUERY
+    assert module.FEATURES_TEXT_QUERY not in queries
+
+
+def test_fulltext_keeps_existing_primary_index_and_fails_on_leftover() -> None:
+    """An existing primary index is not dropped; features_text that survives the removal fails the step."""
+    module = _module()
+    session = FakeSession(_fulltext_responder(module, existing_fields=list(module.FULLTEXT_FIELDS), features_text_counts=[0],
+                                              hits_by_call=[["B00006HC8Q", "P3"]]))
+    assert module.run_fulltext_index(lambda: session, 20261019, 30) == (0, list(module.FULLTEXT_FIELDS))
+    assert module.DROP_FULLTEXT_QUERY not in [c for c, _ in session.calls]
+    stuck = FakeSession(_fulltext_responder(module, existing_fields=None, features_text_counts=[10, 3], hits_by_call=[]))
+    with pytest.raises(RuntimeError, match="features_text still present on 3"):
+        module.run_fulltext_index(lambda: stuck, 20261019, 30)
+
+
+# ------------------------------------------------------------- embed write-back by elementId, counted
+
+
+class AttributeGraph:
+    """Attributes keyed by elementId; two values cannot round-trip (the driver sees '?'), like the live Color values."""
+
+    def __init__(self) -> None:
+        self.nodes = {
+            "4:db:1": {"name": "Color", "value": "Black", "true_value": "Black", "embedding": None},
+            "4:db:2": {"name": "Color", "value": "?Saddle Brown/?Black", "true_value": "\ud83dSaddle Brown/\ud83dBlack", "embedding": None},
+            "4:db:3": {"name": "Color", "value": "?????", "true_value": "\ud83d\ud83d\ud83d\ud83d\ud83d", "embedding": None},
+            "4:db:4": {"name": "Material", "value": "Aluminium", "true_value": "Aluminium", "embedding": None},
+        }
+
+    def __call__(self, cypher: str, params: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        if cypher.startswith("MATCH (n:Attribute) WHERE n.embedding IS NULL"):
+            rows = sorted((n["name"], n["value"], eid) for eid, n in self.nodes.items() if n["embedding"] is None
+                          and (n["name"], n["value"]) > (params["after0"], params["after1"]))
+            return [{"eid": eid, "k0": name, "k1": value, "name": name, "value": value} for name, value, eid in rows[:params["batch"]]]
+        if cypher.startswith("UNWIND $rows AS row MATCH (n:Attribute) WHERE elementId(n) = row.id"):
+            for row in params["rows"]:
+                self.nodes[row["id"]]["embedding"] = row["e"]
+            return [{"written": len(params["rows"])}]
+        if cypher == "MATCH (n:Attribute) RETURN count(n) AS n":
+            return [{"n": len(self.nodes)}]
+        if cypher == "MATCH (n:Attribute) WHERE n.embedding IS NOT NULL RETURN count(n) AS n":
+            return [{"n": sum(1 for n in self.nodes.values() if n["embedding"] is not None)}]
+        raise AssertionError(f"unexpected query: {cypher}")
+
+
+def test_embed_writes_back_by_element_id() -> None:
+    """Every label writes by elementId and counts rows; values that do not round-trip are still embedded."""
+    module = _module()
+    specs = module.label_specs("title_description_features")
+    for label, spec in specs.items():
+        assert "elementId(n) AS eid" in spec.fetch_query, label
+        assert spec.write_query == f"UNWIND $rows AS row MATCH (n:{label}) WHERE elementId(n) = row.id SET n.embedding = row.e RETURN count(n) AS written"
+    graph = AttributeGraph()
+    session = FakeSession(graph)
+    stats = module.embed_label(lambda: session, FakeEmbedder(), specs["Attribute"], 2, time.monotonic)
+    assert stats.embedded == stats.eligible == 4
+    assert all(n["embedding"] is not None for n in graph.nodes.values())
+    payload_keys = {key for cypher, params in session.calls if cypher.startswith("UNWIND") for row in params["rows"] for key in row}
+    assert payload_keys == {"id", "e"}
+
+
+def test_embed_write_count_mismatch_fails_and_rerun_completes(caplog) -> None:
+    """A page that writes fewer embeddings than encoded is logged and fails the step after the label; written pages stay,
+    and a re-run embeds only the nodes still missing an embedding."""
+    module = _module()
+    graph = ReviewGraph()
+    graph.unwritable = {"r1"}
+    with caplog.at_level("ERROR", logger="post_import_v2"):
+        with pytest.raises(RuntimeError, match="encoded 3 texts but wrote 2") as raised:
+            _embed(graph, FakeEmbedder(), batch_size=3)
+    assert type(raised.value).__name__ == "EmbedWriteError" and issubclass(module.EmbedWriteError, RuntimeError)
+    assert any("but wrote 2 embeddings" in r.getMessage() for r in caplog.records)
+    missing = {k for k, n in graph.nodes.items() if n["embed_rank"] is not None and n["embedding"] is None}
+    assert missing == {"r1", "r_blank"}
+    graph.unwritable = set()
+    rerun = FakeEmbedder()
+    stats = _embed(graph, rerun, batch_size=3)
+    assert [text for batch in rerun.batches for text in batch] == ["Title 1. Body"]
+    assert stats.embedded == 7 and stats.skipped_empty == 1
+
+
+def test_embed_repeated_page_stops() -> None:
+    """If the same page comes back twice (no progress), the label stops instead of looping."""
+    module = _module()
+    spec = module.label_specs("title_description_features")["Review"]
+
+    def stuck(cypher: str, params: Mapping[str, Any]):
+        if cypher.startswith("MATCH (n:Review) WHERE n.embed_rank"):
+            return [{"eid": "4:db:x", "k0": "x", "title": " ", "body": ""}]
+        raise AssertionError(cypher)
+
+    with pytest.raises(RuntimeError, match="same page was returned twice"):
+        module.embed_label(lambda: FakeSession(stuck), FakeEmbedder(), spec, 1, time.monotonic)

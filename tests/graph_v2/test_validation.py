@@ -305,3 +305,33 @@ def test_pilot_default_paths_consistent(tmp_path: Path) -> None:
     assert full_args.build_params == pilot_args.build_params
     explicit = VG.resolve_paths(VG.build_parser().parse_args(["--pilot", "--out", str(tmp_path / "x.json")]), repo_root=root)
     assert explicit.out == tmp_path / "x.json"
+
+
+# ------------------------------------------------------------------ scale-robust full-text smoke probe (FR-025)
+
+
+def test_escape_lucene_and_phrase_query() -> None:
+    """Every Lucene query-parser special character is backslash-escaped inside the quoted phrase."""
+    assert v.escape_lucene('a+b (c) "d" e:f\\g/h && i || j! k~ l* m? [n] {o} p^') == (
+        'a\\+b \\(c\\) \\"d\\" e\\:f\\\\g\\/h \\&\\& i \\|\\| j\\! k\\~ l\\* m\\? \\[n\\] \\{o\\} p\\^')
+    assert v.lucene_phrase_query(["Corner-loading", "optimization", "(bass)"]) == '"Corner\\-loading optimization \\(bass\\)"'
+
+
+def test_pick_smoke_candidates_phrase_from_own_bullet() -> None:
+    """Each probe is a phrase window from the product's own bullet around a features-only token; seeded and deterministic."""
+    products = [
+        {"parent_asin": "B00006HC8Q", "title": "Powered Subwoofer", "description": "Deep bass for home theater", "details_text": None,
+         "features": ["Front-firing woofer", "Corner-loading optimization provides maximum bass performance in small rooms"]},
+        {"parent_asin": "P2", "title": "Hub", "description": None, "details_text": "Ports: aluminium", "features": ["Aluminium shell"]},
+        {"parent_asin": "P3", "title": "Cable", "description": None, "details_text": None, "features": ["Kevlar reinforced: 2m (6.6ft)"]},
+    ]
+    picked = v.pick_smoke_candidates(products, 20261019, k=3)
+    assert picked == v.pick_smoke_candidates(products, 20261019, k=3) and len(picked) == 2
+    by_asin = {c.parent_asin: c for c in picked}
+    sub = by_asin["B00006HC8Q"]
+    assert sub.token == "optimization"
+    assert sub.phrase_words == ("Corner-loading", "optimization", "provides", "maximum", "bass", "performance", "in", "small")
+    assert sub.query == '"Corner\\-loading optimization provides maximum bass performance in small"'
+    assert by_asin["P3"].query == '"Kevlar reinforced\\: 2m \\(6.6ft\\)"'
+    assert v.pick_smoke_candidates(products[1:2], 1) == [] and len(v.pick_smoke_candidates(products, 1, k=1)) == 1
+    assert v.feature_phrase(["no match here"], "optimization") is None

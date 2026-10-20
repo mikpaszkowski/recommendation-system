@@ -52,6 +52,10 @@ IDENTICAL_EMBEDDING_SCORE: float = 0.99999
 ISBN_PATTERN = re.compile(r"^\d{9}[\dX]$")
 SMOKE_TOKEN_PATTERN = re.compile(r"[A-Za-z]{6,}")
 FULLTEXT_SMOKE_LIMIT: int = 50
+SMOKE_MAX_CANDIDATES: int = 3
+SMOKE_PHRASE_WORDS_BEFORE: int = 3
+SMOKE_PHRASE_MAX_WORDS: int = 8
+LUCENE_SPECIAL_PATTERN = re.compile(r'(&&|\|\||[+\-!(){}\[\]^"~*?:\\/])')
 H06_SAMPLE_SIZE: int = 10_000
 H14_PRODUCT_SAMPLE: int = 2_000
 H14_REVIEW_SAMPLE: int = 2_000
@@ -90,6 +94,15 @@ class FidelityMismatch(NamedTuple):
     field: str
     graph_value: Any
     csv_value: Any
+
+
+class SmokeCandidate(NamedTuple):
+    """One full-text smoke probe: a product, its features-only token and a quoted phrase from its own feature bullet."""
+
+    parent_asin: str
+    token: str
+    phrase_words: Tuple[str, ...]
+    query: str          # Lucene query string: the escaped, quoted phrase
 
 
 class TaxonCountCheck(NamedTuple):
@@ -323,23 +336,67 @@ def _tokens(text: Optional[str]) -> set:
     return {token.lower() for token in SMOKE_TOKEN_PATTERN.findall(text or "")}
 
 
+def _features_only_tokens(product: Mapping[str, Any]) -> List[str]:
+    """>= 6-letter feature tokens absent from title, description and details_text, longest first."""
+    feature_tokens = set()
+    for item in product.get("features") or []:
+        feature_tokens |= _tokens(item)
+    other = _tokens(product.get("title")) | _tokens(product.get("description")) | _tokens(product.get("details_text"))
+    return sorted(feature_tokens - other, key=lambda token: (-len(token), token))
+
+
 def pick_smoke_token(products: Sequence[Mapping[str, Any]], seed: int) -> Optional[Tuple[str, str]]:
     """FR-025: seeded choice of (parent_asin, token) with a >= 6-letter features token absent (case-insensitive)
     from the product's title, description and details_text (the longest such token per product); None if no product qualifies."""
-    candidates: List[Tuple[str, str]] = []
-    for product in products:
-        features = product.get("features") or []
-        feature_tokens = set()
-        for item in features:
-            feature_tokens |= _tokens(item)
-        other = _tokens(product.get("title")) | _tokens(product.get("description")) | _tokens(product.get("details_text"))
-        unique = sorted(feature_tokens - other, key=lambda token: (-len(token), token))
-        if unique and product.get("parent_asin"):
-            # the longest token is the rarest in practice, so the product ranks inside the top-50 hits
-            candidates.append((str(product["parent_asin"]), unique[0]))
+    candidates = [
+        (str(product["parent_asin"]), tokens[0])
+        for product in products if product.get("parent_asin") and (tokens := _features_only_tokens(product))
+    ]
     if not candidates:
         return None
     return random.Random(seed).choice(sorted(candidates))
+
+
+def escape_lucene(text: str) -> str:
+    """Backslash-escapes the Lucene query-parser special characters (+ - && || ! ( ) { } [ ] ^ " ~ * ? : \\ /)."""
+    return LUCENE_SPECIAL_PATTERN.sub(lambda match: "".join("\\" + ch for ch in match.group(0)), text)
+
+
+def lucene_phrase_query(words: Sequence[str]) -> str:
+    """A quoted Lucene phrase over `words`, each escaped."""
+    return '"' + " ".join(escape_lucene(word) for word in words) + '"'
+
+
+def feature_phrase(features: Sequence[str], token: str) -> Optional[Tuple[str, ...]]:
+    """Up to SMOKE_PHRASE_MAX_WORDS consecutive words of the first feature bullet containing `token`
+    (starting SMOKE_PHRASE_WORDS_BEFORE words before it); None if no bullet contains it."""
+    for bullet in features or []:
+        if not isinstance(bullet, str):
+            continue
+        words = bullet.split()
+        for index, word in enumerate(words):
+            if token in _tokens(word):
+                start = max(0, index - SMOKE_PHRASE_WORDS_BEFORE)
+                return tuple(words[start:start + SMOKE_PHRASE_MAX_WORDS])
+    return None
+
+
+def pick_smoke_candidates(products: Sequence[Mapping[str, Any]], seed: int, k: int = SMOKE_MAX_CANDIDATES) -> List[SmokeCandidate]:
+    """FR-025, scale-robust: up to k seeded candidates, each a quoted phrase from the product's own feature bullet that
+    contains a features-only token. A phrase is specific enough to rank its product inside the top 50 on the full
+    graph (a single shared word is not: 'optimization' had 11,828 hits), and because the token occurs only in
+    `features`, a hit still proves that field is indexed."""
+    candidates: List[SmokeCandidate] = []
+    for product in products:
+        asin = product.get("parent_asin")
+        tokens = _features_only_tokens(product)
+        if not asin or not tokens:
+            continue
+        words = feature_phrase(product.get("features") or [], tokens[0])
+        if words:
+            candidates.append(SmokeCandidate(str(asin), tokens[0], words, lucene_phrase_query(words)))
+    candidates.sort()
+    return random.Random(seed).sample(candidates, min(k, len(candidates)))
 
 
 def isbn_like(asins: Iterable[str]) -> List[str]:

@@ -21,7 +21,8 @@ Usage:
         [--labels Attribute Brand …] [--batch-size 256] [--report graph_versions/v2/embedding_report.json]
         [--embed-device auto|cpu|mps] [--embed-batch-size 32]
     post_import_v2.py vector-indexes --lineage … [--await-timeout 7200]
-    post_import_v2.py fulltext-index --lineage … [--seed 20261019]
+    post_import_v2.py fulltext-index --lineage … [--seed 20261019] [--await-timeout 7200]
+        (drops an index left over a fallback run and removes p.features_text before rebuilding on the primary fields)
     post_import_v2.py all --lineage … --build-params … [--embed-device …] [--embed-batch-size …]
 
 Embedding (FR-023) encodes in batches of --embed-batch-size. On a device out-of-memory error the
@@ -64,7 +65,7 @@ from src.knowledge_graph.graph_v2.models import (  # noqa: E402
     Lineage,
     ValidationReport,
 )
-from src.knowledge_graph.graph_v2.validation import FULLTEXT_SMOKE_LIMIT, pick_smoke_token  # noqa: E402
+from src.knowledge_graph.graph_v2.validation import FULLTEXT_SMOKE_LIMIT, SMOKE_MAX_CANDIDATES, pick_smoke_candidates  # noqa: E402
 from src.knowledge_graph.graphdb.embedding_templates import (  # noqa: E402
     TEMPLATE_IDS,
     brand_text_v1,
@@ -114,7 +115,7 @@ SMOKE_CANDIDATES_QUERY = (
     "p.features AS features, p.details_text AS details_text ORDER BY p.parent_asin LIMIT $limit"
 )
 SMOKE_QUERY = (
-    "CALL db.index.fulltext.queryNodes($index, $token) YIELD node, score "
+    "CALL db.index.fulltext.queryNodes($index, $query) YIELD node, score "
     "RETURN node.parent_asin AS parent_asin LIMIT $limit"
 )
 FEATURES_TEXT_QUERY = (
@@ -123,6 +124,12 @@ FEATURES_TEXT_QUERY = (
     "CASE WHEN s = '' THEN f ELSE s + '\\n' + f END) } IN TRANSACTIONS OF 10000 ROWS"
 )
 DROP_FULLTEXT_QUERY = "DROP INDEX product_fulltext_index IF EXISTS"
+FEATURES_TEXT_COUNT_QUERY = "MATCH (p:ParentProduct) WHERE p.features_text IS NOT NULL RETURN count(p) AS n"
+# Paged removal (one transaction per 10,000 products) keeps every transaction under the build-profile timeout
+REMOVE_FEATURES_TEXT_QUERY = (
+    "MATCH (p:ParentProduct) WHERE p.features_text IS NOT NULL "
+    "CALL { WITH p REMOVE p.features_text } IN TRANSACTIONS OF 10000 ROWS"
+)
 AWAIT_INDEX_QUERY = "CALL db.awaitIndex($name, $timeout)"
 AWAIT_INDEXES_QUERY = "CALL db.awaitIndexes($timeout)"
 FULLTEXT_PROPERTIES_QUERY = "SHOW INDEXES YIELD name, properties WHERE name = $name RETURN properties"
@@ -154,7 +161,7 @@ class LabelEmbedSpec(NamedTuple):
     fetch_query: str                                     # keyset page: WHERE key > $after AND embedding IS NULL ORDER BY key LIMIT $batch
     eligible_query: str                                  # eligible count (Review: embed_rank IS NOT NULL)
     embedded_query: str                                  # embedding IS NOT NULL count within scope
-    write_query: str                                     # UNWIND $rows AS row MATCH (n:<Label> {<key>: row.k}) SET n.embedding = row.e
+    write_query: str                                     # by elementId read in the same page; RETURN count(n) AS written
     text_builder: Callable[[Mapping[str, Any]], Optional[str]]
 
 
@@ -182,7 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
         parsers[name].add_argument("--embed-batch-size", type=int, default=DEFAULT_EMBED_BATCH_SIZE,
                                    help="Texts per model.encode batch; halved automatically on device out-of-memory")
         parsers[name].add_argument("--report", type=Path, default=DEFAULT_EMBEDDING_REPORT)
-    for name in ("vector-indexes", "all"):
+    for name in ("vector-indexes", "fulltext-index", "all"):
         parsers[name].add_argument("--await-timeout", type=int, default=DEFAULT_AWAIT_TIMEOUT_S)
     for name in ("fulltext-index", "all"):
         parsers[name].add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -252,6 +259,19 @@ _PRODUCT_CONTENT_CYPHER = {
 }
 
 
+class EmbedWriteError(RuntimeError):
+    """Fewer (or more) embeddings were written than texts encoded; the step fails after finishing the label."""
+
+
+def write_query(label: str) -> str:
+    """Write-back by elementId read in the same page. Matching on key strings silently missed nodes whose values hold
+    characters that do not round-trip over Bolt (unpaired surrogates come back as '?'); elementId always matches."""
+    return (
+        f"UNWIND $rows AS row MATCH (n:{label}) WHERE elementId(n) = row.id "
+        "SET n.embedding = row.e RETURN count(n) AS written"
+    )
+
+
 def label_specs(product_content_rule: str) -> Dict[str, LabelEmbedSpec]:
     """The five LabelEmbedSpec definitions using embedding_templates (product, review, brand, attribute, category_v1)."""
     if product_content_rule not in _PRODUCT_CONTENT_CYPHER:
@@ -263,26 +283,23 @@ def label_specs(product_content_rule: str) -> Dict[str, LabelEmbedSpec]:
             fetch_query=(
                 "MATCH (n:Attribute) WHERE n.embedding IS NULL AND "
                 "(n.attribute_name > $after0 OR (n.attribute_name = $after0 AND n.attribute_value > $after1)) "
-                "RETURN n.attribute_name AS k0, n.attribute_value AS k1, n.attribute_name AS name, n.attribute_value AS value "
+                "RETURN elementId(n) AS eid, n.attribute_name AS k0, n.attribute_value AS k1, n.attribute_name AS name, n.attribute_value AS value "
                 "ORDER BY n.attribute_name, n.attribute_value LIMIT $batch"
             ),
             eligible_query="MATCH (n:Attribute) RETURN count(n) AS n",
             embedded_query="MATCH (n:Attribute) WHERE n.embedding IS NOT NULL RETURN count(n) AS n",
-            write_query=(
-                "UNWIND $rows AS row MATCH (n:Attribute {attribute_name: row.k0, attribute_value: row.k1}) "
-                "SET n.embedding = row.e"
-            ),
+            write_query=write_query("Attribute"),
             text_builder=lambda row: attribute_text_v1(row["name"], row["value"]),
         ),
         "Brand": LabelEmbedSpec(
             label="Brand", key_fields=("name",),
             fetch_query=(
                 "MATCH (n:Brand) WHERE n.embedding IS NULL AND n.name > $after0 "
-                "RETURN n.name AS k0, n.name AS name ORDER BY n.name LIMIT $batch"
+                "RETURN elementId(n) AS eid, n.name AS k0, n.name AS name ORDER BY n.name LIMIT $batch"
             ),
             eligible_query="MATCH (n:Brand) RETURN count(n) AS n",
             embedded_query="MATCH (n:Brand) WHERE n.embedding IS NOT NULL RETURN count(n) AS n",
-            write_query="UNWIND $rows AS row MATCH (n:Brand {name: row.k0}) SET n.embedding = row.e",
+            write_query=write_query("Brand"),
             text_builder=lambda row: brand_text_v1(row["name"]),
         ),
         "Category": LabelEmbedSpec(
@@ -294,11 +311,11 @@ def label_specs(product_content_rule: str) -> Dict[str, LabelEmbedSpec]:
                 "WHERE p.title IS NOT NULL AND trim(p.title) <> '' "
                 "WITH n, p ORDER BY coalesce(p.review_count, 0) DESC, p.parent_asin ASC "
                 "WITH n, collect(p.title)[..5] AS samples "
-                "RETURN n.name AS k0, n.name AS name, n.path AS path, samples ORDER BY n.name"
+                "RETURN elementId(n) AS eid, n.name AS k0, n.name AS name, n.path AS path, samples ORDER BY n.name"
             ),
             eligible_query="MATCH (n:Category) RETURN count(n) AS n",
             embedded_query="MATCH (n:Category) WHERE n.embedding IS NOT NULL RETURN count(n) AS n",
-            write_query="UNWIND $rows AS row MATCH (n:Category {name: row.k0}) SET n.embedding = row.e",
+            write_query=write_query("Category"),
             text_builder=lambda row: category_text_v1(row["name"], row["path"], row["samples"] or []),
         ),
         "ParentProduct": LabelEmbedSpec(
@@ -311,12 +328,12 @@ def label_specs(product_content_rule: str) -> Dict[str, LabelEmbedSpec]:
                 "OPTIONAL MATCH (n)-[:HAS_ATTRIBUTE]->(a:Attribute) "
                 "WITH n, category, a ORDER BY a.attribute_name, a.attribute_value "
                 "WITH n, category, collect(a.attribute_name + ': ' + coalesce(a.attribute_value, '')) AS pairs "
-                "RETURN n.parent_asin AS k0, n.title AS title, n.description AS description, n.features AS features, "
+                "RETURN elementId(n) AS eid, n.parent_asin AS k0, n.title AS title, n.description AS description, n.features AS features, "
                 "category, pairs ORDER BY n.parent_asin"
             ),
             eligible_query=f"MATCH (n:ParentProduct) WHERE {content} RETURN count(n) AS n",
             embedded_query="MATCH (n:ParentProduct) WHERE n.embedding IS NOT NULL RETURN count(n) AS n",
-            write_query="UNWIND $rows AS row MATCH (n:ParentProduct {parent_asin: row.k0}) SET n.embedding = row.e",
+            write_query=write_query("ParentProduct"),
             text_builder=lambda row: product_text_v1(
                 row["title"], row["category"], row["pairs"] or [], row["description"], row["features"],
                 rule=product_content_rule,
@@ -326,12 +343,12 @@ def label_specs(product_content_rule: str) -> Dict[str, LabelEmbedSpec]:
             label="Review", key_fields=("review_id",),
             fetch_query=(
                 "MATCH (n:Review) WHERE n.embed_rank IS NOT NULL AND n.embedding IS NULL AND n.review_id > $after0 "
-                "RETURN n.review_id AS k0, n.review_title AS title, n.review_body AS body "
+                "RETURN elementId(n) AS eid, n.review_id AS k0, n.review_title AS title, n.review_body AS body "
                 "ORDER BY n.review_id LIMIT $batch"
             ),
             eligible_query="MATCH (n:Review) WHERE n.embed_rank IS NOT NULL RETURN count(n) AS n",
             embedded_query="MATCH (n:Review) WHERE n.embedding IS NOT NULL RETURN count(n) AS n",
-            write_query="UNWIND $rows AS row MATCH (n:Review {review_id: row.k0}) SET n.embedding = row.e",
+            write_query=write_query("Review"),
             text_builder=lambda row: review_text_v1(row["title"], row["body"]),
         ),
     }
@@ -344,13 +361,17 @@ def embed_label(
     batch_size: int,
     clock: Callable[[], float],
 ) -> LabelEmbeddingStats:
-    """Keyset pagination in ascending key order; None texts are counted and never embedded; resumable (AC-023)."""
+    """Keyset pagination in ascending key order over nodes still missing an embedding (so a re-run only does the rest);
+    None texts are counted and never embedded; writes go by elementId and the written count must equal the texts
+    encoded, otherwise EmbedWriteError is raised once the label has finished (AC-023)."""
     started = clock()
     after: Tuple[str, ...] = ("",) * len(spec.key_fields)
     skipped = 0
     skipped_keys: List[str] = []
     embedded_now = 0
     batches = 0
+    write_mismatches: List[str] = []
+    previous_page: Tuple[str, ...] = ()
     while True:
         params = {"batch": batch_size, "after0": after[0], "after1": after[1] if len(after) > 1 else ""}
         with session_factory() as session:
@@ -359,7 +380,7 @@ def embed_label(
             break
         batches += 1
         texts: List[str] = []
-        keys: List[Tuple[str, ...]] = []
+        element_ids: List[str] = []
         for row in rows:
             key = tuple(row[f"k{i}"] for i in range(len(spec.key_fields)))
             text = spec.text_builder(row)
@@ -369,19 +390,27 @@ def embed_label(
                     skipped_keys.append(" | ".join(str(k) for k in key))
                 continue
             texts.append(text)
-            keys.append(key)
+            element_ids.append(row["eid"])
+        # Python and Neo4j may order keys with unusual characters differently, so the loop guard compares
+        # element IDs, not keys: an identical page twice in a row means no progress.
+        page_ids = tuple(row["eid"] for row in rows)
+        if page_ids == previous_page:
+            raise RuntimeError(f"{spec.label}: the same page was returned twice after {after!r}; stopping to avoid a loop")
+        previous_page = page_ids
         after = tuple(rows[-1][f"k{i}"] for i in range(len(spec.key_fields)))
         if texts:
             vectors = embedder.embed_documents(texts)
             if len(vectors) != len(texts):
                 raise RuntimeError(f"{spec.label}: embedder returned {len(vectors)} vectors for {len(texts)} texts")
-            payload = [
-                {**{f"k{i}": key[i] for i in range(len(key))}, "e": [float(x) for x in vector]}
-                for key, vector in zip(keys, vectors)
-            ]
+            payload = [{"id": eid, "e": [float(x) for x in vector]} for eid, vector in zip(element_ids, vectors)]
             with session_factory() as session:
-                session.run(spec.write_query, rows=payload).consume()
-            embedded_now += len(texts)
+                record = session.run(spec.write_query, rows=payload).single()
+            written = int(record["written"]) if record is not None else 0
+            if written != len(payload):
+                message = f"{spec.label}: encoded {len(payload)} texts but wrote {written} embeddings (page after {after!r})"
+                logger.error(f"[Embed] {message}")
+                write_mismatches.append(message)
+            embedded_now += written
         if len(rows) < batch_size:
             break
     with session_factory() as session:
@@ -389,6 +418,10 @@ def embed_label(
         embedded = _scalar(session, spec.embedded_query)
     seconds = clock() - started
     logger.info(f"[Embed] {spec.label}: {embedded_now} embedded now, {embedded}/{eligible} in graph, {skipped} skipped (empty)")
+    if write_mismatches:
+        raise EmbedWriteError(f"{spec.label}: {len(write_mismatches)} page(s) wrote fewer embeddings than encoded: {write_mismatches[:5]}")
+    if embedded + skipped < eligible:
+        logger.warning(f"[Embed] {spec.label}: {eligible - embedded - skipped} eligible nodes still lack an embedding; re-run embed")
     return LabelEmbeddingStats(
         template_id=TEMPLATE_IDS[spec.label], eligible=eligible, embedded=embedded, skipped_empty=skipped,
         skipped_keys_sample=skipped_keys, batches=batches, seconds=round(seconds, 3),
@@ -505,21 +538,26 @@ def fulltext_create_statement(fields: Sequence[str]) -> str:
 
 
 def fulltext_smoke_test(session_factory: SessionFactory, seed: int) -> Tuple[bool, Optional[str], Optional[str]]:
-    """(found, token, parent_asin): seeded product/token via validation.pick_smoke_token, queried with limit 50."""
+    """(found, query, parent_asin). Up to SMOKE_MAX_CANDIDATES seeded probes, each a quoted, Lucene-escaped phrase from
+    the product's own feature bullet around a features-only token; the product must be within the top 50 hits. The
+    first probe that finds its product passes; if none does, the first probe is reported as failed."""
     with session_factory() as session:
         products = [dict(record) for record in session.run(SMOKE_CANDIDATES_QUERY, limit=SMOKE_CANDIDATE_LIMIT)]
-    choice = pick_smoke_token(products, seed)
-    if choice is None:
+    candidates = pick_smoke_candidates(products, seed, SMOKE_MAX_CANDIDATES)
+    if not candidates:
         logger.error("Full-text smoke test: no product has a features-only token")
         return False, None, None
-    parent_asin, token = choice
-    with session_factory() as session:
-        hits = [record["parent_asin"] for record in session.run(
-            SMOKE_QUERY, index=FULLTEXT_INDEX_NAME, token=token, limit=FULLTEXT_SMOKE_LIMIT,
-        )]
-    found = parent_asin in hits
-    logger.info(f"Full-text smoke test: token {token!r} -> {parent_asin} {'found' if found else 'NOT found'} in {len(hits)} hits")
-    return found, token, parent_asin
+    for candidate in candidates:
+        with session_factory() as session:
+            hits = [record["parent_asin"] for record in session.run(
+                SMOKE_QUERY, index=FULLTEXT_INDEX_NAME, query=candidate.query, limit=FULLTEXT_SMOKE_LIMIT,
+            )]
+        found = candidate.parent_asin in hits
+        logger.info(f"Full-text smoke test: phrase {candidate.query} -> {candidate.parent_asin} "
+                    f"{'found at rank ' + str(hits.index(candidate.parent_asin) + 1) if found else 'NOT found'} in {len(hits)} hits")
+        if found:
+            return True, candidate.query, candidate.parent_asin
+    return False, candidates[0].query, candidates[0].parent_asin
 
 
 def _create_and_await_fulltext(session_factory: SessionFactory, fields: Sequence[str], await_timeout_s: int) -> None:
@@ -529,9 +567,38 @@ def _create_and_await_fulltext(session_factory: SessionFactory, fields: Sequence
         session.run(AWAIT_INDEX_QUERY, name=FULLTEXT_INDEX_NAME, timeout=await_timeout_s).consume()
 
 
+def current_fulltext_fields(session_factory: SessionFactory) -> Optional[List[str]]:
+    """Indexed properties of an existing product_fulltext_index, or None when it does not exist."""
+    with session_factory() as session:
+        record = session.run(FULLTEXT_PROPERTIES_QUERY, name=FULLTEXT_INDEX_NAME).single()
+    return list(record["properties"]) if record is not None else None
+
+
+def prepare_primary_fulltext(session_factory: SessionFactory) -> None:
+    """Recovers a previous fallback run before the primary index is built: an index over other fields than
+    FULLTEXT_FIELDS is dropped, and any p.features_text is removed in paged transactions (verified to be gone)."""
+    existing = current_fulltext_fields(session_factory)
+    if existing is not None and existing != list(FULLTEXT_FIELDS):
+        logger.warning(f"Existing {FULLTEXT_INDEX_NAME} covers {existing}; dropping it to rebuild over {list(FULLTEXT_FIELDS)}")
+        with session_factory() as session:
+            session.run(DROP_FULLTEXT_QUERY).consume()
+    with session_factory() as session:
+        leftover = _scalar(session, FEATURES_TEXT_COUNT_QUERY)
+    if leftover:
+        logger.warning(f"Removing features_text from {leftover} products (left by a previous fallback run)")
+        with session_factory() as session:
+            session.run(REMOVE_FEATURES_TEXT_QUERY).consume()
+        with session_factory() as session:
+            remaining = _scalar(session, FEATURES_TEXT_COUNT_QUERY)
+        if remaining:
+            raise RuntimeError(f"features_text still present on {remaining} products after removal")
+
+
 def run_fulltext_index(session_factory: SessionFactory, seed: int, await_timeout_s: int) -> Tuple[int, List[str]]:
-    """Creates and awaits the index, smoke-tests; on failure writes features_text, recreates over the fallback fields,
-    re-tests (AC-026). Returns (exit code, fulltext_fields)."""
+    """Recovers a previous fallback run, creates and awaits the index over the primary fields and smoke-tests it;
+    only if that fails, writes features_text, recreates over the fallback fields and re-tests (AC-026).
+    Returns (exit code, fulltext_fields)."""
+    prepare_primary_fulltext(session_factory)
     fields = list(FULLTEXT_FIELDS)
     _create_and_await_fulltext(session_factory, fields, await_timeout_s)
     found, _, _ = fulltext_smoke_test(session_factory, seed)

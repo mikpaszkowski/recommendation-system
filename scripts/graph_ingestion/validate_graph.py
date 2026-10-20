@@ -307,7 +307,7 @@ def collect_h11(session: Any, embedder: Any, product_content_rule: str = "title_
 
 
 def collect_h12_h13(session_factory: SessionFactory, seed: int) -> Tuple[List[IndexState], bool, Optional[str], Optional[str], List[str]]:
-    """(index states, smoke found, token, parent_asin, full-text fields read from SHOW INDEXES)."""
+    """(index states, smoke found, smoke query (quoted phrase), parent_asin, full-text fields read from SHOW INDEXES)."""
     with session_factory() as session:
         indexes = [
             IndexState(
