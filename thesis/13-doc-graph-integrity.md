@@ -10,6 +10,7 @@
 **Audit**: `production_artifacts/Audit_Report_Graph_Rebuild.md`: **PASS WITH FIXES**. Two High findings (import guard, wrong-graph guard) were fixed. 155/155 targeted tests and 767 tests in the full suite pass, with no Neo4j and no Docker.  
 **Evidence status**: There is **no v2 graph and no v2 run**. Every v2 figure in this document is either a guarantee of the construction rule (checked on fixtures) or a read-only projection from the raw files.  
 **Relation to earlier contributions**: Supplies the data-validity layer that the citable-run predicate of `11-doc-evaluation-protocol.md` lacked. Invalidates or qualifies claims in `3-doc-robust-retrieval.md`, `4-doc-hybrid-scoring.md`, `6-doc-orthogonal-gating.md`, `7-doc-evaluation-framework.md`, `8-doc-catalog-stratification.md`, `10-doc-fusion-ablation.md` and `11-doc-evaluation-protocol.md`; each now has a dated correction note. Prepares the official-split comparison of Meta-Phase C.
+**Update 2026-10-20**: Graph v2 has been built, validated (18/18 hard gates), stamped and re-baselined against v1, with three citable runs per graph. §7 records what is now measured, what the re-baseline found, and the revised rubric (54/90 → 60/90; verdict unchanged). The 2026-10-19 text in the header and in §§0–6 is kept as written. Where it says "not executed", "projected" or "open", §7.1 gives the current status.
 
 ---
 
@@ -289,3 +290,215 @@ EOF
 * Schelter, S., Lange, D., Schmidt, P., Celikel, M., Biessmann, F., & Grafberger, A. (2018). Automating Large-Scale Data Quality Verification. *Proceedings of the VLDB Endowment*, 11(12), 1781–1794.
 * Sun, Z., Yu, D., Fang, H., Yang, J., Qu, X., Zhang, J., & Geng, C. (2020). Are We Evaluating Rigorously? Benchmarking Recommendation for Reproducible Evaluation and Fair Comparison. In *Proceedings of RecSys 2020*, pp. 23–32.
 * W3C (2009). SKOS Simple Knowledge Organization System Reference. W3C Recommendation.
+
+---
+
+## 7. Update (2026-10-20): Graph v2 Executed, Validated and Re-Baselined
+
+**Evaluator date**: 2026-10-20  
+**Git scope**: `64ef49b` … `65a0ba0` on `feature/afp-002-vector-aggregation`. Build at clean commit `75c5c0a`, fixes `8306d9b`, `8b10a35`, `0a32604`, stamp commit `0a32604`, evaluation at clean commit `4248d03`, records committed in `65a0ba0`. The CP-9 acceptance line of `graph_versions/v2/RUNBOOK_LOG.md` is in the working tree and was not yet committed when this section was written.  
+**Records used** (all git-tracked): `graph_versions/v2/RUNBOOK_LOG.md` (CP-1 … CP-9), `graph_versions/v2/validation_report.json` (SHA-256 `d8a68b7f…8af`), `graph_versions/v2/lineage.json` (SHA-256 `3f985952…86ec`), `graph_versions/v2/embedding_report.json`, `graph_versions/v2/preflight_report.json`, `graph_versions/v2/pilot/pilot_report.json`, `graph_versions/v2/baseline_comparison.json`, `graph_versions/v1/snapshot.json`, `graph_versions/v1/DUMP.json`, and the archived runs `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (v1) and `eval_2026-10-20_1114`, `_1128`, `_1142` (v2).  
+**Measured for this update** (read-only, no Neo4j): F-10, O-1, O-4 and the per-query analyses in §7.5. They were computed from the archived `per_query.jsonl` files, the frozen catalogue and `datasets/processed_data/processed_metadata.csv`. The commands are in §7.8.
+
+This section keeps the labelling of §0. Every statement below is marked **(a) measured**, **(b) method verified** or **(c) hypothesis**.
+
+### 7.1 Status of the 2026-10-19 Statements
+
+| 2026-10-19 statement | Status 2026-10-20 |
+|---|---|
+| Header "Evidence status": no v2 graph and no v2 run | **Superseded.** `(:GraphVersion {version: 'v2', validation_passed: true})` was written at 2026-10-20T08:20:05Z. Three citable v2 runs are archived. |
+| §0 (b) the method has not been executed against Neo4j or the full raw files | **Superseded (b, measured).** The pilot (5%) and the full build ran with all checkpoints CP-1 … CP-9 approved. |
+| §1.3 $H_{13a}$, $H_{13b}$ | Unchanged (supported). $H_{13b}$ is strengthened by F-10 (§7.4). |
+| §1.3 $H_{13c}$ "untested at full scale" | **Supported at full scale (b, measured)**: 18/18 hard gates (§7.2). Byte-identical determinism is still shown only on fixtures (AC-016). The full build ran once. |
+| §1.3 $H_{13d}$ / $H_{13d,0}$ | **Tested. $H_{13d,0}$ is not rejected** on legacy-21. No arm changes significantly (all $p_{Holm} \ge 0.875$). At n = 21 this is absence of evidence, not evidence of no effect (§7.4). |
+| §1.3 $H_{13e}$ | **First half supported (a, measured)**: review-coverage-bias@10 = 1.000 for every arm in all three v2 runs (v1: 0.029 … 0.386). The second half, that RS-02 then measures the review channel itself, remains open. |
+| §4.2 "Verified at build" column | **Measured**: H-01 … H-18 all passed (§7.2). |
+| §4.2 projected v2 counts | Measured. Compared with the projection in §7.2. |
+| §4.3 pre-registered re-baseline protocol | **Executed**, with one recorded amendment: the code commit is `4248d03`, not a commit equal to `88cdbdf` plus graph v2 paths. `check_baseline_diff.py --base 88cdbdf` first exited 1 on 5 documentation and compose paths. The allow-list was widened to documentation and `docker-compose` (amendment A-7, `012b780`, `4248d03`). It then accepted 37 changed paths. Benchmark SHA (`cbbf3621…`), LLM snapshot (`gpt-4o-2024-08-06`), fusion arms, category recovery and r = 3 match the v1 runs. |
+| §4.4 E-1 direction not predicted | Measured: mixed, see §7.4. |
+| §4.4 E-2 coverage-bias loses discriminating power | **Measured (a)**: see $H_{13e}$. |
+| §4.4 E-3 about 13 cold candidates | **Measured (a)**: 13 products have no review (265,307 − 265,294). |
+| §4.4 E-4 temporal decay, helpfulness ordering, listing-text grounding become testable | Inputs now exist (raw `timestamp`, `helpful_vote`; full-text index over title, description, features, details). The readers are still unchanged, so these remain untested. |
+| §4.6 "Not executed"; peak memory about 3.3 GB vs 3 GB target | Resolved. Measured peak RSS: 3.6 GB in the pre-flight dry run and 4.2 GB in the full transform. The target was exceeded and the overrun accepted at CP-1. |
+| §3.2 "a v1 → v2 difference … is attributable to the data, not to representation or code" | **Qualified by O-4 (§7.5).** The code was held fixed. The v2 graph changes the Category node set (71 → 38, by FR-008) and the Category embeddings (P-09: 40% identical, because the template's sample titles change once ghosts are filled). As a result, category resolution differs for 12 of 21 queries. A difference is attributable to the graph as a whole, not to ghost filling or review coverage alone. |
+| §3.3 R-06 "the 90 ISBN-like IDs" | R-06 reports 213 IDs matching `^\d{9}[\dX]$`. The spec expected 90. The discrepancy is report-only and not explained here. |
+
+### 7.2 Construction at Full Scale (a, b; measured)
+
+**Review funnel** (`lineage.json`, `counts.reviews`). 43,886,944 raw lines → 8,537,757 outside the catalogue → 2,828,276 official valid/test pairs excluded → 60,521 duplicate `review_id`s collapsed → 29,078,142 beyond the cap of 20 → **3,382,248 kept**. Of the kept reviews, 1,269,946 are train-split pairs and 2,112,302 are by users outside the 5-core splits. 1,081,137 reviews were selected for embedding. 0 timestamps were missing.
+
+**Products.** 265,307 written, 0 catalogue IDs missing in raw metadata, 8 with an empty title, 3 content-empty, 1 features-only. 265,303 were embedded; 4 were skipped by the `title_description` content rule decided at CP-1. 151,262 products (57%) have no price, and 17,254 have no category path. The Taxon tree has 1,183 nodes, 3 roots and a maximum depth of 7, with 248,053 `IN_TAXON` edges.
+
+**Projection vs measurement** (§4.2):
+
+| Quantity | Projected 2026-10-19 | Measured 2026-10-20 |
+|---|---:|---:|
+| `ParentProduct` | 265,307 | 265,307 (H-01) |
+| Ghost-signature products | 0 by construction | 0 (H-04) |
+| Untitled products | unknown until P-01 | 8 (H-03); share 0.393 → 0.00003 (R-08) |
+| Products with ≥ 1 review | 265,294 | 265,294 |
+| Products with ≥ 5 reviews | 185,332 | ≈ 184,960 (weighted from the four-decimal shares in R-01; not an exact count) |
+| `Review` nodes | 3,388,842 | 3,382,248 (H-08). The projection did not fully account for the duplicates collapsed |
+| Held-out pairs in review evidence | 0 (H-06) | 0 hits; `in_train_split` checked on 10,000 sampled reviews, 0 mismatches |
+| Review-embedded product coverage | approaches 1 | 0.0215 → 0.99995 (R-08) |
+
+**Hard gates** (`validation_report.json`, all passed). Among the observed values:
+- H-07: at most 20 reviews per product, 0 bad `cap_rank`.
+- H-10: embedded = report = eligible for every label (Attribute 36,187; Brand 49,663; Category 38; ParentProduct 265,303; Review 1,081,137), and 0 vectors with the wrong dimension.
+- H-11: 0 empty products and 0 blank reviews embedded. The maximum ANN self-query score over 40 probes is 0.9955, below the 0.9999 threshold.
+- H-13: the phrase smoke test ranked its product first.
+- H-14: 4,203 values compared, 0 mismatches.
+- H-15: all 21 benchmark targets are grounded.
+- H-17: no taxon defects.
+- H-18: every node and relationship count equals the lineage.
+
+**Report-only findings.**
+- R-04: 3 pairs of identical embeddings with different texts in a 5,000-product sample (score 1.0). This is not the ghost signature, but it is not zero either.
+- R-05: 925 groups of brand names that differ only in case, kept as exact names under the v1 rule.
+- R-07: 19 of 21 benchmark targets change, mostly in review-node count because of the cap (for example 472 → 20). `charger_02` gains the category "Apple Products".
+- R-08: v1 → v2 counts:
+  - Review: 1,629,426 → 3,382,248
+  - User: 471,474 → 2,594,661
+  - Brand: 40,998 → 49,663
+  - Category: 71 → 38
+  - Attribute: 47,335 → 36,187
+  - `SUBCATEGORY_OF`: 33 → 0
+
+  The fall in Attribute nodes is not analysed here.
+
+**Cost** (measured). Transform: 10.5 min, 2.9 GB CSV. Import: 94 s, 4.0 GB store, 0 bad rows. Embedding on MPS at batch 32: about 2.5 h in total (reviews 7,679 s at 141 texts/s, products 1,234 s at 215 texts/s). The pilot had extrapolated 2.25 h.
+
+### 7.3 Execution Findings Relevant to Method (a; one build, anecdotal)
+
+These are records of one build, not a measured detection rate. They are reported because they bear on how far a pilot and the gates can be trusted.
+
+| # | Finding | How it surfaced | Fix | Pilot |
+|---|---|---|---|---|
+| X-1 | **MPS memory.** Pre-flight P-04 crashed twice with MPS out-of-memory after the 9-minute dry run. Both times it lost every measurement, because the report was written only at the end. Encode batch 64 runs out of memory; batch 32 does not. | Pre-flight crash | `8306d9b`: each P-section is isolated and the report is always written; a resilient embedder halves the batch down to 8 and then falls back to CPU per chunk | n/a (before the pilot). The pilot and the full run then recorded 0 out-of-memory events and 0 CPU fallbacks |
+| X-2 | **Single-token full-text smoke test does not scale.** At 265k products the chosen token matched 11,828 products, the target fell outside the top 50, and the step fell back to writing `features_text` on 215,032 products. | The post-import step's own smoke test | `8b10a35`: an escaped, quoted phrase from the product's own feature bullet; fallback recovery and an index rebuild | **Passed the pilot** (13,381 products; token "rangefinder", 7 hits). Scale-dependent |
+| X-3 | **String-matched embedding write-back.** 2 Attribute nodes with unpaired UTF-16 surrogates were reported as embedded but not written, because the strings do not round-trip over Bolt. | During the full post-import. The records do not say whether a count check or a manual inspection found it. It is the report/graph mismatch that H-10 (embedded = report = eligible) is designed to catch. | `8b10a35`: write by `elementId`, count written rows, and fail the step on a mismatch | **Passed the pilot.** Data-dependent: 2 of 36,187 nodes, not in the 5% sample |
+| X-4 | **Driver parameter clash.** The new smoke query passed `query=`, which collides with the first parameter of `Session.run`. | First live execution of the X-2 fix | `0a32604`: Cypher parameter `$search`; the unit-test fake now has the driver's signature | Not scale-dependent. It was a regression introduced by the X-2 fix and masked by a test double whose signature differed from the driver's |
+
+**Methodological reading.**
+1. The 5% pilot passed all 18 gates but exposed neither X-2 nor X-3. A pilot checks the procedure and estimates its cost (actual embedding time, about 2.5 h, was about 11% above the 2.25 h estimate). It does not certify correctness at full scale. Assertions inside each step plus full-scale gates are needed.
+2. None of the four defects reached the stamped graph. The sequence fix → commit with tests → re-run (`embed --labels Attribute`, `fulltext-index`) → 18/18 validation → user-confirmed report SHA-256 → stamp held. Run citability therefore depends on a graph state that was validated after the fixes.
+3. Test doubles must have the same interface as the real driver (X-4). This is general engineering practice, recorded here only because it affected the timeline of a citable artefact.
+
+### 7.4 v1 → v2 Re-Baseline on Legacy-21 (a; measured)
+
+Six runs: v1 `eval_2026-10-18_2340/_2349/_2358` at `88cdbdf`, and v2 `eval_2026-10-20_1114/_1128/_1142` at `4248d03`. All six are citable, use benchmark SHA `cbbf3621…` and `gpt-4o-2024-08-06`, and have 0/21 CLARIFY. The SEARCH-only slice therefore equals the all-queries slice (n = 21). Analysis (`baseline_comparison.json`): per-query mean over r = 3, a paired randomization (sign-flip) test, a paired bootstrap 95% CI of v2 − v1, and Holm correction across arms for MRR. "Discordant" counts queries whose per-query mean reciprocal rank differs. These counts are recomputed for this update from the archived `per_query.jsonl` files.
+
+| Arm | MRR v1 | MRR v2 | Δ | 95% CI | p | $p_{Holm}$ | Δ NDCG@10 | HR@10 v1 → v2 | Discordant (up / down) |
+|---|---:|---:|---:|---|---:|---:|---:|---|---|
+| hybrid@rrf3 (default) | 0.226 | 0.319 | +0.093 | [−0.004, +0.208] | 0.129 | 0.875 | +0.101 | 0.381 → 0.492 | 9 (5 / 4) |
+| hybrid@rrf2 | 0.237 | 0.206 | −0.031 | [−0.092, +0.014] | 0.344 | 1.000 | −0.039 | 0.429 → 0.365 | 6 (1 / 5) |
+| hybrid@wrrf3 | 0.345 | 0.322 | −0.023 | [−0.103, +0.065] | 0.656 | 1.000 | −0.018 | 0.524 → 0.524 | 7 (2 / 5) |
+| hybrid@cc3 | 0.298 | 0.288 | −0.011 | [−0.102, +0.088] | 0.875 | 1.000 | −0.015 | 0.476 → 0.460 | 7 (2 / 5) |
+| hybrid@sum_legacy | 0.176 | 0.144 | −0.032 | [−0.124, +0.058] | 0.511 | 1.000 | −0.040 | 0.333 → 0.254 | 12 (5 / 7) |
+| vector_only | 0.162 | 0.047 | −0.115 | [−0.276, +0.014] | 0.184 | 0.918 | −0.109 | 0.238 → 0.143 | 9 (4 / 5) |
+| cypher_only | 0.148 | 0.056 | −0.093 | [−0.198, −0.011] | 0.125 | 0.875 | −0.080 | 0.190 → 0.143 | 4 (0 / 4) |
+
+**Result.** $H_{13d,0}$ is not rejected for any arm. The R2 protocol predicted low power at this size: with 4 to 12 discordant queries per arm, split between both directions, effects of this size cannot reach significance. The rrf3 interval [−0.004, +0.208] is compatible both with no change and with a large gain.
+
+**Points to report with the table.**
+* **The rrf3 gain is concentrated in a few queries.** `keyboard_02` and `laptop_01` go from a miss to rank 1–2, `phone_01` from 5 to 1, and `charger_01` from 11 to 8. `keyboard_03` goes from 7 to a miss. Run-to-run variation is larger on v2: 4 of 21 queries change rank across the three v2 rrf3 runs, against 1 on v1. vector_only and cypher_only are deterministic in both.
+* **cypher_only: the bootstrap CI excludes 0, but the primary test does not.** Only 4 queries are discordant. With 4 discordant pairs the exact sign-flip test cannot go below p = 2/16 = 0.125, and a percentile bootstrap over so few non-zero differences is anti-conservative. Under the pre-registered protocol (doc 11) the randomization test is primary, so this is **not** a finding.
+* **The arms are not what their names suggest.** `vector_only` is not a single channel: it fuses all three channels with the default configuration (rrf3) and applies no hard filters. `cypher_only` applies the hard filters and ranks by a Bayesian rating × log-volume score read from `avg_rating` and `review_count` on the product node.
+* **The within-v2 contrast rrf3 vs rrf2 (0.319 vs 0.206) is descriptive only.** Legacy-21 is tuning-side. The RS-02 rule is defined for the benchmark-v2 tuning split, and its premise of 4.7% review coverage no longer holds (§7.5 O-3).
+
+**New measured fact about v1 (F-10, strengthens $H_{13b}$).** In the three citable v1 runs, products without a row in the v1 metadata input occupied a substantial share of top-10 slots: vector_only 35.2% (222/630), sum_legacy 14.4%, rrf3 10.3%, cc3 6.7%, rrf2 3.2%, cypher_only 3.0%, wrrf3 2.4%. These products are the 104,306 IDs of §3.2; 104,281 of them were untitled in the graph. Hit-based metrics scored these slots as ordinary non-target items. The citable v1 evidence therefore ranked nodes with no data for a user to see, and no metric in the R2a protocol recorded this.
+
+### 7.5 Candidate Explanations (c; hypotheses, not findings)
+
+**Measured observations** (a) that bear on them:
+* **O-1, former ghosts in v2 top-10.** On v2 the same 104,306 IDs, now real products, occupy 44–73% of top-10 slots: rrf2 44.3%, wrrf3 49.5%, cc3 55.9%, rrf3 58.4%, cypher_only 61.7%, vector_only 63.3%, sum_legacy 72.9%. Their catalogue share is 39.3%.
+* **O-2.** Benchmark targets with embedded reviews: 1/21 on v1, 21/21 on v2.
+* **O-3.** Review-coverage-bias@10 = 1.000 for every arm on v2 (catalogue share 0.99995), so the metric is degenerate.
+* **O-4, category resolution shift.** In all three run pairs, the applied category differs between v1 and v2 for the same 12 of 21 queries. On v1, requests resolved to legacy Category nodes such as "Mice", "Earbud Headphones", "Keyboards, Mice & Accessories", "Headphones & Earbuds", and to "Computers" and "Apple Products". On v2 the raw string ("mouse", "keyboard", "headphones", "MacBook Air", "iPhone") is applied. `camera_01` moves the other way: raw "webcam" becomes "Camera & Photo". Target admission is unchanged (20/21 on both graphs).
+* **O-5, displacement** (one run pair, `2340` → `1114`). Where the target ranks worse on v2, the items that newly rank above it are mostly former ghosts: cypher_only 24/24, rrf3 22/26, vector_only 59/76, sum_legacy 76/107, cc3 17/20, wrrf3 24/28, rrf2 19/26. Where the target ranks better on v2, the items no longer above it are rarely v1 ghosts for the fused arms (rrf3 2/50, sum_legacy 1/60, cc3 0/21). vector_only is the exception, at 20/50.
+
+**Hypotheses** (none tested):
+* **HYP-1, review coverage.** rrf3 can gain because the review channel now reaches every product, including all targets (O-2). For: rrf3 rises and rrf2, which has no review channel, falls. On `keyboard_02` the three equal-weight arms with the review channel (rrf3, cc3, sum_legacy) go from a miss to rank ≤ 4, while rrf2 still misses. Against: cc3 (Δ −0.011) and vector_only (rrf3 fusion without filters, Δ −0.115) do not rise. Review coverage is therefore not a sufficient explanation.
+* **HYP-2, ghosts became competitors.** Filling the 104k ghosts added real, often review-rich competitors to the benchmark's categories (O-1). They displaced targets in the arms that fell (O-5). The case is strongest for cypher_only. On v1 a ghost had no `avg_rating` or `review_count` and scored 0. On v2 it carries metadata ratings, and every item that newly outranks a target is a former ghost. O-5 is descriptive and comes from one run pair. It shows *which* items displaced targets, not that they were the cause.
+* **HYP-3, category resolution.** O-4 changes the input of the hard filter for 12 queries, which can move filtered arms in either direction. The two largest rrf3 gains (`keyboard_02`, `laptop_01`) fall on queries whose resolution changed. rrf3's improvements are not explained by removing v1 ghosts (O-5: 2/50). vector_only applies no filters, so HYP-3 cannot explain its drop.
+* **HYP-4, LLM noise.** Extraction noise differs between the two graphs. On v2, 4 of 21 queries vary across the rrf3 runs. Averaging over r = 3 reduces this noise but does not remove it.
+
+**Tests that would separate these hypotheses** (not yet run):
+1. Mask the former ghosts on v2 at query time (HYP-2).
+2. Pin the category filter to its v1 value per query (HYP-3).
+3. Run rrf3 against rrf2 on benchmark v2 with a larger n (HYP-1).
+
+### 7.6 Consequences for Other Contributions
+
+These consequences are now also recorded as dated notes (2026-10-20) in the affected documents: `8-doc-catalog-stratification.md` (C-4 … C-6), `10-doc-fusion-ablation.md` (C-8 … C-11) and `11-doc-evaluation-protocol.md` (C-4 … C-8).
+* **Docs 10 and 11, review-coverage-bias@K.** The metric is uninformative on v2 (O-3) and must be redefined before R2b, for example as the share of top-K that only the review channel reaches. The RS-02 rule (Vision 2026-10-18-015 point 4) assumed 4.7% review coverage. That premise does not hold on v2.
+* **Doc 8, stratum S1 "cold".** S1 has 13 candidates on v2 and needs the redefinition planned in G-9.
+* **R1/R2a retrieval conclusions (docs 10, 11).** They are neither overturned nor confirmed on v2. No arm changed detectably, and the arm order on v2 (wrrf3 ≈ rrf3 > cc3 > rrf2 > sum_legacy) is descriptive.
+
+### 7.7 Revised Rubric Audit (Thesis Evaluator, 2026-10-20)
+
+| # | Criterion | 2026-10-19 | 2026-10-20 | Reason for change |
+|---|---|---:|---:|---|
+| 1 | Algorithmic & Architectural Novelty | 3/10 | 3/10 | No new method. Execution does not add novelty. |
+| 2 | Unexpected or Original Combination | 6/10 | 6/10 | Unchanged. |
+| 3 | Problem Significance in Literature | 8/10 | 8/10 | Unchanged. F-10 adds a concrete data-cascade instance (ghost nodes in citable top-10 lists) but no new problem class. |
+| 4 | Red Flag Check | PASS (scoped) | PASS (scoped) | X-1 … X-4 are engineering and are not claimed as contributions. They are reported only for what they show about pilots and gates. |
+| 5 | SOTA Gap Alignment | 6/10 | 6/10 | Unchanged. |
+| 6 | Formal RQ Formulability | 6/10 | **7/10** | The pre-registered part of $RQ_{13}$ ran as registered (one recorded amendment, A-7) and returned a defined answer with intervals. Its first clause now has a measured instance (F-10). Not higher, because the answer to $H_{13d}$ is inconclusive at n = 21. |
+| 7 | Tangible Research Artifact | 8/10 | **9/10** | The artifact now exists as a validated, stamped graph whose lineage, validation, embedding, import and pilot records are hash-bound into every run manifest (`graph_snapshot.graph_version`). Not 10: the store itself is not distributable, and the catalogue is inherited. |
+| 8 | Empirical Instrumentation | 8/10 | **9/10** | The instrumentation ran at scale and produced every figure in §7.2–§7.5: gate values, report-only deltas, out-of-memory and fallback counts, write counts. Per-query traces allowed the displacement and category-shift analyses. Not 10: which check detected X-3 is not recorded, and there is no full-scale determinism probe. |
+| 9 | Measurable Metric Improvements | 2/10 | **4/10** | Graph-validity metrics improved by large measured margins: untitled share 0.393 → 0.00003; ghost signature 104,281 → 0; review-embedded product coverage 0.0215 → 0.99995; held-out pairs 204,352 input rows → 0 graph hits; raw timestamps and helpful votes restored. Capped at 4 because these improvements are what the construction rule targets (largely true by construction), and no retrieval metric improved significantly; four arms point down. |
+| 10 | Scientific Reproducibility | 7/10 | **8/10** | Full build from SHA-verified inputs at clean commits, a user-confirmed validation SHA before the stamp, six archived citable runs bound to graph-version hashes, and a v1 dump with SHA kept for rollback. Not higher: byte-identical determinism shown only on fixtures (one full build); the v1 dump restore test was not run (`restore_test: null`); embeddings depend on the device (P-09: 19/20 product embeddings reproduce v1 at ≥ 0.999); LLM run-to-run variation (§7.4); the catalogue is inherited. |
+| | **Total** | **54/90 + PASS** | **60/90 + PASS** | **Verdict unchanged: QUALIFIES, Methodological Artifact.** |
+
+**Why not a Primary Academic Contribution.** The 2026-10-19 condition was "until $H_{13d}$ is tested". It has now been tested, and the null hypothesis was not rejected. The contribution is a validity method and its measured necessity (F-1 … F-10). It does not establish a performance effect, and its novelty score (3/10) is below the "strong novelty" profile of a primary contribution.
+
+### 7.8 Claims, Non-Claims and Replication (2026-10-20)
+
+**Claims supported by this update:**
+1. The catalogue-first, split-aware rebuild ran at full scale and passed 18/18 hard gates: ghost signature 0, held-out pairs 0, untitled products 104,281 → 8, and every count equal to the lineage.
+2. In the citable v1 runs, products with no metadata occupied up to 35% of top-10 slots (vector_only) and 10% for the default arm (F-10).
+3. With code (modulo the A-7 allow-list), benchmark and LLM snapshot held fixed, no retrieval arm changed detectably between v1 and v2 on legacy-21 (all $p_{Holm} \ge 0.875$). The study had low power, as predicted.
+4. Review-coverage-bias@K is degenerate on v2.
+5. A 5% pilot that passes every gate can still miss defects that appear only at full scale or in rare data (X-2, X-3).
+
+**Not to be claimed:**
+- that v2 improves retrieval;
+- that rrf3 benefits from review coverage;
+- that former ghosts or the category shift caused any per-arm change (HYP-1 … HYP-4);
+- that cypher_only is significantly worse;
+- that the v1 retrieval conclusions are confirmed on v2.
+
+**Replication** (offline, no Neo4j):
+```bash
+python -m pytest tests/graph_v2 tests/test_legacy_ingest_guards.py tests/test_graph_cypher_prompt.py \
+                 tests/test_provenance.py tests/test_archive_eval_run.py -q      # 226 passed on 2026-10-20
+
+# F-10 / O-1: share of v1 metadata-less IDs in top-10, per arm and graph
+python - <<'PY'
+import gzip, json, pandas as pd
+cat = {x.strip() for x in gzip.open("graph_versions/v2/catalogue_asins.txt.gz", "rt") if x.strip()}
+meta = set(pd.read_csv("datasets/processed_data/processed_metadata.csv", usecols=["parent_asin"], dtype=str).parent_asin.dropna())
+ghost = cat - meta                                   # 104,306 IDs
+runs = {"v1": ["eval_2026-10-18_2340", "eval_2026-10-18_2349", "eval_2026-10-18_2358"],
+        "v2": ["eval_2026-10-20_1114", "eval_2026-10-20_1128", "eval_2026-10-20_1142"]}
+for g, rs in runs.items():
+    tot, hit = {}, {}
+    for r in rs:
+        for line in open(f"evaluations_archive/{r}/per_query.jsonl"):
+            for arm, s in json.loads(line)["strategies"].items():
+                top = s["top20"][:10]
+                tot[arm] = tot.get(arm, 0) + len(top)
+                hit[arm] = hit.get(arm, 0) + sum(x in ghost for x in top)
+    print(g, {a: round(hit[a] / tot[a], 3) for a in tot})
+PY
+# O-4: compare per_query.jsonl "applied_category.normalized" between paired v1/v2 runs.
+# O-5: for each arm, compare top20[:target_rank-1] between eval_2026-10-18_2340 and eval_2026-10-20_1114.
+```
+
+### 7.9 Follow-Up
+- Run the separating tests of §7.5 (ghost masking, pinned category filter).
+- Redefine review-coverage-bias@K and S1 before the R2b benchmark freeze.
+- Check full-scale determinism by rebuilding and comparing the lineage SHA.
+- Test-restore the v1 dump.
+- Run R2b on v2 with about 200 queries, so that effects of the size seen here become detectable.

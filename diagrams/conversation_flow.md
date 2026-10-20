@@ -58,7 +58,7 @@ flowchart TD
     RESPONSE["💬 Response\nPassed back to Chainlit UI"]:::ui
 
     %% ─── Neo4j ──────────────────────────────────────────────────
-    NEO4J[("🗄️ Neo4j Knowledge Graph\n─────────────────────────────\n:Item :Brand :Category\n:Attribute :Review :PriceRange\n+ Vector Indexes\n(product / brand / category /\nattribute embeddings)")]:::neo4j
+    NEO4J[("🗄️ Neo4j Knowledge Graph\n─────────────────────────────\n:ParentProduct :Brand :Category :Taxon\n:Attribute :Review :User\n+ Vector Indexes (product / review /\nbrand / category / attribute)\n+ Full-text index (product)\nGraph v2")]:::neo4j
 
     %% ─── Flow ───────────────────────────────────────────────────
     USER --> CHAINLIT --> ORCH

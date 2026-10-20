@@ -19,7 +19,7 @@ docker volume create <your-volume-name>   # first time only
 docker compose --env-file .env -f src/knowledge_graph/docker-compose.yml up -d
 ```
 
-Compose fails with "Set NEO4J_DATA_VOLUME to the graph volume (v1 or v2)" when the variable is unset. The graph version in use is whichever volume you name (v1 volume today; the v2 volume `kg_neo4j_data_v2` only after the v2 build is approved and run, see `scripts/graph_ingestion/README.md`).
+Compose fails with "Set NEO4J_DATA_VOLUME to the graph volume (v1 or v2)" when the variable is unset. The graph version in use is whichever volume you name (the live graph is **v2**, volume `kg_neo4j_data_v2`, built 2026-10-20; the retired v1 graph is the volume `knowledge-graph_neo4j_data`, kept for rollback, see "Rollback to v1" in `scripts/graph_ingestion/README.md`). Only one Neo4j container can run at a time (ports 7474 and 7687): the v2 container is `neo4j-recommendation`, the stopped v1 container is `neo4j-recommendation-v1`.
 
 This will:
 
@@ -396,6 +396,6 @@ For production deployments:
 
 1. ✅ Start Neo4j with Docker Compose
 2. ✅ Verify connection
-3. 📝 Build the graph: follow the "Graph v2" runbook in [`scripts/graph_ingestion/README.md`](../../scripts/graph_ingestion/README.md) (pre-flight, dump, pilot, import, post-import, validation)
+3. ✅ The graph is built (v2, 2026-10-20). To rebuild it or to roll back to v1, follow the "Graph v2" runbook and "Rollback to v1" in [`scripts/graph_ingestion/README.md`](../../scripts/graph_ingestion/README.md); counts are in `production_artifacts/graph_state_snapshot.md`
 
 For the Python connector API, see the docstrings in [`graphdb/neo4j_connector.py`](graphdb/neo4j_connector.py). The former `README.md` and `QUICKSTART.md` in this folder were removed on 2026-10-19 because they described a never-implemented schema and wrong import paths (see `production_artifacts/Documentation_Audit_Report.md`).

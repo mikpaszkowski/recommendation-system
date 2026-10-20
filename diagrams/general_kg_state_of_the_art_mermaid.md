@@ -1,64 +1,62 @@
 ```mermaid
 flowchart TD
-%% NOTE 2026-10-19: v1 design schema. Graph v2 (Vision 2026-10-19-018) drops Variant and PriceRange and adds the Taxon tree.
-%% Redraw after the v2 graph is built and validated.
+%% Graph v2 build and schema, live since 2026-10-20 (Vision 2026-10-19-018; runbook in scripts/graph_ingestion/README.md).
+%% Redrawn 2026-10-20: the ASTE / aspect-preference layer and the Variant / PriceRange nodes of the v1 design are not part of v2.
 
 subgraph Ingest
-  METADATA[Product metadata\nparent asin title brand categories price]
-  REVIEWS[User reviews\nuser id asin text rating timestamp]
+  METADATA[Raw product metadata\nmeta_Electronics.jsonl]
+  REVIEWS[Raw reviews\nElectronics.jsonl + train / valid / test splits]
+  CATALOGUE[Frozen catalogue\n265307 parent asins]
 end
 
-subgraph Processing
-  CLEAN[Clean and normalize\nparsing timestamps ids]
-  ASPECTS[Aspect opinion extraction\nASTE triplets]
-  AGG_PREFS[Aggregate user preferences\nprefers dislikes from sentiment]
+subgraph Build
+  TRANSFORM[build_graph_v2.py\nproduct mapping, taxonomy, review cap 20,\nsplit exclusion, lineage.json]
+  IMPORT[import_graph_v2.py\nneo4j-admin offline import]
+  POST[post_import_v2.py\nconstraints, embeddings, vector and full-text indexes]
+  VALIDATE[validate_graph.py\n18 hard gates, then stamp GraphVersion]
 end
 
 subgraph Graph_Neo4j
   USER[User]
   REVIEW[Review]
-  VAR[Variant]
   PARENT[ParentProduct]
-  ASPECT[Aspect]
   BRAND[Brand]
   CAT[Category]
-  PRICE[PriceRange]
+  ATTR[Attribute]
+  TAXON[Taxon]
+  GVER[GraphVersion]
 
-  USER --> REVIEW
-  REVIEW --> VAR
-  VAR --> PARENT
-  REVIEW --> VAR
-  PARENT --> BRAND
-  PARENT --> CAT
-  PARENT --> PRICE
-  REVIEW --> ASPECT
-  USER --> ASPECT
+  USER -->|WROTE| REVIEW
+  REVIEW -->|ABOUT_PRODUCT| PARENT
+  PARENT -->|HAS_BRAND| BRAND
+  PARENT -->|BELONGS_TO_CATEGORY| CAT
+  PARENT -->|HAS_ATTRIBUTE| ATTR
+  PARENT -->|IN_TAXON| TAXON
+  TAXON -->|BROADER| TAXON
 end
 
 subgraph Serve
-  QUERY[Recommendation queries]
+  QUERY[GraphSearchTool\nhybrid vector + structural retrieval]
   RECS[Graph backed recommendations\nwith explanations]
 end
 
-METADATA --> CLEAN
-REVIEWS --> CLEAN
-CLEAN --> GRAPHLOAD[Load graph data]
-ASPECTS --> GRAPHLOAD
-AGG_PREFS --> GRAPHLOAD
+METADATA --> TRANSFORM
+REVIEWS --> TRANSFORM
+CATALOGUE --> TRANSFORM
+TRANSFORM --> IMPORT
+IMPORT --> POST
+POST --> VALIDATE
+VALIDATE --> GVER
 
-CLEAN --> ASPECTS
-ASPECTS --> AGG_PREFS
+IMPORT --> USER
+IMPORT --> REVIEW
+IMPORT --> PARENT
+IMPORT --> BRAND
+IMPORT --> CAT
+IMPORT --> ATTR
+IMPORT --> TAXON
 
-GRAPHLOAD --> USER
-GRAPHLOAD --> REVIEW
-GRAPHLOAD --> VAR
-GRAPHLOAD --> PARENT
-GRAPHLOAD --> ASPECT
-GRAPHLOAD --> BRAND
-GRAPHLOAD --> CAT
-GRAPHLOAD --> PRICE
-
-USER --> QUERY
-QUERY --> R
-
+PARENT --> QUERY
+REVIEW --> QUERY
+QUERY --> RECS
 ```

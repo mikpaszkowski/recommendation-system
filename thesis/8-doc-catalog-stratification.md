@@ -18,6 +18,22 @@ The text below is kept as written on 2026-10-06. Its numbers were not rewritten.
 
 **C-3. Substring counts are noisy (pre-existing caveat).** `CONTAINS` keyword matching counts cross-type matches, for example "phone" inside "headphone" and "case" inside other words. This is the word-boundary problem fixed for category matching in 2026-10-07-009 point 2. The head/tail figures are approximate, and the qualitative long-tail claim should be re-checked on v2 taxonomy leaves.
 
+## Correction Note (2026-10-20, Thesis Evaluator, graph v2 executed)
+
+The text above and below is kept as written. No stratum size in §3.2 has been recomputed. Sources: `13-doc-graph-integrity.md` §7, `graph_versions/v2/validation_report.json`, `graph_versions/v2/lineage.json`, `graph_versions/v2/baseline_comparison.json`, and the archived runs `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (v1) and `eval_2026-10-20_1114`, `_1128`, `_1142` (v2).
+
+**C-4. The recount required by C-1 is now possible.** Graph v2 was built, passed 18/18 hard gates and was stamped on 2026-10-20. It has 265,307 products, of which 8 are untitled (v1: 104,281). 248,053 products have an `IN_TAXON` edge into a Taxon tree of 1,183 nodes (depth ≤ 7). 17,254 products have no category path. The §3.2 keyword counts and the "Computers ~46.5k" figure remain v1 numbers over titled products, and they have not been recomputed on v2.
+
+**C-5. The Category node set changed, and with it category resolution.** v2 keeps one `Category` node per `main_category` (FR-008), so the count falls from **71 to 38**. The 33 legacy subcategory nodes and their `SUBCATEGORY_OF` edges are gone, and the hierarchy now lives in `Taxon`. The Category embeddings also changed: only 40% of them are identical to v1 (pre-flight P-09), because the template's sample titles change once ghosts are filled.
+
+In the paired v1/v2 runs, the category applied by the pipeline differs for the **same 12 of 21** legacy queries in every run pair (`13-doc-graph-integrity.md` §7.5, O-4). For example, "Mice" on v1 becomes the raw string "mouse" on v2. Target admission is unchanged (20/21). Two consequences:
+- A per-stratum accuracy comparison across graph versions (RQ8) mixes up the stratum with the category-resolution path.
+- Strata should be defined on v2 Taxon leaves and compared within one graph version.
+
+**C-6. Cold and long-tail strata need redefinition on v2.**
+- **S1 "cold".** S1 of benchmark v2 (Vision 2026-10-18-014: no reviews, priced, embedded) has **about 13 candidates** on v2: only 13 of 265,307 products have no review (lineage; review-embedded product coverage is 0.99995). On v1 most titled products had no review in the graph (19,439 of 161,026 titled products had one), so the stratum was large. The redefinition (G-9: review-sparse stratum, cold start simulated by masking; `13-doc-graph-integrity.md` §4.4 E-3) is pending for the R2b benchmark freeze.
+- **Long tail by review count.** On v2, a product's number of `Review` nodes is capped at 20 (gate H-07; for example a benchmark target with 472 v1 review nodes has 20 on v2, R-07). Graph review-node counts therefore no longer measure popularity. A long-tail stratification by popularity on v2 must use the metadata count stored as `ParentProduct.review_count` (raw `rating_number`).
+
 ---
 
 ## 1. Formal Research Context

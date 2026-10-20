@@ -112,3 +112,44 @@ Files changed in this pass: `scripts/graph_ingestion/README.md`, `production_art
 Still open: `graph_state_snapshot.md`, `schema.md`, the 3 diagrams and the `.jpg` (deferred until v2 is built); the v2 schema doc and `graph_versions/README.md` (after the build); spec §13 status lines for A-3 and A-6 (owner @pm-specs); AI-13 in the plan.
 
 Note on scope: `docs/changelog/changelog.md` was not read for edits or modified (historian writing in parallel). Existing changelog lines mentioning `CREATE VECTOR INDEX` working (line 1140) are historical and unchanged; they conflict with the 5.14 reality (see Implementation_Plan GAP-003 note).
+
+---
+
+## Pass 2026-10-20 — Graph v2 BUILT (deferred rewrites done)
+
+**Scope**: graph v2 is built and live (validated 18/18, `GraphVersion` v2 stamped 2026-10-20T08:20:05Z, v2 baseline accepted at CP-9, F4 complete). The rewrites deferred on 2026-10-19 ("until v2 is built") were done. Sources: `graph_versions/v2/RUNBOOK_LOG.md`, `validation_report.json` (H-01 … H-18, R-03, R-08), `lineage.json`, `embedding_report.json`, `graph_versions/v1/snapshot.json`, `DUMP.json`, spec §5.1 and §5.6. Every figure written was read from these files. No code, protected file, changelog, thesis, `graph_versions/` or Docker/Neo4j state was touched.
+
+### Findings and fixes
+
+| File | Status before | Fix |
+|---|---|---|
+| `production_artifacts/graph_state_snapshot.md` | ⏰ July curated-subset report under a stale banner | Rewritten as the v2 graph state: build provenance, node and relationship counts, embedding coverage, 5 vector indexes via procedure (Neo4j 5.14) plus the full-text index on title / description / features / details_text, constraints, coverage figures (R-01 … R-03), `GraphVersion` fields, runtime profile, known limits. Short dated v1 section (retired; dump, container, volume, why replaced) with the R-08 v1 vs v2 table. July content removed (still in git history, pointers kept) |
+| `docs/kg_pipeline/schema.md` | ⏰ design-time schema with a "rewrite after build" banner | Part 1 added: live v2 schema (nodes, properties, counts, relationships, indexes, constraints, templates, what is dropped or not built). Original design kept as Part 2 and marked historical |
+| `diagrams/nodes_edges_mermaid.md` | ⏰ v1 schema with comment | Redrawn for v2 (ParentProduct, Review, User, Brand, Category, Attribute, Taxon, GraphVersion; IN_TAXON / BROADER) |
+| `diagrams/general_kg_state_of_the_art_mermaid.md` | ⏰ v1 schema, ASTE layer, broken `QUERY --> R` edge | Redrawn as the v2 build pipeline and schema; the dangling edge is gone |
+| `diagrams/conversation_flow.md` | ⏰ Neo4j node box listed `:Item`, `:PriceRange` | Node box updated to v2 labels and indexes |
+| `scripts/graph_ingestion/README.md` | ⏰ runbook had gaps | Status "built"; R-4 uses `docker stop neo4j-recommendation`; R-7 renames the v1 container to `neo4j-recommendation-v1`; R-9 runs `post_import_v2.py all` detached with `nohup` and says how to re-run one failed step; new "Rollback to v1" (kept container, compose on the v1 volume, dump restore with hash); new "Lessons from the 2026-10-20 build" (compose project `knowledge-graph` vs current path, 2.6 h run, MPS batch 32, phrase smoke test). `--embed-device` / `--embed-batch-size 32` were already present and are now explained |
+| `README.md` | ⏰ "only the code exists, live graph is still v1" | Step 3 states v2 is live since 2026-10-20 |
+| `src/README.md` | ⏰ "graph_v2 is code only" | States v2 built and live |
+| `src/knowledge_graph/DOCKER.md` | ⏰ "v1 volume today" | v2 live, v1 volume and container names, one container at a time; next-steps line marked done |
+| `production_artifacts/action_items/README.md` | ⏰ "no graph operation has run" | Row says built 2026-10-20; v1-figures note gives the v2 coverage |
+| `action_items/Retrieval_Score_Redesign_Roadmap.md`, `Proposed_Fix_Vector_Aggregation.md`, `Live_Graph_Audit_2026-10-10.md` | ⏰ "v2 not built yet" | Dated notes updated; v1 text kept as history |
+
+### Conflicts and issues found (not fixed here)
+
+- ⚠️ **Code vs v2 schema (needs the user)**: `src/tools/graph_search_tool.py:542` orders reviews by `r.helpful_votes DESC, r.timestamp_iso DESC` (`fetch_product_attributes`, AI-06). Graph v2 stores `Review.helpful_vote` and `Review.timestamp` (ms). The property names do not exist in v2, so the ordering is a no-op (Neo4j returns null for missing properties). Docs now state the v2 names. Fixing it is code work (AI-06).
+- ⚠️ `production_artifacts/Implementation_Plan.md` (protected, user approval needed): the AI-13 line still tells to refresh `graph_state_snapshot.md` (now done for the snapshot; `scripts/graph_ingestion/README.md` also refreshed; `seaborn` in `.venv` was already noted done), and F4 / A1.1 text may still say the baseline is pending. Suggest marking AI-13 `[x]`.
+- ⚠️ `production_artifacts/Technical_Specification_Graph_Rebuild.md` §13 status lines for A-3 and A-6 remain stale (owner @pm-specs, protected).
+- ⏰ Changelog, thesis docs (`thesis/README.md`, `thesis/13-doc-graph-integrity.md` still say "no v2 graph") and `production_artifacts/Project_State_Report.md`: not edited, being written by other agents or protected. They need the same "built 2026-10-20" correction.
+- 🔗 `src/knowledge_graph/graphdb/create_indexes.py` still holds DDL that Neo4j 5.14 rejects (code, unchanged).
+
+### Still open
+
+- 🕳️ **Binary images**: `diagrams/crs_detailed_architecture_2026-10-17.jpg` and `diagrams/crs_detailed_architecture_1791405352600.jpg` (untracked) were not edited. They predate the build; `crs_detailed_architecture.html` ("flows as of 2026-10-19") is an editable source and shows the retrieval flow rather than the graph schema, but its "Historical & co-purchase paths: schema mismatch · AI-03" box and any node list should be checked at the next redraw. **Flag: redraw the JPGs after the next architecture change; check whether either shows `Variant` / `PriceRange` / `:Item`.** I could not open them to verify, so treat them as possibly stale.
+- 🕳️ `graph_versions/README.md` (index of `v1/` and `v2/` files and their hashes) still does not exist. Proposed, needs approval.
+- 🕳️ A package README for `src/knowledge_graph/graph_v2/` (optional, as before).
+- ⏰ `diagrams/recommendation_flow.md` was read only for schema terms: its Cypher box still shows the pre-R1 `sum(score)` / `BELONGS_TO` / `helpful_votes` form, not graph v2 or the RRF channels. Not changed in this pass (retrieval, not graph schema). Proposed: redraw for RRF channels.
+
+### Pass summary
+
+Files changed: 14 (`graph_state_snapshot.md`, `schema.md`, 3 diagrams, `scripts/graph_ingestion/README.md`, `README.md`, `src/README.md`, `src/knowledge_graph/DOCKER.md`, `action_items/README.md`, and the 3 action-item documents Roadmap, AFP-002 and Live Graph Audit) plus this report. Valid and unchanged: `.env.example`, `docker-compose.yml`, `evaluations_archive/README.md`, `extensibility.md`.

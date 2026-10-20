@@ -22,6 +22,26 @@ The text below is kept as written. No result in it is rewritten, and the archive
 
 **C-3. v1 figures in §4.4 and §4.5.** The price coverage of Table 3 (≈ 0.54), the base rates 2.15% and 0.52%, and Table 5 are v1 quantities. On v2, ghosts are removed and the top 5 reviews of every reviewed product are embedded. That changes the price-unknown share and makes review-coverage bias, as defined, close to uninformative (`13-doc-graph-integrity.md` §4.4, E-2). Findings 6 and 7 are statements about v1 and should be cited as such.
 
+## Correction Note (2026-10-20, Thesis Evaluator, graph v2 executed)
+
+The text above and below is kept as written. The R2a runs stay citable as graph v1 evidence. Sources: `13-doc-graph-integrity.md` §7, `graph_versions/v2/validation_report.json` (SHA-256 `d8a68b7f…8af`), `graph_versions/v2/lineage.json`, `graph_versions/v2/baseline_comparison.json`, and the archived runs `evaluations_archive/eval_2026-10-20_1114`, `_1128`, `_1142`.
+
+**C-4. The extended predicate has been exercised.** Graph v2 passed 18/18 hard gates and was stamped (`GraphVersion` v2, `validation_passed: true`). The three v2 runs at clean commit `4248d03` are the first runs certified under FR-029. Each records `graph_version.version = v2` and the lineage, validation-report and catalogue SHA-256 values in `graph_snapshot`, with `citable: true`.
+
+The protocol of §3.3 was applied unchanged to the v1 → v2 comparison (per-query mean over r = 3, paired randomization, bootstrap CI, Holm). Its result: no arm changes significantly (all $p_{Holm} \ge 0.875$), with `rrf3` MRR 0.226 → 0.319 (+0.093, CI [−0.004, +0.208]).
+
+The comparison also illustrates why §3.3 makes the exact randomization test primary. `cypher_only` has a bootstrap CI for ΔMRR of [−0.198, −0.011], which excludes 0. But only 4 queries are discordant, so the exact test cannot go below p = 0.125 ($p_{Holm}$ = 0.875). Under this protocol it is correctly not reported as a finding.
+
+**C-5. §4.5 / Table 5 do not carry over to v2.** On v2 the catalogue reference rate of review coverage is 0.99995 (all nodes and titled alike). Review-coverage-bias@10 is **1.000 for every arm**, including the channel-off null `rrf2`, in all three v2 runs. The "excess over `rrf2`" column is therefore 0 by construction, and the metric no longer separates arms. It must be redefined before R2b, for example as the share of top-K reached only through the review channel. Table 5 and finding 7 remain v1 evidence.
+
+**C-6. The RS-02 premise no longer holds.** §4.3 finding 1 is tuning-side input to the RS-02 rule (Vision 2026-10-18-015 point 4), which was stated to hold "only for the current 4.7% review-embedding coverage". On v2, coverage is 99.995%, and all 21 targets have embedded reviews (v1: 1 of 21). That input is v1-only, and the rule must be restated before it is decided on benchmark v2.
+
+**C-7. Category resolution and other v2 quantities that affect the measured metrics.**
+- **Category resolution.** Category nodes fall from 71 to 38 (FR-008), and Category embeddings changed. The category applied by the pipeline therefore differs for 12 of 21 queries between v1 and v2 (`13-doc-graph-integrity.md` §7.5, O-4). `type-precision@K` and the category part of any cross-version comparison mix up the graph version with the category-resolution path. The gold-target check is unchanged (17 targets checked, 38 constraints, 19 unknown on both graphs).
+- **Price coverage.** On v2, 151,262 of 265,307 catalogue products (57%) have no price (lineage). Table 3's price coverage (≈ 0.54) was measured within the top-K on v1 and has not been recomputed on v2.
+
+**C-8. Benchmark v2, stratum S1.** S1 "cold" (Vision 2026-10-18-014) has about 13 candidates on v2, because only 13 products have no review. The G-9 redefinition (review-sparse stratum, cold start simulated by masking) is pending for the R2b freeze. Until then, the stratum sizes of 2026-10-18-014 cannot all be met on v2.
+
 ---
 
 ## 0. Scope of the Claim

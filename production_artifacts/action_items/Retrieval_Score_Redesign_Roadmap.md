@@ -31,7 +31,7 @@ The retrieval score should measure **how well a product matches what the user as
 
 ### Live data facts (graph v1; read-only queries, 2026-10-10 and 2026-10-14)
 
-> **Correction (2026-10-19, Vision 2026-10-19-021)**: the figures in this section describe the **v1 graph** only. 104,281 of the 265,307 v1 products are ghosts (no title, price or category; identical blank-template embedding), so the "47% have reviews", "53% no reviews / cold", "4.7% / 2.2% review-embedding coverage" and "71 categories" figures do not hold as statements about the catalogue. In v1, 12% of titled products have reviews, and 85% of the 5,715 review-embedded products are ghosts. All of them are recomputed on graph v2 (`production_artifacts/Technical_Specification_Graph_Rebuild.md`). **Graph v2 has not been built yet** (code only, 2026-10-19): the live Neo4j is still v1, and no v2 figure exists. The v1 numbers are kept below as history.
+> **Correction (2026-10-19, Vision 2026-10-19-021)**: the figures in this section describe the **v1 graph** only. 104,281 of the 265,307 v1 products are ghosts (no title, price or category; identical blank-template embedding), so the "47% have reviews", "53% no reviews / cold", "4.7% / 2.2% review-embedding coverage" and "71 categories" figures do not hold as statements about the catalogue. In v1, 12% of titled products have reviews, and 85% of the 5,715 review-embedded products are ghosts. All of them are recomputed on graph v2 (`production_artifacts/Technical_Specification_Graph_Rebuild.md`). **Graph v2 was built on 2026-10-20** (validated 18/18): the live Neo4j is now v2, with 99.995% of products having an embedded review, 8 untitled products and 57.0% of products without a price (`production_artifacts/graph_state_snapshot.md`). The review-based claims of this section are still to be re-measured on v2 (R2b). The v1 numbers are kept below as history.
 
 | Fact | Value |
 |---|---|
@@ -48,7 +48,7 @@ The retrieval score should measure **how well a product matches what the user as
 | `BOUGHT_TOGETHER` | absent |
 | Review properties | no timestamp, no helpful votes |
 
-**Consequence (v1 reading, superseded by the correction above)**: the low 2.2% was *embedding* coverage, not *review* coverage. Also, "no reviews" is the **normal case** (53% of all products, 81% of priced ones), not an edge case. The 53% and 81% include ghosts; the "normal case" claim is re-tested on v2.
+**Consequence (v1 reading, superseded by the correction above)**: the low 2.2% was *embedding* coverage, not *review* coverage. Also, "no reviews" is the **normal case** (53% of all products, 81% of priced ones), not an edge case. The 53% and 81% include ghosts; the "normal case" claim is re-tested on v2 (built 2026-10-20; 57.0% of v2 products have no price, and 99.995% have an embedded review, so the "no reviews" share must be redefined in R2b).
 
 ---
 

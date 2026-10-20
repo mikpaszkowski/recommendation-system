@@ -5,6 +5,147 @@
 
 ---
 
+## 📅 2026-10-20 (Graph v2 wykonany: zbudowany, zwalidowany, opieczętowany i zmierzony; F4 zakończone)
+
+### Changelog (względem stanu z 2026-10-19, wpis „Graph v2 — przebudowa fundamentu danych")
+
+> **Kontekst**: Wpis z 2026-10-19 opisywał wyłącznie kod potoku; żadna operacja na grafie nie była wtedy wykonana. Ten wpis opisuje **wykonanie** runbooka (punkty kontrolne CP-1 … CP-9) na gałęzi `feature/afp-002-vector-aggregation`. Źródło główne: `graph_versions/v2/RUNBOOK_LOG.md`, uzupełniająco `graph_versions/v2/preflight_report.json`, `graph_versions/v2/pilot/pilot_report.json`, `graph_versions/v2/validation_report.json`, `graph_versions/v2/baseline_comparison.json`, `graph_versions/v1/DUMP.json` oraz pozycja F4 w `production_artifacts/Implementation_Plan.md` (F4.1 … F4.7 oznaczone `[x]`). Liczby poniżej pochodzą z tych plików; nie ponowiono żadnych pomiarów na żywym grafie.
+>
+> **Odniesienie do Vision Report**: realizuje decyzje 2026-10-19-018 … 021 (przywrócenie uziemienia §4 „Knowledge Graph as Grounding”). Nie zmienia kierunku strategicznego, nie dodaje trenowania modeli ani nowego zbioru danych. Wpis nie wymaga nowej decyzji w Vision Report; po stronie metryk wynika jedna otwarta kwestia (redefinicja `review-coverage-bias@K`, patrz „Nadal brakuje”).
+>
+> **Zakres commitów** (kolejność wykonania):
+>
+> | Commit | Opis |
+> |---|---|
+> | `8306d9b` | poprawka braku pamięci MPS (pre-flight i osadzanie) |
+> | `e6183d0` | zapis CP-1 |
+> | `75c5c0a` | zapis CP-2 … CP-4; **czysty commit transformacji** (`--require-clean`) |
+> | `d4f338b` | linie pochodzenia (lineage) |
+> | `8c35d68` | pilot |
+> | `8b10a35`, `0a32604` | trzy błędy po imporcie (patrz „Korekty”) |
+> | `35e395c` | graf v2 zbudowany, zwalidowany i opieczętowany |
+> | `79f21e6` | profil uruchomieniowy (R-11) i pre-check R-12 |
+> | `012b780`, `4248d03` | poprawka A-7: lista dozwolonych ścieżek dla dokumentacji i `docker-compose` |
+> | `65a0ba0` | przebiegi baseline v2 (cytowalne) i porównanie v1 / v2 |
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Aktywny graf v2 (Critical):** Neo4j 5.14.0 działa na wolumenie Docker `kg_neo4j_data_v2` (compose, `.env`: `NEO4J_DATA_VOLUME=kg_neo4j_data_v2`). Liczności z `validation_report.json` (`graph_version: v2`, `passed: true`, utworzony 2026-10-20T02:22:44Z):
+
+    | Element | v1 | v2 |
+    |---|---|---|
+    | `ParentProduct` | 265 307 (z czego **104 281 duchów**) | 265 307 (**8 bez tytułu**; udział 0,393058 → 0,00003) |
+    | `Review` | 1 629 426 | 3 382 248 |
+    | `User` | 471 474 | 2 594 661 |
+    | `Brand` | 40 998 | 49 663 |
+    | `Category` | 71 | 38 |
+    | `Attribute` | 47 335 | 36 187 |
+    | `Taxon` (drzewo kategorii, `BROADER`, `IN_TAXON`) | brak | **1 183** (maks. głębokość 7, 3 korzenie) |
+    | Pokrycie produktów osadzoną recenzją | 0,021541 (2,2%) | **0,999951 (99,995%)** |
+
+    Relacje v2: `ABOUT_PRODUCT` i `WROTE` po 3 382 248, `HAS_BRAND` 264 274, `BELONGS_TO_CATEGORY` 261 664, `HAS_ATTRIBUTE` 190 043, `IN_TAXON` 248 053, `BROADER` 1 180. W v2 nie istnieją już etykiety `Variant`, `Product`, `PriceRange` ani relacje `RATED`, `REVIEWS`, `IN_PRICE_RANGE`, `IS_VARIANT_OF`, `SUBCATEGORY_OF` (kontrola R-08 pokazuje je jako `null` w v2; bramka H-16 „no legacy schema” = 0).
+2.  **Węzeł `GraphVersion` v2 (High):** `(:GraphVersion {version: 'v2', validation_passed: true})` zapisany 2026-10-20T08:20:05Z poleceniem `post_import_v2.py stamp … --confirm-validation-sha256 d8a68b7f…8af` (lineage `3f985952…86ec`, commit kodu `75c5c0a`, commit pieczęci `0a32604`, Neo4j 5.14.0). Dopiero od tego momentu przebiegi live są cytowalne wg `src/evaluation/provenance.py` (powód `graph_version_not_validated` znika).
+3.  **Artefakty w `graph_versions/` (git):** `graph_versions/v2/build_params.json` (zatwierdzony w CP-1; `product_content_rule = "title_description"`, `embedding_device = "mps"`, partia kodowania 32), `catalogue_asins.txt.gz` (SHA-256 `76d882ab…f528`), `preflight_report.json` (SHA-256 `3c2804ff49968f6490a04e300ee0c4ddfbe8c269c053caf0afe442fdfc03f5d1`), `pilot/pilot_report.json`, `import_run.json`, `validation_report.json` (SHA-256 **`d8a68b7f…8af`**; pełny skrót `d8a68b7f2ac1589353fc8d32b6b00646dfe4e2aca98150b1964f8f1e6b1bb8af`), `baseline_comparison.json`, `RUNBOOK_LOG.md`; `graph_versions/v1/DUMP.json`.
+4.  **Zrzut v1 (High, ścieżka wycofania):** `~/neo4j-backups/kg_v1_20261019_2234/neo4j.dump`, 2 717 863 893 bajtów, SHA-256 **`51db81286ef04f4a780a37833ed5d6d47d1ecc9737ea16ca9043c20af6c0026f`** (sprawdzony niezależnie `shasum`; zapis w `graph_versions/v1/DUMP.json`, `created_at` 2026-10-19T22:35:27Z). Opcjonalny test odtworzenia (`restore-test`) **nie został uruchomiony**.
+5.  **Cytowalne przebiegi baseline v2 (High):** `eval_2026-10-20_1114`, `_1128`, `_1142`, zarchiwizowane (`evaluations_archive/`), `graph_version` = v2 zwalidowany. Szczegóły w sekcji „Weryfikacja”.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **Przebieg wykonania — punkty kontrolne (wszystkie zatwierdzone przez użytkownika 2026-10-20):**
+    *   **CP-1 (R-1, pre-flight):** raport bez nieudanych sekcji (SHA-256 `3c2804ff49968f6490a04e300ee0c4ddfbe8c269c053caf0afe442fdfc03f5d1`), uruchomiony na `82a1bb9` z niezatwierdzoną poprawką MPS (dwa wcześniejsze przebiegi zawiesiły się w P-04 i nie zapisały raportu; poprawka w `8306d9b`). Pomiary: 8 produktów bez tytułu, 0 produktów katalogu bez surowych metadanych, **3 382 248** zachowanych recenzji (60 521 zduplikowanych identyfikatorów recenzji scalono), 1 081 137 recenzji do osadzenia, 2 594 661 użytkowników, 265 294 produkty z co najmniej jedną recenzją, 1 183 węzły taksonów, 17 254 produkty bez ścieżki kategorii, 151 262 bez ceny; osadzanie na MPS przy partii 32 (335 tekstów/s; partia 64 kończyła się brakiem pamięci); szczytowy RSS próby 3,6 GB (cel 3 GB, zaakceptowany przez użytkownika), 72 GB wolnego miejsca. P-09: osadzenia produktów odtwarzają v1 (19 z 20 identycznych), osadzenia kategorii nie (40% identycznych), bo zmienia się próbka tytułów po uzupełnieniu duchów; uznane za część różnicy v1 → v2. Decyzje: zatwierdzenie `build_params.json` w całości, w tym OQ-1 (jedyny produkt wyłącznie z `features` nie dostaje osadzenia zamiast prawie pustego).
+    *   **CP-2 (R-2, bramka startowa):** użytkownik potwierdził, że R2a nie wymaga już grafu v1 (cytowalne przebiegi v1 zarchiwizowane: `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`, commit `96874f3`). Do `.env` (ignorowany przez git) dodano `NEO4J_DATA_VOLUME` i `NEO4J_DATA_VOLUME_V1` (strażnik importu). R-3: `export_v1_snapshot.py --verify-only` potwierdził niezmienność katalogu (265 307), migawki v1 i celów benchmarku.
+    *   **CP-3 (R-4, zatrzymanie v1):** `docker stop neo4j-recommendation` (kod wyjścia 0). Polecenie zatrzymania z runbooka nie pasowało do kontenera (należy do projektu compose `knowledge-graph`, utworzonego ze ścieżki `src/knowledge-graph/docker-compose.yml`); obsłużone w R-9/R-7 przez przemianowanie kontenera.
+    *   **CP-4 (R-5, zrzut):** patrz „Nowe komponenty” p. 4; wolumen v1 `knowledge-graph_neo4j_data` był zamontowany tylko przez kontener zrzutu i nie został zmodyfikowany.
+    *   **R-6 (transformacja)** na czystym commicie `75c5c0a`: pilot `--sample-mod 20` (13 381 produktów, 171 212 recenzji, 54 668 do osadzenia, 790 taksonów; 6 min, szczyt RSS 1,1 GB) i pełna (265 307 produktów, 3 382 248 recenzji, 1 081 137 do osadzenia, 2 594 661 użytkowników, 49 663 marki, 38 kategorii, 36 187 atrybutów, 1 183 taksony; 2,9 GB CSV; 10,5 min; szczyt RSS **4,2 GB**, czyli powyżej celu NFR-002 ≤ 3 GB i powyżej wcześniejszego oszacowania 3,3 GB). Liczności zgodne z `build_params.json`.
+    *   **CP-5 (R-7, pilot):** kontener v1 przemianowany na `neo4j-recommendation-v1` (niezmieniony, zatrzymany), aby compose mógł utworzyć `neo4j-recommendation`. Wolumen roboczy `kg_neo4j_data_v2_pilot`: import 13 s, magazyn 479 MB, pusty raport importu (0 błędnych wierszy). `post_import_v2.py all`: 7,8 min, MPS, partia 32, 0 zdarzeń braku pamięci, 0 przejść na CPU; 5 indeksów wektorowych (procedura), test dymny full-text zaliczony. `validate_graph.py --pilot`: **18/18** bramek twardych. R-07: 20 celów benchmarku poza 5% próbą; próbkowany cel `live_eval_laptop_02` zachował tytuł, cenę, markę i kategorię (recenzje 33 → 20, limit). Ekstrapolacja pełnego budowania (`pilot/pilot_report.json`): import ≈ 4 min, osadzanie ≈ 2,25 h, magazyn ≈ 12,5 GB + 0,5–1 GB logów. Kontener pilota usunięty (`compose down` bez `-v`), wolumen roboczy skasowany.
+    *   **CP-6 (R-8, pełny import):** `docker volume create kg_neo4j_data_v2`; `import_graph_v2.py import --execute`: **94 s**, magazyn 4,0 GB, pusty raport importu (0 błędnych wierszy); `graph_versions/v2/import_run.json`.
+    *   **CP-7 (R-9, przełączenie, kroki po imporcie, walidacja):** compose uruchomiony na `kg_neo4j_data_v2` z profilem budowania (sterta 4G, cache stron 1G, limit transakcji 600 s). `post_import_v2.py all` uruchomiony odłączony (`nohup`), ok. **2,6 h**: wszystkie etykiety osadzone na MPS przy partii 32 bez braku pamięci (`Review` 1 081 137; `ParentProduct` 265 303, 4 pominięte przez regułę `title_description`; `Brand` 49 663; `Category` 38). Przebieg zatrzymał się na kroku full-text (patrz p. 2). Po poprawkach: `validate_graph.py` → **18/18 bramek twardych**.
+    *   **CP-8 (R-10, pieczęć):** użytkownik przejrzał i zatwierdził raport walidacji; zapis `GraphVersion` (patrz „Nowe komponenty” p. 2).
+    *   **R-11 (profil uruchomieniowy):** `.env` bez nadpisań budowania; compose odtworzony z stertą 2 GiB, cache stron 2 GiB, limitem transakcji 1 min; `GraphVersion` v2 obecny.
+    *   **CP-9 (R-12, baseline):** patrz „Weryfikacja”; zaakceptowany przez użytkownika 2026-10-20. Na tym F4 jest zakończone.
+2.  **Trzy błędy kodu znalezione dopiero na pełnym grafie (po zatwierdzonej walidacji pilota), naprawione i zatwierdzone z testami:**
+    *   `8b10a35`: (a) test dymny full-text na pojedynczym tokenie nie skalował się (token pasował do 11 828 produktów) i uruchamiał awaryjny indeks `features_text`; zastąpiony testem frazą, z odzyskiwaniem po awarii; (b) 2 węzły `Attribute` z niesparowanymi surogatami nie zostały zapisane zwrotnie, bo zapis dopasowywał ciągi znaków; zapis zwrotny przez `elementId`, z licznikami zapisów.
+    *   `0a32604`: zapytanie testu dymnego przekazywało parametr `query=` do `Session.run` (kolizja nazw argumentów); zmieniono na `$search`.
+    *   Po poprawkach ponowiono `embed --labels Attribute` (2 osadzone; 36 187 / 36 187) oraz `fulltext-index` (indeks awaryjny usunięty, `features_text` zdjęte z 215 032 produktów, indeks przebudowany na `title`, `description`, `features`, `details_text`; test frazą znalazł produkt na pozycji 1; bramka H-13 w raporcie: `B00006HC8Q`).
+3.  **Poprawka A-7 listy dozwolonych ścieżek (`012b780`, `4248d03`; `scripts/graph_ingestion/check_baseline_diff.py`):** pre-check R-12 (`--base 88cdbdf`) zwrócił kod 1: 5 ścieżek poza listą, wszystkie dokumentacja lub infrastruktura (`src/README.md`, `src/knowledge_graph/DOCKER.md`, usunięte `src/knowledge_graph/README.md` i `QUICKSTART.md`, `src/knowledge_graph/docker-compose.yml`). Użytkownik wybrał opcję (a) — rozszerzenie listy; po zmianie: 37 zmienionych ścieżek, wszystkie dozwolone.
+4.  **Różnica w liczbie recenzji względem prognozy:** wpis z 2026-10-19 podawał oczekiwane 3 388 842 recenzji (do potwierdzenia w P-02). Zmierzone i zbudowane: 3 382 248. Wcześniejsza liczba pochodziła z szybkiego zliczenia tylko do odczytu, które nie deduplikowało (`preflight_report.json`, P-02: `reference_kept_measured` = 3 388 842). Potok scala 60 521 zduplikowanych identyfikatorów recenzji (ten sam użytkownik, ten sam podrzędny ASIN i ten sam znacznik czasu; `duplicate_review_id` = 60 521, zapis CP-1 w `RUNBOOK_LOG.md`: „3,382,248 kept reviews (60,521 duplicate review IDs collapsed)”). Wyjaśnia to różnicę 6 594 między prognozą a stanem zbudowanym.
+5.  **Rozbieżność nazewnicza do odnotowania:** wpis z 2026-10-19 (p. 1) podawał dla v1 1 630 273 recenzje; kontrola R-08 w `validation_report.json` pokazuje dla `Review` w v1 1 629 426 (`WROTE` 1 624 586, `ABOUT_PRODUCT` 1 634 273). Obie liczby są poprawne, ale dotyczą różnych rzeczy: 1 630 273 to liczba wierszy wejściowego pliku v1 `datasets/processed_data/processed_reviews.csv`, a 1 629 426 to liczba węzłów `Review` w grafie v1. Różnica 847 jest zgodna z tym, że w v1 `review_id = md5(user_id-asin-sort_timestamp)`, a znacznik czasu zawsze wynosił 0, więc powtórne recenzje tego samego podrzędnego ASIN-a przez jednego użytkownika zlewały się w jeden węzeł (`Research_Report_Graph_Rebuild.md` N-2: „likely but not verified”, czyli prawdopodobne, niezweryfikowane).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Kod czytników i agentów (`src/tools/graph_search_tool.py`, `src/tools/kecr_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`, `src/agents/orchestrator.py`, `src/agents/critic_agent.py`) nie był modyfikowany w ramach wykonania; baseline v2 uruchomiono na nich bez zmian (NFR-009), a bramka H-15 potwierdziła, że 21 celów legacy-21 jest uziemionych w v2.
+*   Fuzja RRF i ramiona ablacji z R1, metryki i archiwum R2a: bez zmian. Neo4j pozostaje w wersji 5.14.0; `vector_search_helper.py` nadal emituje `db.index.vector.queryNodes` (D-4), a indeksy wektorowe są tworzone procedurą.
+*   Bramka spurious CLARIFY (RS-23): `check_eval_gate.py --max-spurious-clarify 0` → PASS, 0/21 w każdym z trzech przebiegów v2.
+*   Wszystkie 18 bramek twardych H-01 … H-18 zaliczone (H-03: 8 bez tytułu; H-04: brak sygnatury ducha; H-07: maks. 20 recenzji na produkt; H-10: osadzone = kwalifikujące się dla wszystkich pięciu etykiet, 0 złych wymiarów; H-11: maks. wynik próbek 0,9954624 < 0,9999; H-12: wszystkie indeksy ONLINE 100%; H-14: 4 203 porównane, 0 niezgodności importu; H-17: 0 błędów taksonomii).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **R2b** (stratyfikowany benchmark ~200 + 30 zapytań, podział tuning / test, zamrożenie) — odblokowany, ale niewykonany. Wymaga redefinicji stratum **S1 „cold”** (G-9): w v2 praktycznie wszystkie produkty mają osadzoną recenzję (99,995%), więc definicja „brak recenzji” z decyzji 2026-10-18-014 nie ma już populacji.
+*   **Redefinicja `review-coverage-bias@K`:** wg `RUNBOOK_LOG.md` metryka „nie rozdziela już ramion na v2”; zasady jej przeformułowania nie zostały jeszcze określone (to samo dotyczy plasterka `target_review_embedded`).
+*   Wyniki baseline v2 mają niską moc (21 zapytań); żadne twierdzenie o poprawie lub pogorszeniu wyszukiwania po przebudowie nie jest poparte istotnością statystyczną. Rozstrzygnąć może dopiero R2b.
+*   Test odtworzenia zrzutu v1 (`restore-test`) nie został wykonany; dotychczasowa ścieżka wycofania opiera się na zatrzymanym kontenerze, a zrzut jest drugą, nieprzetestowaną warstwą.
+*   Nadal otwarte (odblokowane przez v2, ale niewykonane): AI-03 (ścieżki historyczne KECR; znaczniki czasu recenzji są teraz w grafie, w tej sesji niezweryfikowane zapytaniem), AI-06, RS-03, RS-12; nadal otwarte bez zmian: RS-24, RS-11, B1–B6, Meta-Phase C, dynamiczne schematy domen (2026-09-29-007), pozostałe uwagi L-1 … L-13 i DL-1 … DL-3 z audytu.
+*   Brak zweryfikowanego wpływu na `ResolverService` i `GraphSearchTool` poza legacy-21: w v2 kategorie to 38 węzłów `Category` (z 71 w v1) plus drzewo `Taxon`; czytniki nadal używają `Category`, a `Taxon` nie jest jeszcze wykorzystywany przez retrieval (nie sprawdzano kodu pod tym kątem w tej sesji).
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+*   **Graf v1 jako aktywny graf.** Pozostaje jako zatrzymany kontener `neo4j-recommendation-v1`, wolumen `knowledge-graph_neo4j_data` (niezmieniony) i zrzut z SHA-256 `51db8128…026f`. Przebiegi live na v1 nie są już cytowalne (brak `GraphVersion`); dowodem dla v1 są wyłącznie zarchiwizowane przebiegi R1 / R2a.
+*   104 281 węzłów-duchów, etykiety `Variant`, `Product`, `PriceRange`, relacje `RATED`, `REVIEWS`, `IN_PRICE_RANGE`, `IS_VARIANT_OF`, `SUBCATEGORY_OF` — nieobecne w v2.
+*   Pilot: kontener usunięty, wolumen roboczy `kg_neo4j_data_v2_pilot` skasowany.
+
+#### 📊 Weryfikacja
+
+*   **Walidacja grafu:** `validate_graph.py` → 18/18 bramek twardych, raport SHA-256 `d8a68b7f2ac1589353fc8d32b6b00646dfe4e2aca98150b1964f8f1e6b1bb8af`, zatwierdzony w CP-8.
+*   **Baseline v2 vs v1** (`graph_versions/v2/baseline_comparison.json`; legacy-21, 3 przebiegi v1: `eval_2026-10-18_2340/_2349/_2358`, 3 przebiegi v2: `eval_2026-10-20_1114/_1128/_1142` na czystym commicie `4248d03`, `--fusion-arms rrf3 rrf2 wrrf3 cc3 sum_legacy`, `gpt-4o-2024-08-06`; średnia na zapytanie po r = 3, test randomizacji parami, bootstrap 95% CI różnicy v2 − v1, korekta Holma między ramionami dla MRR):
+
+    | Ramię | MRR v1 | MRR v2 | Δ | 95% CI | p_Holm |
+    |---|---|---|---|---|---|
+    | `hybrid@rrf3` | 0,226 | 0,319 | +0,093 | [-0,004; +0,208] | 0,875 |
+    | `hybrid@rrf2` | 0,237 | 0,206 | -0,031 | [-0,092; +0,014] | 1,0 |
+    | `hybrid@wrrf3` | 0,345 | 0,322 | -0,023 | [-0,103; +0,065] | 1,0 |
+    | `hybrid@cc3` | 0,298 | 0,288 | -0,011 | [-0,102; +0,088] | 1,0 |
+    | `hybrid@sum_legacy` | 0,176 | 0,144 | -0,032 | [-0,124; +0,058] | 1,0 |
+    | `vector_only` | 0,162 | 0,047 | -0,115 | [-0,276; +0,014] | 0,918 |
+    | `cypher_only` | 0,148 | 0,056 | -0,093 | [-0,198; -0,011] | 0,875 |
+
+    **Wniosek zgodny z zapisem w logu:** żadne ramię nie zmienia się istotnie (MRR p_Holm ≥ 0,875). Zmiany jednoznacznie dodatnie widać tylko w `rrf3`; ramiona jednokanałowe (`vector_only`, `cypher_only`) spadają, przy czym przedział ufności `cypher_only` nie obejmuje 0 przed korektą wielokrotności, a po korekcie Holma p = 0,875. Dla `rrf3` HR@5 0,286 → 0,397 (p = 0,25), HR@20 0,429 → 0,492 (p = 0,625). Przy n = 21 i szumie LLM między przebiegami test ma niską moc, więc brak istotności nie dowodzi braku efektu.
+*   **Bramka spurious CLARIFY:** PASS (0/21 w każdym z trzech przebiegów v2).
+*   **Cytowalność:** wszystkie trzy przebiegi v2 oznaczone jako cytowalne (czysty commit, `graph_version` v2 zwalidowany), zarchiwizowane.
+*   Nie uruchamiano w tej sesji testów jednostkowych ani zapytań do grafu; wpis opiera się na zapisach i raportach wymienionych na początku.
+
+#### 🔁 Ścieżka wycofania (z `RUNBOOK_LOG.md`, R-11)
+
+1.  Zatrzymać `neo4j-recommendation` (v2).
+2.  `docker start neo4j-recommendation-v1` (kontener przemianowany w CP-5, zatrzymany, niezmieniony) albo uruchomić compose z `NEO4J_DATA_VOLUME=knowledge-graph_neo4j_data` (wartość wycofania odnotowana w komentarzu `.env`).
+3.  Awaryjnie: odtworzyć `~/neo4j-backups/kg_v1_20261019_2234/neo4j.dump` po sprawdzeniu SHA-256 `51db81286ef04f4a780a37833ed5d6d47d1ecc9737ea16ca9043c20af6c0026f` (odtwarzanie nieprzetestowane).
+4.  Skutek: przebiegi live na v1 nie będą cytowalne (brak `GraphVersion`).
+
+#### ➡️ Następne kroki
+
+1.  R2b: zamrożenie stratyfikowanego benchmarku na v2, z redefinicją stratum S1 (G-9).
+2.  Redefinicja `review-coverage-bias@K` (i plasterka `target_review_embedded`) dla grafu o pokryciu recenzjami 99,995%.
+3.  Odblokowane pozycje: AI-03, AI-06, RS-12, RS-03.
+4.  Sugestia: ponieważ wykonanie F4 zmienia podstawę empiryczną wyników R1 / R2a (pula kandydatów bez duchów), warto rozważyć wpis w Decision Log Vision Report przez @pm-research — „Te zmiany wprowadzają istotne zmiany architektoniczne. Czy chcesz, żebym zaktualizował `production_artifacts/Vision_Report.md` z nowym wpisem w Decision Log?” (decyzje 2026-10-19-018 … 021 już istnieją; ten wpis nie jest ich zamiennikiem).
+
+### Zaktualizowana Architektura
+
+Architektura potoku bez zmian względem diagramu z 2026-10-19; zmieniło się to, że wszystkie jego kroki zostały wykonane, a graf aktywny to v2.
+
+```mermaid
+flowchart LR
+    V1[("v1: kontener neo4j-recommendation-v1<br/>wolumen knowledge-graph_neo4j_data<br/>zrzut SHA-256 51db8128…026f")]
+    V2[("v2: neo4j-recommendation<br/>wolumen kg_neo4j_data_v2<br/>GraphVersion v2, 18/18 bramek")]
+    RAW["datasets/raw + catalogue_asins.txt.gz"] --> BUILD["build_graph_v2.py (75c5c0a)"]
+    BUILD --> IMP["import_graph_v2.py (94 s)"]
+    IMP --> POST["post_import_v2.py (≈2,6 h, MPS)"]
+    POST --> VAL["validate_graph.py → stamp (CP-8)"]
+    VAL --> V2
+    V2 --> EV["baseline v2: eval_2026-10-20_1114/_1128/_1142"]
+    V1 -. "wycofanie (R-11)" .-> V2
+```
+
+---
+
 ## 📅 2026-10-19 (Graph v2 — przebudowa fundamentu danych: kod potoku gotowy, żadna operacja na grafie jeszcze nie wykonana)
 
 ### Changelog (względem stanu z 2026-10-19, wpis R2a)

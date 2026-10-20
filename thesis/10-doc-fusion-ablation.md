@@ -45,6 +45,30 @@ Consequences: finding 2's "about ten times the 2.15% base rate" for `rrf3` is ab
 - **Review channel.** The v1 review fields `helpful_votes` and `sort_timestamp` are 0 in all 1,630,273 rows (item 6). The v1 "20 most helpful reviews" sample was therefore ordered by `verified_purchase` only, and it was not a helpfulness sample. Together with C-1, the review channel of R1 and R2a is a v1-specific evidence set. Its $\text{rrf2}$ vs $\text{rrf3}$ differences do not transfer to v2.
 - **Coverage-bias metric on v2.** Graph v2 embeds the top 5 reviews of every reviewed product (projected 265,294 of 265,307 products with at least one review). $P_{\text{rev}}$ will then cover nearly the whole catalogue, so coverage bias@K as defined in §3 stops discriminating. It must be redefined before it is reported on v2 (`13-doc-graph-integrity.md` §4.4, E-2). The v1 values in this document and in C-1 and C-3 remain valid as v1 evidence.
 
+## Correction Note (2026-10-20, Thesis Evaluator, graph v2 executed)
+
+The text above and below, including the 2026-10-19 note, is kept as written. Sources: `13-doc-graph-integrity.md` §7, `graph_versions/v2/baseline_comparison.json`, and the archived runs `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (v1, commit `88cdbdf`) and `eval_2026-10-20_1114`, `_1128`, `_1142` (v2, commit `4248d03`, `citable: true`, `GraphVersion` v2 validated). Benchmark, LLM snapshot and arm configuration are the same in all six runs.
+
+**C-8. v1 → v2 re-baseline of the arms.** No arm changes significantly between the graphs (per-query mean over r = 3, paired randomization test, Holm across arms; all $p_{Holm} \ge 0.875$). MRR, v1 → v2:
+
+| Arm | MRR v1 → v2 | Note |
+|---|---|---|
+| `rrf3` | 0.226 → 0.319 | +0.093, 95% CI [−0.004, +0.208] |
+| `rrf2` | 0.237 → 0.206 | |
+| `wrrf3` | 0.345 → 0.322 | |
+| `cc3` | 0.298 → 0.288 | |
+| `sum_legacy` | 0.176 → 0.144 | |
+
+Finding 3 ($H_{1c}$, no detectable ranking difference between arms) is neither overturned nor confirmed on v2. The v2 arm order (`wrrf3` ≈ `rrf3` > `cc3` > `rrf2` > `sum_legacy`) is descriptive only. The full table, with NDCG@10, HR@K and discordant-query counts, is in `13-doc-graph-integrity.md` §7.4.
+
+**C-9. Coverage bias@K no longer separates arms on v2.** This confirms the projection in C-7. $P_{\text{rev}}$ covers 265,294 of 265,307 products (0.99995; titled 0.99995). Review-coverage-bias@10 is **1.000 for every arm** in all three v2 runs (v1: 0.029–0.386). The $H_{1a}$/$H_{1b}$ results (Table 2, C-1, C-3) are v1-only evidence. On v2 the metric must be redefined before it is reported, for example as the share of top-K reached *only* through the review channel. The redefinition is pending before R2b.
+
+**C-10. The RS-02 premise no longer holds.** The RS-02 rule (`rrf2` vs `rrf3`; Vision 2026-10-18-015 point 4) was stated to hold "only for the current 4.7% review-embedding coverage". On v2, review-embedding coverage is 99.995%, and 21 of 21 benchmark targets have embedded reviews (v1: 1 of 21, see C-4). An `rrf2` vs `rrf3` comparison on v2 therefore measures the review channel's *content*, not its *coverage*, and the rule must be restated before R2b. On legacy-21, v2 `rrf3` and `rrf2` reach MRR 0.319 and 0.206. This contrast is descriptive and untested, and it comes from tuning-side queries.
+
+**C-11. Graph-level confounds for per-query comparisons across versions.** Two of them:
+- **Category resolution.** Category nodes fall from 71 to 38, and Category embeddings changed. As a result, the category applied by the pipeline differs for 12 of 21 queries between v1 and v2 (`13-doc-graph-integrity.md` §7.5, O-4). A per-query v1 → v2 change in a filtered arm cannot be attributed to channel content alone. Candidate explanations are listed there as untested hypotheses (HYP-1 … HYP-4).
+- **Ghosts in v1 top-K lists** (measured, `13-doc-graph-integrity.md` F-10). In the citable v1 runs, products without v1 metadata (ghost nodes) held 10.3% of `rrf3` top-10 slots, 14.4% for `sum_legacy`, 6.7% for `cc3`, 3.2% for `rrf2` and 2.4% for `wrrf3`. Because 85.3% of v1 review-embedded products were ghosts, part of the v1 coverage bias in Tables 2–3 and C-3 consisted of ranking data-less nodes. This qualifies the reading of $H_{1b}$ on v1. It does not change the measured values.
+
 ---
 
 ## 0. Scope of the Claim
