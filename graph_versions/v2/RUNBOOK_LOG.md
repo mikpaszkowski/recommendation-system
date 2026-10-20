@@ -106,3 +106,15 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
 - `check_baseline_diff.py --base 88cdbdf` exits 1: 5 paths outside the allow-list, all documentation or infrastructure
   (`src/README.md`, `src/knowledge_graph/DOCKER.md`, deleted `src/knowledge_graph/README.md` and `QUICKSTART.md`,
   `src/knowledge_graph/docker-compose.yml`). Decision pending at CP-9.
+
+## R-12 v2 baseline — CP-9 runs (2026-10-20)
+
+- User chose option (a) for the allow-list (A-7, commits `012b780`, `4248d03`); `check_baseline_diff.py --base 88cdbdf`:
+  37 changed paths, all allow-listed.
+- Three live runs at clean commit `4248d03` (`--mode live --require-clean --fusion-arms rrf3 rrf2 wrrf3 cc3 sum_legacy`,
+  gpt-4o-2024-08-06): `eval_2026-10-20_1114`, `_1128`, `_1142`; all citable, `graph_version` v2 validated; archived.
+- `check_eval_gate.py --max-spurious-clarify 0`: PASS (0/21 spurious CLARIFY in each run).
+- v1 (`eval_2026-10-18_2340/_2349/_2358`) vs v2, per-query means over r = 3, paired randomization test, Holm across arms:
+  no arm changes significantly (MRR p_Holm ≥ 0.875). Largest moves: rrf3 MRR 0.226 → 0.319 (+0.093, 95% CI
+  [-0.004, +0.208]); vector_only MRR 0.162 → 0.047. Full table: `graph_versions/v2/baseline_comparison.json`.
+  Awaiting user review (CP-9).

@@ -52,5 +52,35 @@
     "git_commit": "88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29",
     "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
     "note": null
+  },
+  {
+    "run_id": "eval_2026-10-20_1114",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-20T11:28:20.483157",
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "graph_version": "v2",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-20_1128",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-20T11:41:58.813964",
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "graph_version": "v2",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-20_1142",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-20T11:53:52.395982",
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "graph_version": "v2",
+    "note": null
   }
 ]
