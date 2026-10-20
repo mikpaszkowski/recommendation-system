@@ -214,7 +214,7 @@ def test_fulltext_fallback() -> None:
     creates = [q for q in queries if q.startswith("CREATE FULLTEXT INDEX")]
     assert "p.features]" not in creates[1] and "p.features_text" in creates[1] and "p.features," in creates[0]
     assert "'english'" in creates[0]
-    smoke_queries = [params["query"] for cypher, params in session.calls if cypher == module.SMOKE_QUERY]
+    smoke_queries = [params["search"] for cypher, params in session.calls if cypher == module.SMOKE_QUERY]
     assert smoke_queries == ['"Braided nylonsheath jacket"', '"Braided nylonsheath jacket"']
     assert module.REMOVE_FEATURES_TEXT_QUERY not in queries
 
@@ -536,7 +536,7 @@ def _fulltext_responder(module, *, existing_fields, features_text_counts, hits_b
         if cypher == module.SMOKE_QUERY:
             build = max(state["build"], 0)
             findable = state["smoke"][build] if build < len(state["smoke"]) else []
-            target = "P3" if "Kevlar" in params["query"] else "B00006HC8Q"
+            target = "P3" if "Kevlar" in params["search"] else "B00006HC8Q"
             return [{"parent_asin": target}] if target in findable else [{"parent_asin": "X"}] * 50
         return []
     return respond
@@ -549,9 +549,9 @@ def test_fulltext_smoke_uses_escaped_phrase_and_tries_next_candidate() -> None:
                                               hits_by_call=[["P3"]]))
     found, query, asin = module.fulltext_smoke_test(lambda: session, 20261019)
     probes = [params for cypher, params in session.calls if cypher == module.SMOKE_QUERY]
-    assert all(p["limit"] == 50 and p["query"].startswith('"') and p["query"].endswith('"') for p in probes)
-    assert {p["query"] for p in probes} <= {'"Corner\\-loading optimization provides maximum bass performance"', '"Kevlar reinforced jacket"'}
-    assert (found, query, asin) == (True, '"Kevlar reinforced jacket"', "P3") and probes[-1]["query"] == query
+    assert all(p["limit"] == 50 and p["search"].startswith('"') and p["search"].endswith('"') for p in probes)
+    assert {p["search"] for p in probes} <= {'"Corner\\-loading optimization provides maximum bass performance"', '"Kevlar reinforced jacket"'}
+    assert (found, query, asin) == (True, '"Kevlar reinforced jacket"', "P3") and probes[-1]["search"] == query
     failing = FakeSession(_fulltext_responder(module, existing_fields=None, features_text_counts=[0], hits_by_call=[[]]))
     found, query, asin = module.fulltext_smoke_test(lambda: failing, 20261019)
     assert found is False and query is not None and len([1 for c, _ in failing.calls if c == module.SMOKE_QUERY]) == 2

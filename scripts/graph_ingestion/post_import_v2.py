@@ -115,7 +115,7 @@ SMOKE_CANDIDATES_QUERY = (
     "p.features AS features, p.details_text AS details_text ORDER BY p.parent_asin LIMIT $limit"
 )
 SMOKE_QUERY = (
-    "CALL db.index.fulltext.queryNodes($index, $query) YIELD node, score "
+    "CALL db.index.fulltext.queryNodes($index, $search) YIELD node, score "
     "RETURN node.parent_asin AS parent_asin LIMIT $limit"
 )
 FEATURES_TEXT_QUERY = (
@@ -550,7 +550,7 @@ def fulltext_smoke_test(session_factory: SessionFactory, seed: int) -> Tuple[boo
     for candidate in candidates:
         with session_factory() as session:
             hits = [record["parent_asin"] for record in session.run(
-                SMOKE_QUERY, index=FULLTEXT_INDEX_NAME, query=candidate.query, limit=FULLTEXT_SMOKE_LIMIT,
+                SMOKE_QUERY, index=FULLTEXT_INDEX_NAME, search=candidate.query, limit=FULLTEXT_SMOKE_LIMIT,
             )]
         found = candidate.parent_asin in hits
         logger.info(f"Full-text smoke test: phrase {candidate.query} -> {candidate.parent_asin} "

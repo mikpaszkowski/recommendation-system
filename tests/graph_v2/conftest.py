@@ -69,11 +69,12 @@ class FakeSession:
         self.responder = responder
         self.calls: List[Tuple[str, Dict[str, Any]]] = []
 
-    def run(self, cypher: str, parameters: Optional[Mapping[str, Any]] = None, **kwargs: Any) -> FakeResult:
-        """Logs the call and returns the responder's records."""
+    def run(self, query: str, parameters: Optional[Mapping[str, Any]] = None, **kwargs: Any) -> FakeResult:
+        """Logs the call and returns the responder's records. The first argument is named `query`, as in
+        `neo4j.Session.run`, so a Cypher parameter passed as `query=` raises TypeError here too."""
         params = {**(parameters or {}), **kwargs}
-        self.calls.append((cypher, params))
-        return FakeResult(self.responder(cypher, params))
+        self.calls.append((query, params))
+        return FakeResult(self.responder(query, params))
 
     def __enter__(self) -> "FakeSession":
         """Context-manager entry."""
