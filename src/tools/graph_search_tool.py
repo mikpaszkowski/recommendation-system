@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional, Sequence, Set
+from typing import Dict, Any, List, Optional, Sequence, Set, Tuple
 
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
@@ -171,7 +171,8 @@ class GraphSearchTool:
                query: Optional[str] = None,
                preferences: Optional[Dict[str, Any]] = None,
                soft_preferences: Optional[List[Dict[str, Any]]] = None,
-               fusion_config: Optional[FusionConfig] = None) -> Dict[str, Any]:
+               fusion_config: Optional[FusionConfig] = None,
+               mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """
         Executes a search using one of three strategies:
         1. Hybrid (Semantic + Filters) - PREFERRED
@@ -186,6 +187,7 @@ class GraphSearchTool:
             preferences: Alias for structured_filters (legacy support).
             soft_preferences: List of flexible desires for additive scoring.
             fusion_config: Fusion arm for this call; defaults to the tool's configured arm.
+            mask_review_asins: Optional product ASINs whose reviews are hidden from the review channel at query time (R2b S1 cold-start simulation, G-9).
         """
         # Handle aliases/legacy args
         text = semantic_query or query
@@ -193,6 +195,7 @@ class GraphSearchTool:
         filters = dict(raw_filters)
         soft_preferences = soft_preferences or []
         config = fusion_config or self.fusion_config
+        masked_reviews = [str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()]
         
         logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}, fusion='{config.name}'")
         
@@ -212,7 +215,7 @@ class GraphSearchTool:
             # STRATEGY 1: HYBRID (Most common and desired)
             if text and self._filters_present(filters):
                 logger.info(f"[GST] Strategy: HYBRID (text + filters)")
-                result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
+                result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
                 
                 # MACS Progressive Relaxation
                 relaxed_constraints = []
@@ -231,7 +234,7 @@ class GraphSearchTool:
                         relaxed = True
                         
                     if relaxed:
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
+                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
                     
                     # Pass 2: Drop Category constraint if still failing
                     if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
@@ -239,7 +242,7 @@ class GraphSearchTool:
                         filters.pop("category", None)
                         filters.pop("categories", None)
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
+                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
                 
                 if relaxed_constraints:
                     result["relaxed_constraints"] = relaxed_constraints
@@ -247,7 +250,7 @@ class GraphSearchTool:
             # STRATEGY 2: VECTOR ONLY (No specific filters)
             elif text and not self._filters_present(filters):
                 logger.info(f"[GST] Strategy: VECTOR_ONLY (text only, no meaningful filters)")
-                result = self._execute_vector_search(text, limit, config)
+                result = self._execute_vector_search(text, limit, config, mask_review_asins=masked_reviews)
 
             # STRATEGY 3: FILTER ONLY (Parametric query)
             elif self._filters_present(filters) and not text:
@@ -315,7 +318,9 @@ class GraphSearchTool:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "items": [], "metadata": {"cypher": "", "params": {}}}
 
-    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int, config: Optional[FusionConfig] = None) -> Dict[str, Any]:
+    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int,
+                               config: Optional[FusionConfig] = None,
+                               mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """Vector retrieval over all enabled channels with hard filters applied before ranking."""
         config = config or self.fusion_config
         query_vector = self.embedder.embed_query(text)
@@ -326,18 +331,31 @@ class GraphSearchTool:
         logger.info(f"[GST:Hybrid] WHERE clauses: {where_str}")
 
         if config.method == "sum":
-            return self._execute_legacy_sum_search(query_vector, where_str, params, limit, config, strategy="hybrid_multi_index")
-        return self._execute_fused_search(query_vector, where_str, params, limit, config, strategy="hybrid_multi_index")
+            return self._execute_legacy_sum_search(
+                query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
+                mask_review_asins=mask_review_asins,
+            )
+        return self._execute_fused_search(
+            query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
+            mask_review_asins=mask_review_asins,
+        )
 
-    def _execute_vector_search(self, text: str, limit: int, config: Optional[FusionConfig] = None) -> Dict[str, Any]:
+    def _execute_vector_search(self, text: str, limit: int, config: Optional[FusionConfig] = None,
+                               mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """Vector retrieval over all enabled channels without filters."""
         config = config or self.fusion_config
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
 
         if config.method == "sum":
-            return self._execute_legacy_sum_search(query_vector, None, {}, limit, config, strategy="vector_only")
-        return self._execute_fused_search(query_vector, None, {}, limit, config, strategy="vector_only")
+            return self._execute_legacy_sum_search(
+                query_vector, None, {}, limit, config, strategy="vector_only",
+                mask_review_asins=mask_review_asins,
+            )
+        return self._execute_fused_search(
+            query_vector, None, {}, limit, config, strategy="vector_only",
+            mask_review_asins=mask_review_asins,
+        )
 
     @staticmethod
     def _build_channel_query(channel: str, where_str: Optional[str]) -> str:
@@ -385,7 +403,8 @@ LIMIT $depth""",
         return "\n".join(line for line in query.splitlines() if line.strip())
 
     def _execute_fused_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
-                              limit: int, config: FusionConfig, strategy: str) -> Dict[str, Any]:
+                              limit: int, config: FusionConfig, strategy: str,
+                              mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """
         Runs one MaxP query per enabled channel, fuses the ranked lists (RRF or CC) and
         fetches display details for the fused top `limit`. Every item carries its
@@ -396,8 +415,17 @@ LIMIT $depth""",
         params["vector"] = query_vector
         params["k"] = limit * config.ann_k_per_limit
         params["depth"] = config.channel_depth
+        masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
+        if masked_set:
+            params["mask_review_asins"] = sorted(masked_set)
 
-        channel_queries = {channel: self._build_channel_query(channel, where_str) for channel in config.channels}
+        channel_queries: Dict[str, str] = {}
+        for channel in config.channels:
+            ch_where = where_str
+            if channel == "review" and masked_set:
+                mask_clause = "NOT node.parent_asin IN $mask_review_asins"
+                ch_where = f"({where_str}) AND {mask_clause}" if where_str else mask_clause
+            channel_queries[channel] = self._build_channel_query(channel, ch_where)
         channel_hits: Dict[str, List[ChannelHit]] = {}
 
         with self.db.session() as session:
@@ -407,6 +435,7 @@ LIMIT $depth""",
                     ChannelHit(asin=row["asin"], similarity=float(row["similarity"]), reason=row.get("reason") or "")
                     for row in rows
                     if row.get("asin") and row.get("similarity") is not None
+                    and not (channel == "review" and row.get("asin") in masked_set)
                 ]
                 logger.info(f"[GST:{tag}] Channel '{channel}': {len(channel_hits[channel])} products")
 
@@ -465,12 +494,17 @@ LIMIT $depth""",
                 "params": clean_params,
                 "channel_queries": channel_queries,
                 "channel_counts": {c: len(h) for c, h in channel_hits.items()},
+                "channel_hits": {
+                    c: [{"asin": h.asin, "similarity": h.similarity, "reason": h.reason} for h in hits]
+                    for c, hits in channel_hits.items()
+                },
                 "fusion": config.to_dict(),
             },
         }
 
     def _execute_legacy_sum_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
-                                   limit: int, config: FusionConfig, strategy: str) -> Dict[str, Any]:
+                                   limit: int, config: FusionConfig, strategy: str,
+                                   mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         """
         Pre-R1 ranking kept as the `sum_legacy` ablation arm: UNION of the three indexes and
         sum(score) over every matching node (weights 1.0 / 0.8 / 0.9), filtered after aggregation.
@@ -479,6 +513,9 @@ LIMIT $depth""",
         params: Dict[str, Any] = dict(filter_params)
         params["vector"] = query_vector
         params["k"] = limit * config.ann_k_per_limit
+        masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
+        if masked_set:
+            params["mask_review_asins"] = sorted(masked_set)
 
         # GAP-003 Compliance: Use central helper to generate the vector search fragments
         prod_vector = build_vector_search_query(
@@ -497,12 +534,13 @@ LIMIT $depth""",
             return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
         )
         
+        rev_where = "\nWHERE NOT p.parent_asin IN $mask_review_asins" if masked_set else ""
         rev_vector = build_vector_search_query(
             "review_embedding_index", 
             "$k", 
             yield_alias="node", 
             score_alias="score", 
-            return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
+            return_clause=f"MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct){rev_where}\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
         )
 
         where_line = f"WHERE {where_str}" if where_str else ""
@@ -595,13 +633,22 @@ LIMIT $depth""",
             "metadata": {"cypher": cypher, "params": clean_params},
         }
 
-    def fetch_product_attributes(self, asins: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    def fetch_product_attributes(
+        self,
+        asins: List[str],
+        mask_review_asins: Optional[Sequence[str]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Fetches unstructured attributes (e.g. pros/cons, opinions, reviews) for given products.
         Returns a dictionary mapping ASIN to a list of attributes and recent reviews.
+        When `mask_review_asins` is given (R2b S1 cold-start simulation, G-9), reviews for
+        those ASINs are excluded while structured attributes are retained.
         """
         if not self.db or not asins:
             return {}
+
+        masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
+        review_asins = [a for a in asins if a not in masked_set]
 
         # Query attributes
         cypher_attr = """
@@ -646,15 +693,16 @@ LIMIT $depth""",
                         })
                         
                 # 2. Fetch Reviews (bounded per product at query level and guarded in Python)
-                result_rev = session.run(cypher_rev, asins=asins, reviews_per_product=5)
-                for record in result_rev:
-                    asin = record["asin"]
-                    if asin in result_map and sum(1 for a in result_map[asin] if a["source"] == 'user_review') < 5:
-                        result_map[asin].append({
-                            "name": f"Review: {record['name']}",
-                            "value": str(record["value"])[:300], # truncate long reviews
-                            "source": record["source"]
-                        })
+                if review_asins:
+                    result_rev = session.run(cypher_rev, asins=review_asins, reviews_per_product=5)
+                    for record in result_rev:
+                        asin = record["asin"]
+                        if asin in result_map and asin not in masked_set and sum(1 for a in result_map[asin] if a["source"] == 'user_review') < 5:
+                            result_map[asin].append({
+                                "name": f"Review: {record['name']}",
+                                "value": str(record["value"])[:300], # truncate long reviews
+                                "source": record["source"]
+                            })
                         
             logger.info(f"[GST:Attributes] Fetched attributes and reviews for {len(result_map)} products.")
             return result_map
@@ -745,6 +793,66 @@ LIMIT $depth""",
         except Exception as e:
             logger.error(f"[GST] Failed to fetch review-embedded products: {e}", exc_info=True)
             return set()
+
+    def fetch_review_cap_asins(self, min_reviews: int = 20) -> Set[str]:
+        """
+        Returns ParentProduct ASINs that have at least `min_reviews` reviews in the graph
+        (default 20 = the ingestion cap on Graph v2, titled base rate 0.519).
+        Used by `review_cap_bias@k` (R2b, FR-R2B-008) because binary review-embedding
+        coverage on Graph v2 is 99.995% across all products.
+        """
+        if not self.db:
+            return set()
+        cypher = """
+        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
+        WITH p, count(r) AS rev_cnt
+        WHERE rev_cnt >= $min_reviews
+        RETURN p.parent_asin AS asin
+        """
+        try:
+            with self.db.session() as session:
+                return {
+                    dict(record)["asin"]
+                    for record in session.run(cypher, {"min_reviews": int(min_reviews)})
+                    if dict(record).get("asin")
+                }
+        except Exception as e:
+            logger.error(f"[GST] Failed to fetch review-cap products: {e}", exc_info=True)
+            return set()
+
+    def fetch_head_popular_asins(self, percentile: float = 0.90) -> Tuple[Set[str], Optional[float]]:
+        """
+        Returns `(asins, threshold)` for the top `(1 - percentile)` head of titled products
+        by catalogue `p.review_count` (default P90 = 1,241 on Graph v2, base rate 0.100).
+        Used by `head_popularity_bias@k` (R2b, FR-R2B-008).
+        """
+        if not self.db:
+            return set(), None
+        cypher_thresh = """
+        MATCH (p:ParentProduct)
+        WHERE p.title IS NOT NULL AND trim(p.title) <> ''
+        RETURN percentileCont(coalesce(p.review_count, 0), $percentile) AS thresh
+        """
+        cypher_asins = """
+        MATCH (p:ParentProduct)
+        WHERE p.title IS NOT NULL AND trim(p.title) <> '' AND coalesce(p.review_count, 0) >= $thresh
+        RETURN p.parent_asin AS asin
+        """
+        try:
+            with self.db.session() as session:
+                row = session.run(cypher_thresh, {"percentile": float(percentile)}).single()
+                thresh = float(row["thresh"]) if row and row["thresh"] is not None else None
+                if thresh is None:
+                    return set(), None
+                asins = {
+                    dict(record)["asin"]
+                    for record in session.run(cypher_asins, {"thresh": thresh})
+                    if dict(record).get("asin")
+                }
+                return asins, thresh
+        except Exception as e:
+            logger.error(f"[GST] Failed to fetch head-popular products: {e}", exc_info=True)
+            return set(), None
 
     def _build_filters(self, filters: Dict[str, Any], raw_filters: Dict[str, Any] = None):
         """Build WHERE clauses for filters. Uses EXISTS subqueries for relationship-based filters."""

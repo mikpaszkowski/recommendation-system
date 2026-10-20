@@ -341,3 +341,53 @@ A Vision decision amending 2026-10-06-002 is required (§5).
   - `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`
   - `thesis/10-doc-fusion-ablation.md` (R1 paired sign tests; the 16-of-21 denominator; coverage vs popularity bias)
   - `evaluations/eval_2026-10-17_1846`, `evaluations/eval_2026-10-17_1937` (local only)
+
+---
+
+## 7. R2b Graph v2 Empirical Amendment (2026-10-20)
+
+When §1–§6 were written on 2026-10-18, the live graph was **Graph v1** (39.3% untitled ghost nodes, 2.2% review-embedding coverage, 71 coarse `Category` nodes, no `Taxon` hierarchy). On 2026-10-20, **Graph v2** was built, validated and stamped (`evaluations_archive/eval_2026-10-20_1114`, `_1128`, `_1142`). Direct empirical queries against the live Graph v2 (`kg_neo4j_data_v2`) reveal four structural differences that require surgical adjustments to the R2b benchmark build and bias metric:
+
+### 7.1 Live Graph v2 Distribution Measurements
+
+1. **Review count distribution (`(:Review)-[:ABOUT_PRODUCT]->(p)`) across 265,307 products (114,021 priced & embedded)**:
+   - `0` graph reviews: **13** total (**8** priced) — `0.005%`.
+   - `1–2` graph reviews: **57,378** total (**17,193** priced) — `21.6%` (`15.1%` of priced).
+   - `3–19` graph reviews: **70,238** total (**26,873** priced) — `26.5%`.
+   - `20` graph reviews (at ingestion cap): **137,678** total (**69,947** priced) — `51.9%` (`61.3%` of priced).
+   - Embedded review coverage (`>= 1` embedded review): **265,286 / 265,299** titled products (**`99.995%`**).
+   - Catalogue rating count (`p.review_count` from Amazon metadata on titled products): median `P50 = 190` (priced), `P75 = 362` (all titled) / `735` (priced), `P90 = 1,241` (all titled) / `2,235` (priced), `max = 585,624`.
+
+2. **Attribute & listing specification distribution**:
+   - Because Graph v2 keeps v1 `HAS_ATTRIBUTE` semantics (`Material`, `Color`, `Style`, `Size`), the maximum `HAS_ATTRIBUTE` degree on any product is **4** (`4`: 1,104 products; `3`: 6,519; `2`: 27,407; `1`: 111,256; `0`: 119,021). Zero products have $\ge 5$ `HAS_ATTRIBUTE` edges.
+   - Instead, Graph v2 stores rich product specifications in `p.features` ($\ge 3$ bullets on **104,884** priced products) and `p.details_json` / `p.details_text` (**113,390** priced products, mean ~15 key-value pairs per product).
+
+3. **Category & `Taxon` hierarchy**:
+   - 24 `Category` (`main_category`) nodes have $\ge 50$ priced products.
+   - 1,183 `Taxon` nodes (`(:ParentProduct)-[:IN_TAXON]->(:Taxon)-[:BROADER*0..7]->(:Taxon)`) provide fine-grained leaf product types (`Earbud Headphones`, `Traditional Laptops`, `AC Adapters`, `Portable Bluetooth Speakers`, `Over-Ear Headphones`, `Mice`, `Keyboards`, `Monitors`, `Routers`, `Video Projectors`, `Complete Tripods`, `Webcams`, etc.).
+   - Empirical **S3 Accessory Trap** ratios on Graph v2 (share of priced products whose title matches the head noun `T` as a whole word that sit outside `T`'s primary `Taxon` leaf):
+     - `camera`: **93.8%** outside single camera leaf (`Camera Cases` alone has 679);
+     - `laptop`: **89.3%** outside `Traditional Laptops` (11,576 total matches vs 1,239 in leaf);
+     - `monitor`: **81.9%** outside `Monitors`;
+     - `printer`: **81.0%** outside `Printers`;
+     - `speaker`: **80.5%** outside `Portable Bluetooth Speakers`;
+     - `charger`: **80.3%** outside `Chargers & Adapters`;
+     - `keyboard`: **79.1%** outside `Keyboards`;
+     - `tablet`: **76.7%** outside tablet leaf (`Cases` has 1,101);
+     - `microphone`: **73.8%** outside microphone leaf (`Earbud Headphones` has 546);
+     - `tripod`: **71.8%** outside `Complete Tripods`;
+     - `projector`: **66.4%** outside `Video Projectors`;
+     - `webcam`: **65.6%** outside `Webcams` (`Traditional Laptops` has 375);
+     - `headphones`: **61.4%** outside `Earbud Headphones`;
+     - `router`: **53.4%** outside `Routers`;
+     - `mouse`: **51.9%** outside `Mice`.
+
+### 7.2 Resulting R2b Decisions (R2b-D1 … R2b-D4)
+
+| ID | Decision |
+|---|---|
+| **R2b-D1 (Strata Inclusion on Graph v2)** | Adapt attribute richness criteria to Graph v2's schema while preserving `2026-10-18-014` and `2026-10-19-018` (G-9):<br>• **S0 Control (40 queries)**: `rev_count >= 5` in graph, `price > 0`, embedded, $\ge 2$ `HAS_ATTRIBUTE` edges, $\ge 3$ `p.features` bullets, $\ge 5$ non-boilerplate keys in `p.details_json`, and dense peer neighbourhood ($\ge 5$ same-leaf `Taxon` peers with cosine similarity $\ge 0.55$).<br>• **S1 Cold / Review-Sparse (40 queries, G-9)**: `1..2` reviews in graph (`17,193` priced candidates), `price > 0`, embedded, $\ge 3$ `p.features` bullets. At evaluation time on S1 queries, the target's (and category pool's S1) reviews are masked at query time (`mask_review_asins`) to simulate true zero-review cold start, with an optional unmasked ablation flag.<br>• **S2 Sparse Title (40 queries)**: title has $\le 4$ content tokens after stripping brand tokens, model codes and stop words (`4,066` priced candidates with $\le 6$ raw words and $\ge 3$ features), while `HAS_ATTRIBUTE` + `p.features` + `p.details_json` hold the distinguishing specifications.<br>• **S3 Accessory Trap (40 queries)**: drawn from verified trap head nouns ($\ge 30\%$ non-leaf title matches, e.g. `laptop`, `camera`, `monitor`, `keyboard`, `speaker`, `tablet`, `webcam`, `microphone`, `projector`, `tripod`, `router`, `mouse`, `headphones`) where the target is a true main device in its `Taxon` leaf and the category pool contains high-similarity accessories whose titles contain the head noun.<br>• **S4 Many-Feature Trade-off (40 queries)**: utterance states $\ge 4$ concrete requirements (price + brand/attributes/specs from `details_json`/`features`), where no product in the `Taxon` leaf satisfies all 4 simultaneously and the target uniquely satisfies $k-1$ requirements as the optimal partial match.<br>• **A Ambiguous (30 queries)**: underspecified or multi-category requests without a decided product type (`gold_action = "CLARIFY"`, `type_explicit = false`). |
+| **R2b-D2 (Redefinition of `review-coverage-bias@K` & Popularity Bias on Graph v2)** | On Graph v2, binary review-embedding coverage (`>= 1` embedded review) is `0.99995` across the catalogue and `1.000` for every retrieval strategy (`thesis/10-doc-fusion-ablation.md` C-8..C-11, `thesis/13-doc-graph-v2-rebuild.md` §7.6). Replace the degenerate reference set while preserving schema keys:<br>1. **`popularity_bias@k` (Graph Review-Cap Bias on v2)**: on `graph_version == "v2"`, `fetch_review_cap_asins()` defines the reference set as products at the 20-review graph cap (`count {(r:Review)-[:ABOUT_PRODUCT]->(p)} >= 20`, titled catalogue base rate = **`0.519`**, priced base rate = `0.613`). On archived v2 baseline runs at $K=5$, this cleanly separates `rrf2` (`0.667`), `wrrf3` (`0.733`), `rrf3` (`0.752`), `vector_only` (`0.781`), `sum_legacy` (`0.905`), and `cypher_only` (`0.981`). On v1 (`graph_version != "v2"`), falls back to `fetch_review_embedded_asins()`.<br>2. **`head_popularity_bias@k` (Catalogue Bestseller Head Bias, new additive key)**: share of top-$K$ products in the top decile of catalogue `p.review_count` (`p.review_count >= P90 = 1,241`, catalogue base rate = **`0.100`**). Separates `cypher_only` (`0.810`) from RRF/vector (`0.219–0.267`).<br>3. **Stratum & review-density breakdowns**: `aggregates_by_strategy` reports `by_stratum` (`S0`, `S1`, `S2`, `S3`, `S4`, `A`, `legacy`). |
+| **R2b-D3 (Deterministic & Fast Benchmark Generation + Split Freeze)** | A new script `scripts/build_benchmark_v2.py` selects targets deterministically from live Graph v2 across $\ge 15$ distinct `Category` / `Taxon` domains, synthesizes title-blind utterances + `gold_constraints` (with an option for deterministic template-free attribute/feature composition or batched async LLM generation with caching), runs automatic leakage checks (model-code ban, unflagged brand ban, title content-token overlap $\le 0.30$, pure-Python TF-IDF rank $> 1$ for test split), assigns the hashed grouped split (`sha256(salt + parent_asin) % 100 < 60` $\rightarrow$ `test`, else `tuning`; `legacy-21` merged with `split = "tuning"` and `stratum = "legacy"`), and writes `evaluations/benchmarks/benchmark_v2.json` + `evaluations/benchmarks/benchmark_v2_manifest.json`.<br>`scripts/evaluate_retrieval.py` gains `--split {all,tuning,test,legacy}` and `--confirm-test` (logging every `test` split evaluation to `evaluations_archive/test_split_access_log.jsonl`). |
+| **R2b-D4 (RS-02 & RS-25 Tuning Protocol on Graph v2)** | Once `benchmark_v2.json` is frozen, run the tuning split (`--split tuning`) to evaluate:<br>• **RS-02**: `hybrid@rrf2` vs `hybrid@rrf3` (ΔHR@20 lower CI bound $\ge -0.05$ and unique review finds $\le 2\%$, plus latency and S1/S0 strata comparison under 99.995% review embedding coverage).<br>• **RS-25**: pre-registered comparison of `hybrid@wrrf3` vs `hybrid@rrf3`, plus a grid evaluation over channel weights $(w_{\text{prod}}, w_{\text{attr}}, w_{\text{rev}})$ and RRF constant $k \in \{20, 40, 60, 100\}$ via fast offline/in-memory replay of per-channel candidate lists from the tuning run (requiring zero extra LLM calls!). |
+

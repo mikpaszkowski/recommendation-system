@@ -5,6 +5,75 @@
 
 ---
 
+## 📅 2026-10-20 (Release R2b: Stratyfikowany Benchmark v2 [RS-21], maskowanie recenzji S1 [G-9], redefinicja metryk obciążenia oraz strojenie fuzji RS-02 / RS-25; czyszczenie martwych benchmarków)
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. ukończenia Graph v2 oraz Stage 0 `GV2-01`..`GV2-06`)
+
+> **Kontekst**: Po przebudowie grafu do wersji v2 (`kg_neo4j_data_v2`, 99,995% pokrycia osadzonymi recenzjami) oraz podłączeniu pól tekstowych w Stage 0 (`GV2-01`..`GV2-06`), zrealizowano pakiet **Release R2b** zgodnie z zatwierdzoną specyfikacją `production_artifacts/Technical_Specification_R2b.md` oraz badaniami w `production_artifacts/Research_Report.md` (§7). Równolegle usunięto martwe, porzucone wcześniej pliki starych benchmarków z `evaluations/benchmarks/`.
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-20-022** (oraz domyka decyzje **2026-10-18-014** i **2026-10-18-015** na grafie v2). Zachowuje pełną kompatybilność wsteczną ze wszystkimi testami `R1`, `R2a` i `Stage 0` (`57 passed`).
+
+#### 🔴 Nowe komponenty
+
+1. **Moduł Stratyfikowanego Benchmarku v2 (`src/evaluation/benchmark_v2.py` — Critical):**
+   * Deterministyczny podział haszowany `assign_split(key, salt="crs_r2b_20261020", test_ratio=60)` (`sha256 % 100 < 60 -> test`, w przeciwnym razie `tuning`).
+   * Automatyczna bramka anty-wyciekowa i anty-trywialności leksykalnej `check_query_leakage(...)`: weryfikuje brak wycieku alfanumerycznych kodów modeli (`model_code_leak == False`), brak nieoznaczonego wycieku marki (`unflagged_brand_leak == False`), nakładanie tokenów tytułu `title_token_overlap <= 0.30` oraz rangę TF-IDF celu `tfidf_target_rank > 1` (wykluczając zapytania trywialne leksykalnie).
+   * Generator wypowiedzi bez dostępu do tytułu `synthesize_title_blind_utterance(...)` (korzystający wyłącznie z `features`, `details_json`, `attributes`, ceny, kategorii/taksonu i opcjonalnie marki) wraz z automatyczną adnotacją `gold_constraints` zgodną ze schematem `src/evaluation/constraint_satisfaction.py`.
+   * Zestaw 30 niejednoznacznych zapytań `AMBIGUOUS_QUERIES_V2` (warstwa `A`, `gold_action = "CLARIFY"`, `type_explicit = False`, podzielona na 3 podtypy po 10 zapytań: `open_use_case`, `category_indecision`, `underspecified_part`).
+   * Filtrowanie po podziale `filter_benchmark_by_split` (`tuning`, `test`, `all`, `legacy`) oraz rejestr dostępu do zbioru testowego `log_test_split_access` zapisujący do `evaluations_archive/test_split_access_log.jsonl`.
+
+2. **Zamrożony artefakt `evaluations/benchmarks/benchmark_v2.json` oraz `evaluations/benchmarks/benchmark_v2_manifest.json` (`scripts/build_benchmark_v2.py` — Critical):**
+   * Wygenerowany i zweryfikowany względem żywego grafu Neo4j v2 (**251 zapytań łącznie**, SHA-256: `3ae073ff54f57d6092612ead279872d82edf84e7d3963a23a67d4633422a1f3c`):
+     * **Warstwa `S0` (Review-Dense Head, 40 zapytań: 14 `tuning` / 26 `test`)**: produkty z pełnym limitem 20 recenzji w grafie i katalogowym `review_count >= 362` ($P_{75}$).
+     * **Warstwa `S1` (Cold-Start / Zero-Review-Reliance, 40 zapytań: 17 `tuning` / 23 `test`)**: produkty z najniższego przedziału recenzji w grafie ($\le 2$ recenzje) z włączonym maskowaniem recenzji w czasie zapytania (`mask_target_reviews = True`, 0 widocznych recenzji celu).
+     * **Warstwa `S2` (Multi-Constraint Structured, 40 zapytań: 18 `tuning` / 22 `test`)**: produkty posiadające $\ge 2$ krawędzie `HAS_ATTRIBUTE`, $\ge 3$ punkty `features` oraz `details_json`.
+     * **Warstwa `S3` (Accessory Trap, 40 zapytań: 19 `tuning` / 21 `test`)**: urządzenia główne z 15 empirycznie zweryfikowanych rzeczowników głównych (`camera`, `laptop`, `monitor`, `printer`, `speaker`, `charger`, `keyboard`, `tablet`, `microphone`, `tripod`, `projector`, `webcam`, `headphones`, `router`, `mouse`), dla których $>50\%$ dopasowań w tytułach w grafie v2 stanowią akcesoria poboczne (`trap_out_of_taxon_ratio` od `0.519` do `0.938`).
+     * **Warstwa `S4` (Many-Feature Trade-off, 40 zapytań: 16 `tuning` / 24 `test`)**: produkty z $\ge 5$ punktami `features` i $\ge 2$ atrybutami, testujące wielowymiarowe kompromisy (4 klauzule wymagań).
+     * **Warstwa `A` (Ambiguous, 30 zapytań: 10 `tuning` / 20 `test`)**: zapytania wymagające dopytania (`gold_action = "CLARIFY"`).
+     * **Warstwa `legacy` (Continuity, 21 zapytań: 21 `tuning` / 0 `test`)**: zachowane 1:1 zapytania z `live_eval_dataset.json` przypisane do zbioru `tuning`.
+   * Rozpiętość kategorii w `S0`–`S4`: **158 unikalnych liści `Taxon`** oraz **19 kategorii `Category`**; **221 unikalnych `target_asin`** (zero duplikatów).
+   * Audyt wycieków na 200 zapytaniach `S0`–`S4`: `0` wycieków kodów modeli, `0` nieoznaczonych wycieków marek, maksymalne nakładanie tokenów tytułu `0.2000` (średnio `0.0046`), minimalna ranga TF-IDF `2` (`0` przypadków rangi 1).
+
+3. **Protokół strojenia fuzji `RS-02` i `RS-25` (`scripts/tune_fusion_r2b.py` + `evaluations/benchmarks/r2b_tuning_report.json` — High):**
+   * Przeprowadzono ewaluację wyłącznie na zbiorze `tuning` ($n = 105$ zapytań retrievalowych: 84 z `S0`–`S4` + 21 z `legacy`; zbiór `test` pozostał nietknięty: `test_split_touched = false`).
+   * Przebadano 4 pre-rejestrowane ramiona fuzji (`rrf3`, `rrf2`, `wrrf3`, `cc3`) oraz siatkę **192 konfiguracji** wag $(w_{\text{prod}}, w_{\text{attr}}, w_{\text{rev}}) \in \{0.5, 1.0, 1.5, 2.0\} \times \{0.5, 1.0, 1.5\} \times \{0.0, 0.25, 0.5, 1.0\}$ i stałej wygładzania RRF $k \in \{20, 40, 60, 100\}$.
+
+4. **Zestaw testów `tests/test_r2b_benchmark_and_metrics.py` (High):**
+   * 9 testów weryfikujących podział `assign_split`, detekcję wycieków `check_query_leakage`, maskowanie recenzji `mask_review_asins` w `GraphSearchTool` (w tym podczas relaksacji MACS), nowe metryki obciążenia, blokadę `--split test` bez `--confirm-test` oraz integralność zamrożonych artefaktów `benchmark_v2.json` i `r2b_tuning_report.json`.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Maskowanie recenzji w czasie zapytania (`src/tools/graph_search_tool.py`, `src/agents/orchestrator.py` — G-9):**
+   * Dodano parametr `mask_review_asins: Optional[Sequence[str]] = None` do `GraphSearchTool.search`, `_execute_hybrid_search`, `_execute_vector_search`, `_execute_fused_search`, `_execute_legacy_sum_search` oraz `fetch_product_attributes`, a także do `AgentOrchestrator.run`.
+   * Dla zapytań z warstwy `S1` (`mask_target_reviews = True`) kanał wektorowy recenzji otrzymuje klauzulę `NOT node.parent_asin IN $mask_review_asins`, a `fetch_product_attributes` wyklucza recenzje wskazanego ASIN-u, symulując prawdziwy zimny start (0 widocznych recenzji celu).
+   * Dodano zwracanie `channel_hits` w `result["metadata"]` w `_execute_fused_search` oraz metody `fetch_review_cap_asins(min_reviews=20)` i `fetch_head_popular_asins(percentile=0.90)`.
+
+2. **Redefinicja metryk obciążenia recenzjami i popularnością na grafie v2 (`src/evaluation/metrics.py`, `scripts/evaluate_retrieval.py` — C-8..C-11):**
+   * Zachowano `METRIC_LABELS["popularity_bias"]` bez zmian dla pełnej zgodności z kontraktami testowymi R2a (`tests/test_retrieval_metrics_r2.py`).
+   * Dodano dwie nowe metryki posiadające realną wariancję na grafie v2:
+     * `review_cap_bias@k` (`RevCapBias@K`): udział kandydatów w top-$K$ posiadających pełny limit 20 recenzji w grafie v2 (`137 678` produktów, częstość bazowa wśród produktów z tytułem `0.519`).
+     * `head_popularity_bias@k` (`HeadPopBias@K`): udział kandydatów w top-$K$ należących do górnych 10% katalogu pod względem `p.review_count >= 1 241` (`26 531` produktów, częstość bazowa `0.100`).
+   * Dodano przekroje `by_stratum` (`S0`–`S4`, `A`, `legacy`) oraz `by_target_review_cap` w `aggregate_rows`.
+   * Rozbudowano CLI `scripts/evaluate_retrieval.py` o flagi `--split {tuning,test,all,legacy}`, `--confirm-test` (wymagane dla `--split test`, w przeciwnym razie kod wyjścia `2`) oraz `--no-mask-s1-reviews`.
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+* Wcześniej w tej sesji (commit `a9b557b`) usunięto 4 martwe pliki starych, porzuconych benchmarków: `evaluations/benchmarks/live_dataset_sample.json`, `evaluations/benchmarks/live_retrieval_benchmark.json`, `evaluations/benchmarks/retrieval_benchmark.json` oraz `src/evaluation/live_dataset_generator.py`. Plik `live_eval_dataset.json` (21 zapytań) pozostał nienaruszony jako domyślny zbiór ciągłości.
+
+#### 📊 Weryfikacja
+
+* **Testy automatyczne:** `pytest tests/test_r2b_benchmark_and_metrics.py tests/test_retrieval_metrics_r1.py tests/test_retrieval_metrics_r2.py tests/test_provenance.py tests/test_benchmark_alignment.py tests/test_stage0_graph_v2_wiring.py` → **`57 passed`**.
+* **Wyniki empiryczne `RS-02` i `RS-25` na zbiorze `tuning` (`n = 105` zapytań retrievalowych, `evaluations/benchmarks/r2b_tuning_report.json`):**
+  * **Walidacja nowych metryk obciążenia (`C-8..C-11`):** Stara metryka `popularity_bias@5` (`>=1` osadzona recenzja) wynosi `1.0000` dla każdego ramienia i każdej warstwy. Nowe metryki wyraźnie różnicują ramiona: `rrf3` ma `RevCapBias@5 = 0.6892` i `HeadPopBias@5 = 0.1926`, podczas gdy `rrf2` obniża je do `0.6097` ($\Delta = -0.0794$, $p = 0.0004$) i `0.1497` ($\Delta = -0.0429$, $p = 0.0038$), a `wrrf3` (`0.60/0.25/0.15`) obniża je do `0.6229` ($\Delta = -0.0692$, $p = 0.0002$) i `0.1580` ($\Delta = -0.0404$, $p = 0.0038$).
+  * **Rozstrzygnięcie `RS-02` (`rrf3` vs `rrf2`):** Kanał recenzji w `rrf3` ratuje **7 unikalnych celów** do top-20 (przy 2 degradacjach), podnosząc `HR@20` z `0.2095` do `0.2571` ($\Delta\text{HR@20} = +0.0476$, 95% CI `[0.0000, +0.1048]`). Kanał recenzji nie jest więc martwy dla odzysku w top-20 i zostaje zachowany.
+  * **Rozstrzygnięcie `RS-25` (strojenie wag RRF):** Ramię ważone `wrrf3` (`0.60/0.25/0.15`, $k=60$) poprawia punktowo `MRR` (`0.1215` vs `0.1115`, $\Delta = +0.0100$, 95% CI `[-0.0031, +0.0273]`) oraz `HR@5` (`0.1714` vs `0.1429`, $\Delta = +0.0286$) przy istotnie niższym obciążeniu popularnością, a najlepsza konfiguracja z siatki 192 ustawień (`grid_k20_p2.0_a0.5_r0.0`) osiąga `MRR = 0.1276` (95% CI różnicy względem `rrf3`: `[-0.0122, +0.0485]`). Zgodnie z pre-rejestrowaną regułą parsymonii (żaden 95% CI dla `MRR`/`NDCG@10` nie wyklucza zera przed wdrożeniem drzewa `Taxon`), `rrf3` pozostaje domyślnym ramieniem bazowym, a `wrrf3` przechodzi jako główne ramię porównawcze do Stage 1 (`GV2-07`..`GV2-09`) i R3.
+
+#### ❌ Nadal brakuje (kolejne kroki)
+
+* **Stage 1 (`GV2-07`..`GV2-09`)**: Przełączenie `ResolverService` i `GraphSearchTool._build_filters` z 38 zgrubnych węzłów `Category` (i nieistniejących w v2 krawędzi `SUBCATEGORY_OF`) na 1 183-węzłową hierarchię `Taxon` (`IN_TAXON` / `BROADER*0..7`), dodanie kanału leksykalnego `product_fulltext_index` do RRF oraz selektywnego filtrowania przed ANN. Przebieg strojenia R2b bezpośrednio wykazał, dlaczego na warstwach `S0`–`S4` (używających 158 szczegółowych nazw liści `Taxon`) obecny filtr kategorii oparty na 38 węzłach `Category` ogranicza `HR@20` do `9.52%`.
+
+---
+
 ## 📅 2026-10-20 (Graph v2 wykonany: zbudowany, zwalidowany, opieczętowany i zmierzony; F4 zakończone)
 
 ### Changelog (względem stanu z 2026-10-19, wpis „Graph v2 — przebudowa fundamentu danych")

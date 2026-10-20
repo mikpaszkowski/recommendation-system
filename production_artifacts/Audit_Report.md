@@ -601,3 +601,39 @@ Base rates (manifest): **2.15%** of all `ParentProduct` nodes and **0.52%** of t
 ### Verdict (R2a exit gate)
 
 **Gate PASS.** G-1 … G-6 and G-8 pass, AC-039 passes, and G-7 is archived but awaits the user's commit of `evaluations_archive/`. AC-031 and AC-032 are met. The three citable R2a runs are `eval_2026-10-18_2340`, `eval_2026-10-18_2349` and `eval_2026-10-18_2358` at `88cdbdf`.
+
+---
+
+# Audit Report: Release R2b — Stratified Benchmark v2 (RS-21), S1 Cold-Start Review Masking (G-9), Redefined Bias Metrics & RS-02/RS-25 Fusion Tuning
+
+**Date**: 2026-10-20
+**Spec Audited**: `production_artifacts/Technical_Specification_R2b.md` (approved 2026-10-20)
+**Context**: `production_artifacts/Research_Report.md` §7, Vision decision `2026-10-20-022`
+**Verdict**: **PASS** (`57 passed` across R2b and R1/R2a/Stage 0 regression suites)
+
+## 1. Spec Compliance Matrix (R2b)
+
+| ID | Acceptance Criterion | Status | Evidence |
+|---|---|---|---|
+| **AC-R2B-01** | `evaluations/benchmarks/benchmark_v2.json` contains **251 queries** (`40` per stratum `S0`–`S4` = `200` retrieval queries across $\ge 15$ categories/`Taxon` leaves, `30` ambiguous `A` queries with `gold_action = "CLARIFY"`, `21` continuity `legacy` queries in `split = "tuning"`), with zero duplicate `target_asin`s | ✅ PASS | Verified by `TestFrozenBenchmarkV2Artifact`: `251` total queries (`115` tuning / `136` test), `221` unique `target_asin`s across all 221 retrieval queries, `158` distinct `Taxon` leaves and `19` categories across `S0`–`S4`, SHA-256 `3ae073ff54f57d6092612ead279872d82edf84e7d3963a23a67d4633422a1f3c`. |
+| **AC-R2B-02** | `100%` of `S0`–`S4` items pass `validate_benchmark_graph_grounding` on live Neo4j v2, `model_code_leak == False`, `unflagged_brand_leak == False`, `title_token_overlap <= 0.30`, and `tfidf_target_rank > 1` | ✅ PASS | Live grounding gate passed `251/251` (`0` violations); `0` model-code leaks, `0` unflagged brand leaks, max `title_token_overlap = 0.2000` (mean `0.0046`), `min_tfidf_target_rank = 2` (`0` rank-1 items); `validate_gold_annotations` returned `[]`. |
+| **AC-R2B-03** | `GraphSearchTool.search(..., mask_review_asins=[asin])` and `fetch_product_attributes(..., mask_review_asins=[asin])` exclude reviews of `asin` at query time, including across MACS relaxation passes | ✅ PASS | Verified in `src/tools/graph_search_tool.py`, `src/agents/orchestrator.py`, and `TestQueryTimeReviewMasking`. |
+| **AC-R2B-04** | Preserve `METRIC_LABELS["popularity_bias"]` unchanged for R2a compatibility while adding `review_cap_bias@k` (20-review cap on Graph v2, base rate `0.519`), `head_popularity_bias@k` (P90 `review_count >= 1,241`, base rate `0.100`), `by_stratum`, and `by_target_review_cap` | ✅ PASS | Verified in `src/evaluation/metrics.py` and `TestRedefinedBiasMetricsAndTestSplitGuard`; R2a `test_retrieval_metrics_r2.py` passes (`7/7`). |
+| **AC-R2B-05** | `scripts/evaluate_retrieval.py --split test` without `--confirm-test` exits with code 2; with `--confirm-test`, logs to `evaluations_archive/test_split_access_log.jsonl` | ✅ PASS | Verified in `scripts/evaluate_retrieval.py` and `TestRedefinedBiasMetricsAndTestSplitGuard::test_test_split_guard_blocks_unconfirmed_execution`. |
+| **AC-R2B-06** | `scripts/tune_fusion_r2b.py` evaluates `RS-02` (`rrf3` vs `rrf2`) and `RS-25` (`wrrf3` vs `rrf3` + 192-config grid) on the `tuning` split (`test_split_touched == False`) and writes `evaluations/benchmarks/r2b_tuning_report.json` | ✅ PASS | Verified in `evaluations/benchmarks/r2b_tuning_report.json` (`n = 105` tuning retrieval queries) and `TestFrozenBenchmarkV2Artifact::test_r2b_tuning_report_contract`. |
+
+## 2. Empirical Tuning Results (`evaluations/benchmarks/r2b_tuning_report.json`, $n = 105$ tuning retrieval queries)
+
+| Arm | Overall `MRR` ($n=105$) | Overall `NDCG@10` | Overall `HR@5` | Overall `HR@20` | `S0`–`S4` `HR@20` ($n=84$) | `legacy` `HR@20` ($n=21$) | `RevCovBias@5` ($\ge 1$ rev) | `RevCapBias@5` ($20$-rev cap) | `HeadPopBias@5` ($P_{90} \ge 1241$) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `rrf3` (`1:1:1`, $k=60$) | `0.1115` | `0.1401` | `0.1429` | `0.2571` | `0.0952` | `0.9048` | `1.0000` | `0.6921` | `0.1984` |
+| `rrf2` (`1:1:0`, $k=60$) | `0.1100` | `0.1222` | `0.1333` | `0.2095` | `0.1071` | `0.6190` | `1.0000` | `0.6097` | `0.1497` |
+| `wrrf3` (`0.60:0.25:0.15`, $k=60$) | `0.1215` | `0.1402` | `0.1714` | `0.2476` | `0.0952` | `0.8571` | `1.0000` | `0.6229` | `0.1580` |
+| `cc3` (`convex`, $1/3$ each) | `0.1171` | `0.1362` | `0.1619` | `0.2571` | `0.1071` | `0.8571` | `1.0000` | `0.6768` | `0.2042` |
+| `grid_k20_p2.0_a0.5_r0.0` (best grid `MRR`) | `0.1276` | `0.1377` | `0.1524` | `0.2381` | `0.0833` | `0.8571` | `1.0000` | `0.5825` | `0.1264` |
+
+### Key Conclusions
+1. **Bias Metric Validation (`C-8..C-11`)**: `RevCovBias@5` (`popularity_bias@5`) is identically `1.0000` across all arms and strata on Graph v2, whereas `RevCapBias@5` (`review_cap_bias@5`) and `HeadPopBias@5` (`head_popularity_bias@5`) cleanly separate `rrf3`, `wrrf3`, and `rrf2` with $p \le 0.0038$.
+2. **`RS-02` Review-Channel Attribution**: `rrf3` rescues `7` unique targets into top-20 that `rrf2` misses (`r2b_s4_035`, `live_eval_camera_01`, `live_eval_phone_02`, `live_eval_mouse_03`, `live_eval_headphone_02`, `live_eval_laptop_01`, `live_eval_laptop_03`) against `2` demotions, yielding $\Delta\text{HR@20} = +0.0476$ (`95% CI [0.0000, +0.1048]`), at the cost of higher `RevCapBias@5` (`+0.0794`, $p = 0.0004$). The review channel is therefore retained.
+3. **`RS-25` Weighted RRF Tuning**: Down-weighting reviews/attributes in `wrrf3` (`0.60 / 0.25 / 0.15`) reduces `RevCapBias@5` by `-6.92 pp` ($p = 0.0002$) and `HeadPopBias@5` by `-4.04 pp` ($p = 0.0038$) while nudging `MRR` (`0.1115 -> 0.1215`) and `HR@5` (`0.1429 -> 0.1714`) upward, but its 95% CI on `MRR` (`[-0.0031, +0.0273]`) includes zero. By parsimony, `rrf3` remains default and `wrrf3` is carried forward to Stage 1 (`GV2-07`..`GV2-09`) / R3.
+

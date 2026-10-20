@@ -34,6 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from src.evaluation.benchmark_v2 import filter_benchmark_by_split, log_test_split_access
 from src.evaluation.constraint_satisfaction import (
     GoldConstraint,
     attribute_names_for,
@@ -43,6 +44,7 @@ from src.evaluation.constraint_satisfaction import (
     validate_gold_annotations,
     verdict_matrix,
 )
+import inspect
 from src.evaluation.dialogue_metrics import (
     annotate_target_admission,
     build_query_record,
@@ -254,7 +256,11 @@ def validate_benchmark_graph_grounding(benchmark_data: List[Dict[str, Any]], neo
     with session_ctx as session:
         for item in benchmark_data:
             query_id = item.get("query_id") or item.get("id")
-            target_asin = item.get("target_asin") or (item.get("ground_truth_asins", [None])[0])
+            gt_asins = item.get("ground_truth_asins") or []
+            target_asin = item.get("target_asin") or (gt_asins[0] if gt_asins else None)
+            if item.get("gold_action") == "CLARIFY" and not target_asin:
+                validation_report["valid_scenarios"] += 1
+                continue
             price_max = item.get("structured_filters", {}).get("price_max")
             
             cypher = """
@@ -419,6 +425,9 @@ def run_retrieval_evaluation(
     stats_resamples: int = DEFAULT_RESAMPLES,
     require_clean: bool = False,
     git_runner: Optional[GitRunner] = None,
+    split: Optional[str] = None,
+    confirm_test: bool = False,
+    mask_s1_reviews: bool = True,
 ) -> int:
     """
     Executes retrieval evaluation aligned with the production Chainlit UI pipeline.
@@ -467,6 +476,24 @@ def run_retrieval_evaluation(
         logger.error(f"Benchmark has {len(gold_errors)} gold-annotation errors. Halting.")
         return 1
 
+    # R2b split selection & holdout protection (FR-R2B-010)
+    has_test_items_in_file = any(item.get("split") == "test" for item in ground_truth if isinstance(item, dict))
+    effective_split = split
+    if effective_split is None and has_test_items_in_file:
+        effective_split = "tuning"
+        logger.info("Multi-split benchmark detected with no --split specified; defaulting to --split tuning.")
+
+    if effective_split:
+        ground_truth = filter_benchmark_by_split(ground_truth, effective_split)
+
+    contains_test_items = any(item.get("split") == "test" for item in ground_truth if isinstance(item, dict))
+    if (effective_split == "test" or contains_test_items) and not confirm_test:
+        logger.error(
+            "--split test (or evaluating test-split items) requires explicit --confirm-test "
+            "(R2b holdout protection, FR-R2B-010). Refusing to run."
+        )
+        return 2
+
     benchmark_query_count = len(ground_truth)
     if sample_size and sample_size > 0:
         ground_truth = ground_truth[:sample_size]
@@ -474,6 +501,7 @@ def run_retrieval_evaluation(
     # Provenance and dirty-tree policy (FR-029, FR-030), before any orchestrator or Neo4j work
     git_provenance = collect_git_provenance(REPO_ROOT, runner=git_runner)
     benchmark_provenance = collect_benchmark_provenance(REPO_ROOT, benchmark_path, benchmark_query_count, runner=git_runner)
+    benchmark_provenance["split"] = effective_split or "all"
     unclean = offending_paths(git_provenance, benchmark_provenance)
     if unclean:
         if require_clean:
@@ -481,7 +509,17 @@ def run_retrieval_evaluation(
             return 2
         logger.warning(f"Uncommitted or untracked evaluation inputs; this run will be marked citable: false. Paths: {unclean}")
 
-    logger.info(f"Loaded {len(ground_truth)} benchmark queries. Running mode: {mode}")
+    if contains_test_items and confirm_test:
+        log_test_split_access(
+            REPO_ROOT / "evaluations_archive" / "test_split_access_log.jsonl",
+            benchmark_path=benchmark_path,
+            split=effective_split or "all",
+            query_count=len(ground_truth),
+            strategies=strategies,
+            git_commit=git_provenance.get("git_commit") or get_git_commit(),
+        )
+
+    logger.info(f"Loaded {len(ground_truth)} benchmark queries (split={effective_split or 'all'}). Running mode: {mode}")
 
     fusion_arms = list(fusion_arms or [])
     unknown_arms = [arm for arm in fusion_arms if arm not in FUSION_ARMS]
@@ -543,14 +581,30 @@ def run_retrieval_evaluation(
         clarification_count = 0
         max_k = max(k_values) if k_values else 20
 
-        # Label-free metric inputs (R1): review-embedded products and per-query category matches
+        # Label-free metric inputs (R1 & R2b): review-embedded products, 20-review cap products,
+        # top-10% head popular products, and per-query category matches
         popular_asins: Optional[Set[str]] = None
+        review_cap_asins: Optional[Set[str]] = None
+        head_popular_asins: Optional[Set[str]] = None
+        head_popular_threshold: Optional[float] = None
         type_match: Optional[Dict[str, Set[str]]] = None
         catalog_popular_share: Optional[float] = None
         base_rates: Dict[str, Optional[Any]] = {}
         graph_tool = getattr(orchestrator, "graph_tool", None) if mode == "live" else None
         if graph_tool is not None:
             popular_asins = set(graph_tool.fetch_review_embedded_asins() or [])
+            if hasattr(graph_tool, "fetch_review_cap_asins"):
+                try:
+                    review_cap_asins = set(graph_tool.fetch_review_cap_asins(20) or [])
+                except Exception as e:
+                    logger.warning(f"Could not fetch review-cap ASINs: {e}")
+            if hasattr(graph_tool, "fetch_head_popular_asins"):
+                try:
+                    hp_asins, hp_thresh = graph_tool.fetch_head_popular_asins(0.90)
+                    head_popular_asins = set(hp_asins or [])
+                    head_popular_threshold = hp_thresh
+                except Exception as e:
+                    logger.warning(f"Could not fetch head-popular ASINs: {e}")
             type_match = {}
             try:
                 with graph_tool.db.session() as session:
@@ -563,7 +617,9 @@ def run_retrieval_evaluation(
                 f"(catalogue share: {catalog_popular_share if catalog_popular_share is not None else 'unknown'}); "
                 f"titled only: {base_rates.get('review_embedded_products_titled')} of "
                 f"{base_rates.get('catalog_titled_products')} titled products "
-                f"(share: {base_rates.get('catalog_popular_share_titled') if base_rates.get('catalog_popular_share_titled') is not None else 'unknown'})"
+                f"(share: {base_rates.get('catalog_popular_share_titled') if base_rates.get('catalog_popular_share_titled') is not None else 'unknown'}); "
+                f"review_cap_20={len(review_cap_asins) if review_cap_asins is not None else 'n/a'}, "
+                f"head_popular_p90={len(head_popular_asins) if head_popular_asins is not None else 'n/a'} (thresh={head_popular_threshold})"
             )
             gold_target_check = check_gold_against_targets(ground_truth, graph_tool)
         else:
@@ -572,12 +628,15 @@ def run_retrieval_evaluation(
 
         for idx, item in enumerate(ground_truth, 1):
             qid = str(item.get("query_id") or item.get("id") or f"query_{idx}")
-            target_asins = item.get("ground_truth_asins") or ([item.get("target_asin")] if item.get("target_asin") else ["ITEM_TARGET"])
-            primary_target = target_asins[0] if target_asins else "TARGET"
+            target_asins = item.get("ground_truth_asins") or ([item.get("target_asin")] if item.get("target_asin") else [])
+            primary_target = target_asins[0] if target_asins else None
             target_title = item.get("target_title", "N/A")
             category = item.get("category", "General")
             utterance = item.get("utterance") or item.get("query") or item.get("semantic_query") or ""
             dist_feat = item.get("distinguishing_feature", {})
+            masked_asins_for_query: Optional[List[str]] = None
+            if mask_s1_reviews and primary_target and (item.get("stratum") == "S1" or item.get("mask_target_reviews") is True):
+                masked_asins_for_query = [primary_target]
 
             # Visual start demarcation
             start_banner = (
@@ -623,11 +682,19 @@ def run_retrieval_evaluation(
                 t0 = time.perf_counter()
                 try:
                     # Run full production pipeline
-                    result = asyncio.run(orchestrator.run(
-                        user_id=qid,
-                        user_message=utterance,
-                        session_id=qid
-                    ))
+                    run_kwargs: Dict[str, Any] = {
+                        "user_id": qid,
+                        "user_message": utterance,
+                        "session_id": qid,
+                    }
+                    if masked_asins_for_query:
+                        try:
+                            run_sig = inspect.signature(orchestrator.run)
+                            if "mask_review_asins" in run_sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in run_sig.parameters.values()):
+                                run_kwargs["mask_review_asins"] = masked_asins_for_query
+                        except Exception:
+                            pass
+                    result = asyncio.run(orchestrator.run(**run_kwargs))
                     latency = (time.perf_counter() - t0) * 1000.0
                 except Exception as e:
                     logger.error(f"Error querying live AgentOrchestrator for query {qid}: {e}", exc_info=True)
@@ -704,7 +771,15 @@ def run_retrieval_evaluation(
                             strat_candidates_map[strat] = raw_asins
                         elif "vector" in strat.lower():
                             try:
-                                v_res = orchestrator.graph_tool.search(semantic_query=utterance, structured_filters={}, limit=max_k)
+                                v_kwargs: Dict[str, Any] = {"semantic_query": utterance, "structured_filters": {}, "limit": max_k}
+                                if masked_asins_for_query:
+                                    try:
+                                        gs_sig = inspect.signature(orchestrator.graph_tool.search)
+                                        if "mask_review_asins" in gs_sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in gs_sig.parameters.values()):
+                                            v_kwargs["mask_review_asins"] = masked_asins_for_query
+                                    except Exception:
+                                        pass
+                                v_res = orchestrator.graph_tool.search(**v_kwargs)
                                 strat_candidates_map[strat] = [p.get("asin") for p in v_res.get("items", []) if isinstance(p, dict) and p.get("asin")]
                             except Exception as e:
                                 logger.warning(f"Failed vector search ablation for {qid}: {e}")
@@ -728,7 +803,7 @@ def run_retrieval_evaluation(
 
             else:
                 # Deterministic offline mock fallback
-                is_mock_clarify = item.get("mock_action") == "CLARIFY" or item.get("action") == "CLARIFY"
+                is_mock_clarify = item.get("mock_action") == "CLARIFY" or item.get("action") == "CLARIFY" or item.get("gold_action") == "CLARIFY"
                 if is_mock_clarify:
                     action = "CLARIFY"
                     status = "CLARIFIED"
@@ -755,23 +830,25 @@ def run_retrieval_evaluation(
                     dialogue_intent = "initial_search"
                     cypher_query = "MATCH (node:ParentProduct) WHERE node.category = $category RETURN node.asin, node.title ORDER BY score DESC LIMIT $limit"
                     cypher_params = {"category": extracted_category, "limit": max_k, "vector": "<vector dim=1536>"}
+                    fb_target = primary_target or "ITEM_TARGET"
+                    fb_targets = list(target_asins) if target_asins else [fb_target]
 
                     for strat in strategies:
                         if "hybrid" in strat.lower() and "critic" not in strat.lower():
-                            cands = list(target_asins) + [f"ALT_{primary_target}_{i}" for i in range(1, 20)]
+                            cands = list(fb_targets) + [f"ALT_{fb_target}_{i}" for i in range(1, 20)]
                             latency = 14.2
                         elif "critic" in strat.lower():
-                            cands = list(target_asins) + [f"VERIFIED_{primary_target}_{i}" for i in range(1, 20)]
+                            cands = list(fb_targets) + [f"VERIFIED_{fb_target}_{i}" for i in range(1, 20)]
                             latency = 22.5
                         elif "vector" in strat.lower():
-                            cands = [f"VECTOR_DIS_{i}" for i in range(1, 3)] + list(target_asins) + [f"ALT_{primary_target}_{i}" for i in range(1, 20)]
+                            cands = [f"VECTOR_DIS_{i}" for i in range(1, 3)] + list(fb_targets) + [f"ALT_{fb_target}_{i}" for i in range(1, 20)]
                             latency = 9.8
                         else:
-                            cands = [f"CYPHER_DIS_{i}" for i in range(1, 4)] + list(target_asins) + [f"ALT_{primary_target}_{i}" for i in range(1, 20)]
+                            cands = [f"CYPHER_DIS_{i}" for i in range(1, 4)] + list(fb_targets) + [f"ALT_{fb_target}_{i}" for i in range(1, 20)]
                             latency = 6.4
                         strat_candidates_map[strat] = cands
 
-                    mock_top_asins = strat_candidates_map.get("hybrid", list(target_asins))
+                    mock_top_asins = strat_candidates_map.get("hybrid", list(fb_targets))
                     raw_candidates = [
                         {"asin": c, "title": f"Candidate Product {c}", "score": round(1.0 - i * 0.05, 4)}
                         for i, c in enumerate(mock_top_asins[:5])
@@ -786,9 +863,16 @@ def run_retrieval_evaluation(
 
             # Per-query dialogue record (R2a): category attribution, clarify reason, target admission
             record = build_query_record(item, result if result is not None else {"action": action}, latency)
+            record["stratum"] = item.get("stratum")
+            record["split"] = item.get("split")
+            record["mask_review_asins"] = masked_asins_for_query
             target_asin = record.get("target_asin")
             if popular_asins is not None and target_asin:
                 record["target_review_embedded"] = target_asin in popular_asins
+            if review_cap_asins is not None and target_asin:
+                record["target_review_cap"] = target_asin in review_cap_asins
+            if head_popular_asins is not None and target_asin:
+                record["target_head_popular"] = target_asin in head_popular_asins
             annotate_target_admission(record, graph_tool)
 
             # Constraint-satisfaction verdicts (FR-022 … FR-025): one fact fetch per query, all strategies
@@ -810,7 +894,7 @@ def run_retrieval_evaluation(
                 top = _top_k_unique(strat_candidates_map.get(strat, []), max_k)
                 record["strategies"][strat] = {
                     "top20": top,
-                    "target_rank": (top.index(target_asin) + 1) if target_asin in top else None,
+                    "target_rank": (top.index(target_asin) + 1) if target_asin and target_asin in top else None,
                     "cs_gold": verdicts_gold.get(strat, []),
                     "cs_req": verdicts_req.get(strat, []),
                 }
@@ -822,6 +906,8 @@ def run_retrieval_evaluation(
                 prediction: Dict[str, Any] = {
                     "query_id": qid,
                     "strategy": strat,
+                    "stratum": item.get("stratum"),
+                    "split": item.get("split"),
                     "candidate_asins": cands,
                     "latency_ms": strat_latency_map.get(strat, latency),
                     "status": status,
@@ -904,6 +990,8 @@ def run_retrieval_evaluation(
             k_values=k_values,
             popular_asins=popular_asins,
             type_match=type_match,
+            review_cap_asins=review_cap_asins,
+            head_popular_asins=head_popular_asins,
         )
         aggregates = batch_results["aggregates"]
         per_query_results = batch_results["per_query_results"]
@@ -957,6 +1045,7 @@ def run_retrieval_evaluation(
             )
             logger.info(
                 f"[{strat}] RevCovBias@5 {_fmt_n(agg, 'popularity_bias@5')} | RevCovBias@20 {_fmt_n(agg, 'popularity_bias@20')} | "
+                f"RevCapBias@5 {_fmt_n(agg, 'review_cap_bias@5')} | HeadPopBias@5 {_fmt_n(agg, 'head_popularity_bias@5')} | "
                 f"TypeP@5 {_fmt_n(agg, 'type_precision@5')} | TypeP@20 {_fmt_n(agg, 'type_precision@20')} | "
                 f"CS@5 known {_fmt_n(agg, 'cs_known@5')} viol {_fmt_n(agg, 'cs_viol@5')} cov {_fmt_n(agg, 'cs_coverage@5')} | "
                 f"CS@20 known {_fmt_n(agg, 'cs_known@20')} cov {_fmt_n(agg, 'cs_coverage@20')} | "
@@ -1016,6 +1105,8 @@ def run_retrieval_evaluation(
             "configuration": {
                 "mode": mode,
                 "benchmark": str(benchmark_path),
+                "split": split,
+                "mask_s1_reviews": mask_s1_reviews,
                 "k_values": k_values,
                 "strategies": strategies,
                 "query_count": len(ground_truth),
@@ -1025,6 +1116,9 @@ def run_retrieval_evaluation(
                 "fusion_arms": {arm: FUSION_ARMS[arm].to_dict() for arm in fusion_arms},
                 "review_embedded_products": len(popular_asins) if popular_asins is not None else None,
                 "catalog_popular_share": catalog_popular_share,
+                "review_cap_products": len(review_cap_asins) if review_cap_asins is not None else None,
+                "head_popular_products": len(head_popular_asins) if head_popular_asins is not None else None,
+                "head_popular_threshold": head_popular_threshold,
                 # Titled-only base rate (untitled ghost ParentProduct nodes excluded); R2a audit
                 "catalog_titled_products": base_rates.get("catalog_titled_products"),
                 "review_embedded_products_titled": base_rates.get("review_embedded_products_titled"),
@@ -1106,6 +1200,22 @@ def main() -> None:
                         help=f"Resamples for the randomization test and bootstrap (default: {DEFAULT_RESAMPLES})")
     parser.add_argument("--stats-seed", type=int, default=DEFAULT_SEED,
                         help=f"Seed for the comparison statistics (default: {DEFAULT_SEED})")
+    parser.add_argument(
+        "--split",
+        choices=["tuning", "test", "all", "legacy"],
+        default="tuning",
+        help="Benchmark split to evaluate (default: tuning). Evaluating 'test' requires --confirm-test.",
+    )
+    parser.add_argument(
+        "--confirm-test",
+        action="store_true",
+        help="Confirm evaluation of the locked 'test' split (logged to evaluations_archive/test_split_access_log.jsonl).",
+    )
+    parser.add_argument(
+        "--no-mask-s1-reviews",
+        action="store_true",
+        help="Disable query-time review masking for Stratum S1 cold-start queries.",
+    )
 
     args = parser.parse_args()
     mode = "offline" if args.offline else args.mode
@@ -1124,6 +1234,9 @@ def main() -> None:
         stats_seed=args.stats_seed,
         stats_resamples=args.stats_resamples,
         require_clean=args.require_clean,
+        split=args.split,
+        confirm_test=args.confirm_test,
+        mask_s1_reviews=not args.no_mask_s1_reviews,
     )
     sys.exit(exit_code)
 

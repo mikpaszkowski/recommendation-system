@@ -128,7 +128,13 @@ class AgentOrchestrator:
         raw = os.getenv("ORCH_CATEGORY_RECOVERY", "1")
         return str(raw).strip().lower() not in ("0", "false", "no")
         
-    async def run(self, user_id: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    async def run(
+        self,
+        user_id: str,
+        user_message: str,
+        session_id: Optional[str] = None,
+        mask_review_asins: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """
         Main entry point for the agent conversation loop.
         """
@@ -159,6 +165,8 @@ class AgentOrchestrator:
 
         # 2. Initialize State
         state = await self._initialize_state(user_id, user_message, session_context=session_context)
+        if mask_review_asins:
+            state["mask_review_asins"] = list(mask_review_asins)
         logger.info(f"[STEP 1c] State initialized")
         logger.info(f"  - History turns loaded: {len(state['messages']) - 1}")
         logger.info(f"  - Active filters from profile/session: {state.get('active_filters', {})}")
@@ -506,12 +514,18 @@ class AgentOrchestrator:
                 "structured_filters": catalog_filters,
                 "limit": self.candidate_limit,
             }
+            masked_reviews = state.get("mask_review_asins")
             try:
                 sig = inspect.signature(self.graph_tool.search)
-                if "soft_preferences" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+                has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+                if "soft_preferences" in sig.parameters or has_var_kw:
                     search_kwargs["soft_preferences"] = soft_preferences
+                if masked_reviews and ("mask_review_asins" in sig.parameters or has_var_kw):
+                    search_kwargs["mask_review_asins"] = list(masked_reviews)
             except Exception:
                 search_kwargs["soft_preferences"] = soft_preferences
+                if masked_reviews:
+                    search_kwargs["mask_review_asins"] = list(masked_reviews)
 
             try:
                 search_result = self.graph_tool.search(**search_kwargs)
@@ -544,7 +558,17 @@ class AgentOrchestrator:
             candidates = list(items_found)
             search_result["raw_candidates"] = candidates
             asins = [item.get("asin") for item in candidates if item.get("asin")]
-            attributes_map = self.graph_tool.fetch_product_attributes(asins)
+            if masked_reviews:
+                try:
+                    attr_sig = inspect.signature(self.graph_tool.fetch_product_attributes)
+                    if "mask_review_asins" in attr_sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in attr_sig.parameters.values()):
+                        attributes_map = self.graph_tool.fetch_product_attributes(asins, mask_review_asins=list(masked_reviews))
+                    else:
+                        attributes_map = self.graph_tool.fetch_product_attributes(asins)
+                except Exception:
+                    attributes_map = self.graph_tool.fetch_product_attributes(asins)
+            else:
+                attributes_map = self.graph_tool.fetch_product_attributes(asins)
 
             for i, item in enumerate(candidates):
                 asin = item.get("asin")
