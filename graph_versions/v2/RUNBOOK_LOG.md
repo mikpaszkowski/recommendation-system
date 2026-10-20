@@ -94,3 +94,15 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
 - `post_import_v2.py stamp … --confirm-validation-sha256 d8a68b7f…8af`: `(:GraphVersion {version: 'v2',
   validation_passed: true})` written at 2026-10-20T08:20:05Z (lineage `3f985952…86ec`, code commit `75c5c0a`,
   stamp commit `0a32604`, Neo4j 5.14.0).
+
+## R-11 runtime profile (2026-10-20)
+
+- `.env`: `NEO4J_DATA_VOLUME=kg_neo4j_data_v2` (rollback value `knowledge-graph_neo4j_data` noted in the comment);
+  compose recreated without build overrides: heap 2 GiB, page cache 2 GiB, transaction timeout 1 min. `GraphVersion` v2 present.
+- Rollback to v1: stop `neo4j-recommendation`, then `docker start neo4j-recommendation-v1` (or compose with the v1 volume).
+
+## R-12 v2 baseline — pre-check (2026-10-20)
+
+- `check_baseline_diff.py --base 88cdbdf` exits 1: 5 paths outside the allow-list, all documentation or infrastructure
+  (`src/README.md`, `src/knowledge_graph/DOCKER.md`, deleted `src/knowledge_graph/README.md` and `QUICKSTART.md`,
+  `src/knowledge_graph/docker-compose.yml`). Decision pending at CP-9.
