@@ -325,11 +325,12 @@ Goal: the retrieval score measures how well a product matches the request, not h
 * [x] **GV2-09 (Selectivity-based filter-before-ANN & `product_v2` embedding arm; covers RS-07 / K-6)** Use `Taxon` subtree size to run exact filtering before scoring on small subtrees, and add the enriched `p.embedding_feat` (`Taxon` path + `features` + `details`) as a separate index/arm without breaking v1/v2 comparability.
 
 **R3 — Search order & query side**.
-* [ ] **RS-07** Adaptive order by filter selectivity: filter-first with exact scoring vs ANN-first with oversampling.
+* [x] **RS-07** Adaptive order by filter selectivity: filter-first with exact scoring (`_execute_filter_first_search` when `Taxon.product_count <= 500` bypassing global ANN truncation with 100% subtree recall) vs ANN-first with dynamic oversampling for broad categories. Completed 2026-10-21 (Release R3.1). Spec: `production_artifacts/Technical_Specification_R3_1.md`, Thesis: `thesis/17-doc-attribute-rarity-taxonomic-distance.md`.
 * [ ] **RS-24** Domain-agnostic product-type matching instead of the word-regex category filter: language analyzer or lemmas on both sides, catalogue-derived type vocabulary and synonyms (with RS-11), type as a ranked signal with hard filtering only on confident matches (with RS-09 / RS-17). Trigger: "Webcams" rejects the C920 in `ret_021`.
-* [ ] **RS-03** Attribute channel as a precise finder: IDF/rarity weighting, AND-matching inside the resolved category.
-* [ ] **RS-08** Query versions fused by RRF: raw message, HyDE on the merged AI-07 call (= AI-10 ablation), IS/HAS pieces, user profile.
-* [ ] **RS-10** Graded category distance (same leaf > sibling > cousin).
+* [x] **RS-03** Attribute channel as a precise finder: Normalized degree-based Inverse Document Frequency (IDF) rarity weighting ($\text{score} \times \frac{\log(1 + N / (1 + \text{deg}))}{\log(1 + N)}$) to penalize generic attributes (`Color=Black`) by 84.5% while elevating rare technical specifications (`Style=Ergonomic Split Keyboard`). Completed 2026-10-21 (Release R3.1).
+* [x] **RS-08a** Dual-Channel HyDE (`hyde_product` matching `product_text_v1` for `product_embedding_index` and `hyde_review` matching `review_text_v1` for `review_embedding_index`) generated in `_generate_search_params` with zero extra LLM calls, plus `use_hyde` ablation arms (`rrf3_no_hyde`, `wrrf3_no_hyde`, `hyde_only` = AI-10). Completed 2026-10-21. Spec: `production_artifacts/Technical_Specification_HyDE.md`, Thesis: `thesis/16-doc-dual-hyde.md`, Run: `evaluations/eval_2026-10-21_0059`.
+* [ ] **RS-08b** Multi-query version fusion by RRF: raw message, IS/HAS pieces, user profile (with AI-07).
+* [x] **RS-10** Graded category distance via Longest Common Prefix (LCP) on `Taxon.path`: Distance 0 (exact/descendant) $\to 1.00$, Distance 1–2 (sibling) $\to 0.85$, Distance 3–4 (cousin) $\to 0.70$, Distance $\ge 5$ (distant) $\to 0.20$, recorded in `item["fusion"]["taxon_proximity"]`. Completed 2026-10-21 (Release R3.1).
 
 **R4 — Feature fit & LLM judge**.
 * [ ] **RS-12** Full-text feature check (synonym sets, negation) → confirmed / contradicted / unknown.
@@ -380,8 +381,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 * [ ] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability. Rubrics are implemented in `src/evaluation/judge.py`, but the script judges hand-written responses rather than system output.
 * [ ] **AI-04** Make Tier 2 judge real system output: run `AgentOrchestrator` over the live benchmark, capture `answer` and `eval_trace`, then judge. Retire or regenerate `evaluations/benchmarks/generative_benchmark.json` (only 3 of 15 ASINs exist in the graph).
 * [ ] **AI-09 (decision)** Tier 2 judge model (currently `gpt-4o-mini` grading a `gpt-4o` system).
-* [ ] **AI-10 (decision)** After AI-01, evaluate the `ideas.txt` direction as an ablation: LLM-generated target-product description → pure vector retrieval.
-  * _Direction (2026-10-17)_: run as the HyDE query version in RS-08 (A1.1 R3), generated on the merged AI-07 call.
+* [x] **AI-10 (decision)** After AI-01, evaluate the `ideas.txt` direction as an ablation: LLM-generated target-product description → pure vector retrieval. Completed 2026-10-21 (`evaluations/eval_2026-10-21_0059` confirms `hyde_only` outperforms `vector_only` by +136.2% MRR and +100% HR@5; documented in `thesis/16-doc-dual-hyde.md`).
 * [ ] **RS-20 / RS-21** (RS-20 done, RS-21 open) Label-free metrics: `review-coverage-bias@K` (formerly `popularity-bias@K`) and `type-precision@K` done in R1; `constraint-satisfaction@K` done in R2a (2026-10-18). The stratified benchmark with a tuning/test split (RS-21) is open, scheduled in R2b.
 * [ ] **AI-12** Stop `tests/test_challenger_distinguishing_features.py` from writing mock runs into `evaluations/`.
 

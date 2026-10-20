@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional, Sequence, Set, Tuple
+from typing import Dict, Any, List, Mapping, Optional, Sequence, Set, Tuple
 
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
@@ -33,9 +33,10 @@ MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins
 OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
 OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
 OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
-WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT c.name) AS cats
+WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT t.path) AS taxon_paths, collect(DISTINCT c.name) AS cats
 RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
-       CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END AS category, elementId(node) AS id,
+       CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END AS category,
+       head(taxon_paths) AS primary_taxon_path, elementId(node) AS id,
        node.features AS features, node.details_text AS details_text,
        node.description AS description, node.avg_rating AS avg_rating
 """
@@ -99,6 +100,55 @@ class GraphSearchTool:
         if not tokens:
             return "*"
         return " ".join(tokens)
+
+    @staticmethod
+    def _compute_taxon_distance(target_path: Optional[Sequence[str]], candidate_path: Optional[Sequence[str]]) -> int:
+        """
+        Computes the topological tree distance between two taxonomy lineage paths (RS-10).
+        Distance 0: Exact leaf or candidate is a descendant inside target subtree
+        Distance 1-2: Sibling sharing immediate parent
+        Distance 3-4: Cousin sharing grandparent
+        Distance >= 5: Distant branch or disjoint
+        Distance 99: Either path missing/empty
+        """
+        if not target_path or not candidate_path:
+            return 99
+        t = [str(x).strip().lower() for x in target_path if str(x).strip()]
+        c = [str(x).strip().lower() for x in candidate_path if str(x).strip()]
+        if not t or not c:
+            return 99
+
+        lcp = 0
+        for x, y in zip(t, c):
+            if x == y:
+                lcp += 1
+            else:
+                break
+
+        # Candidate is exact match or specialization (descendant) of target
+        if lcp == len(t):
+            return 0
+
+        # Topological distance: hops up from target to LCA + hops down from LCA to candidate
+        return (len(t) - lcp) + (len(c) - lcp)
+
+    @staticmethod
+    def _get_taxon_distance_multiplier(distance: int) -> float:
+        """
+        Maps topological taxonomy distance to score penalty multiplier (RS-10).
+        Distance 0 (exact / descendant) -> 1.00
+        Distance 1-2 (sibling)          -> 0.85
+        Distance 3-4 (cousin)           -> 0.70
+        Distance >= 5 (distant)         -> 0.20
+        """
+        if distance == 0:
+            return 1.00
+        elif distance <= 2:
+            return 0.85
+        elif distance <= 4:
+            return 0.70
+        else:
+            return 0.20
 
     @staticmethod
     def _clean_params_for_metadata(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -185,7 +235,9 @@ class GraphSearchTool:
                preferences: Optional[Dict[str, Any]] = None,
                soft_preferences: Optional[List[Dict[str, Any]]] = None,
                fusion_config: Optional[FusionConfig] = None,
-               mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+               mask_review_asins: Optional[Sequence[str]] = None,
+               hyde_product: Optional[str] = None,
+               hyde_review: Optional[str] = None) -> Dict[str, Any]:
         """
         Executes a search using one of three strategies:
         1. Hybrid (Semantic + Filters) - PREFERRED
@@ -201,9 +253,11 @@ class GraphSearchTool:
             soft_preferences: List of flexible desires for additive scoring.
             fusion_config: Fusion arm for this call; defaults to the tool's configured arm.
             mask_review_asins: Optional product ASINs whose reviews are hidden from the review channel at query time (R2b S1 cold-start simulation, G-9).
+            hyde_product: Optional hypothetical product catalog entry matching product_text_v1 for the product channel (RS-08a).
+            hyde_review: Optional hypothetical customer review matching review_text_v1 for the review channel (RS-08a).
         """
         # Handle aliases/legacy args
-        text = semantic_query or query
+        text = semantic_query or query or hyde_product or hyde_review
         raw_filters = structured_filters or preferences or {}
         filters = dict(raw_filters)
         soft_preferences = soft_preferences or []
@@ -228,7 +282,10 @@ class GraphSearchTool:
             # STRATEGY 1: HYBRID (Most common and desired)
             if text and self._filters_present(filters):
                 logger.info(f"[GST] Strategy: HYBRID (text + filters)")
-                result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
+                result = self._execute_hybrid_search(
+                    text, filters, raw_filters, limit, config,
+                    mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                )
                 
                 # MACS Progressive Relaxation
                 relaxed_constraints = []
@@ -247,7 +304,10 @@ class GraphSearchTool:
                         relaxed = True
                         
                     if relaxed:
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
+                        result = self._execute_hybrid_search(
+                            text, filters, raw_filters, limit, config,
+                            mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                        )
                     
                     # Pass 2: Taxonomic step-up via BROADER before dropping category
                     if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
@@ -275,7 +335,10 @@ class GraphSearchTool:
                             if "categories" in filters:
                                 filters.pop("categories", None)
                             relaxed_constraints.append(f"Broadened category constraint from '{current_cat}' to parent category '{parent_cat}'")
-                            result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
+                            result = self._execute_hybrid_search(
+                                text, filters, raw_filters, limit, config,
+                                mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                            )
 
                     # Pass 3: Drop Category constraint if still failing
                     if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
@@ -283,7 +346,10 @@ class GraphSearchTool:
                         filters.pop("category", None)
                         filters.pop("categories", None)
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
+                        result = self._execute_hybrid_search(
+                            text, filters, raw_filters, limit, config,
+                            mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                        )
                 
                 if relaxed_constraints:
                     result["relaxed_constraints"] = relaxed_constraints
@@ -291,7 +357,10 @@ class GraphSearchTool:
             # STRATEGY 2: VECTOR ONLY (No specific filters)
             elif text and not self._filters_present(filters):
                 logger.info(f"[GST] Strategy: VECTOR_ONLY (text only, no meaningful filters)")
-                result = self._execute_vector_search(text, limit, config, mask_review_asins=masked_reviews)
+                result = self._execute_vector_search(
+                    text, limit, config,
+                    mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                )
 
             # STRATEGY 3: FILTER ONLY (Parametric query)
             elif self._filters_present(filters) and not text:
@@ -359,11 +428,68 @@ class GraphSearchTool:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "items": [], "metadata": {"cypher": "", "params": {}}}
 
+    def _build_channel_vectors(
+        self,
+        text: Optional[str],
+        hyde_product: Optional[str],
+        hyde_review: Optional[str],
+        config: FusionConfig,
+    ) -> Tuple[Dict[str, List[float]], Dict[str, Optional[str]]]:
+        """
+        Embeds optional HyDE texts for the 'product' and 'review' channels when config.use_hyde is True.
+        Channels without a HyDE vector fall back to the base query_vector (FR-HYDE-004, AC-HYDE-006).
+        """
+        hp = hyde_product.strip() if isinstance(hyde_product, str) and hyde_product.strip() else None
+        hr = hyde_review.strip() if isinstance(hyde_review, str) and hyde_review.strip() else None
+        channel_vectors: Dict[str, List[float]] = {}
+        if getattr(config, "use_hyde", False):
+            if hp and "product" in config.channels:
+                v_prod = self.embedder.embed_query(hp)
+                if v_prod:
+                    channel_vectors["product"] = v_prod
+            if hr and "review" in config.channels:
+                v_rev = self.embedder.embed_query(hr)
+                if v_rev:
+                    channel_vectors["review"] = v_rev
+        hyde_texts: Dict[str, Optional[str]] = {
+            "product": hp if "product" in channel_vectors else None,
+            "review": hr if "review" in channel_vectors else None,
+        }
+        return channel_vectors, hyde_texts
+
     def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int,
                                config: Optional[FusionConfig] = None,
-                               mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+                               mask_review_asins: Optional[Sequence[str]] = None,
+                               hyde_product: Optional[str] = None,
+                               hyde_review: Optional[str] = None) -> Dict[str, Any]:
         """Vector retrieval over all enabled channels with hard filters applied before ranking."""
         config = config or self.fusion_config
+
+        # RS-07: Adaptive Filter-First Order for small selective subtrees (product_count <= 500)
+        if config.method != "sum":
+            cat_val = filters.get("category") or filters.get("categories")
+            if isinstance(cat_val, (list, tuple)) and cat_val:
+                cat_val = cat_val[0]
+            if cat_val and hasattr(self, "resolver") and self.resolver:
+                try:
+                    cat_matches = self.resolver.resolve_category(str(cat_val), k=1)
+                    if cat_matches and "product_count" in cat_matches[0]:
+                        pc = cat_matches[0].get("product_count")
+                        if pc is not None and 1 <= pc <= 500:
+                            resolved_taxon = cat_matches[0]
+                            logger.info(f"[GST:Hybrid] Small selective Taxon '{resolved_taxon.get('name')}' (count={pc} <= 500). Activating filter-first search.")
+                            return self._execute_filter_first_search(
+                                text=text,
+                                filters=filters,
+                                raw_filters=raw_filters,
+                                limit=limit,
+                                config=config,
+                                resolved_taxon=resolved_taxon,
+                                mask_review_asins=mask_review_asins,
+                            )
+                except Exception as e:
+                    logger.debug(f"[GST:Hybrid] Filter-first check failed: {e}")
+
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Hybrid] Embedded query (dim={len(query_vector)})")
 
@@ -376,13 +502,149 @@ class GraphSearchTool:
                 query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
                 mask_review_asins=mask_review_asins,
             )
+        channel_vectors, hyde_texts = self._build_channel_vectors(text, hyde_product, hyde_review, config)
         return self._execute_fused_search(
             query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
             mask_review_asins=mask_review_asins, text=text,
+            channel_vectors=channel_vectors, hyde_texts=hyde_texts,
         )
 
+    def _execute_filter_first_search(
+        self,
+        text: str,
+        filters: Dict[str, Any],
+        raw_filters: Dict[str, Any],
+        limit: int,
+        config: FusionConfig,
+        resolved_taxon: Dict[str, Any],
+        mask_review_asins: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Adaptive Filter-First search (RS-07) for small selective subtrees (product_count <= 500).
+        Retrieves all candidates in the Taxon subtree satisfying non-category hard filters along with
+        their embeddings, computes cosine similarity and lexical match in Python, and ranks candidates
+        with 100% subtree recall (bypassing global ANN truncation).
+        """
+        target_cat = resolved_taxon.get("name") or filters.get("category")
+        target_path = resolved_taxon.get("path")
+
+        # Build hard constraint WHERE clauses excluding category
+        non_cat_filters = {k: v for k, v in filters.items() if k not in ("category", "categories")}
+        where_clauses, params = self._build_filters(non_cat_filters, raw_filters)
+        where_str = f"AND ({' AND '.join(where_clauses)})" if where_clauses else ""
+        params["category_filter"] = target_cat
+
+        cypher = f"""
+        MATCH (ancestor:Taxon)
+        WHERE toLower(ancestor.name) = toLower($category_filter)
+        MATCH (ancestor)<-[:BROADER*0..7]-(leaf:Taxon)<-[:IN_TAXON]-(node:ParentProduct)
+        WHERE 1=1 {where_str}
+        OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+        WITH DISTINCT node, b, collect(DISTINCT leaf.name) AS taxa, collect(DISTINCT leaf.path) AS taxon_paths
+        RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
+               taxa AS category,
+               head(taxon_paths) AS primary_taxon_path,
+               elementId(node) AS id,
+               node.features AS features, node.details_text AS details_text,
+               node.description AS description, node.avg_rating AS avg_rating,
+               node.embedding AS embedding
+        """
+
+        with self.db.session() as session:
+            rows = [dict(record) for record in session.run(cypher, params)]
+
+        if not rows:
+            logger.info(f"[GST:FilterFirst] Subtree '{target_cat}' returned 0 products satisfying filters.")
+            return {
+                "status": "success",
+                "items": [],
+                "count": 0,
+                "strategy": "filter_first_hybrid",
+                "metadata": {"cypher": cypher, "params": self._clean_params_for_metadata(params)},
+            }
+
+        import numpy as np
+        query_vector = self.embedder.embed_query(text)
+        q_vec = np.array(query_vector, dtype=np.float32)
+        q_norm = np.linalg.norm(q_vec)
+        if q_norm > 0:
+            q_vec /= q_norm
+
+        query_tokens = [w.lower() for w in re.findall(r"\w+", text) if len(w) > 2]
+
+        scored_candidates = []
+        for r in rows:
+            emb = r.get("embedding")
+            if emb is not None:
+                cand_vec = np.array(emb, dtype=np.float32)
+                c_norm = np.linalg.norm(cand_vec)
+                cos_sim = float(np.dot(q_vec, cand_vec) / c_norm) if c_norm > 0 else 0.0
+            else:
+                cos_sim = 0.0
+
+            title_lower = (r.get("title") or "").lower()
+            lex_matches = sum(1 for tok in query_tokens if tok in title_lower) if query_tokens else 0
+            lex_score = lex_matches / max(len(query_tokens), 1) if query_tokens else 0.0
+
+            combined_score = 0.85 * max(0.0, cos_sim) + 0.15 * lex_score
+
+            # Taxon distance multiplier
+            cand_path = r.get("primary_taxon_path")
+            dist = self._compute_taxon_distance(target_path, cand_path) if target_path else 0
+            mult = self._get_taxon_distance_multiplier(dist)
+            final_score = combined_score * mult
+
+            reason = f"Filter-First Subtree Match: {target_cat} (sim={cos_sim:.3f}, lex={lex_score:.2f})"
+            scored_candidates.append({
+                "title": r.get("title"),
+                "price": r.get("price"),
+                "brand": r.get("brand"),
+                "category": r.get("category") or [],
+                "primary_taxon_path": cand_path,
+                "features": r.get("features"),
+                "details_text": r.get("details_text"),
+                "description": r.get("description"),
+                "avg_rating": r.get("avg_rating"),
+                "score": final_score,
+                "fused_score": combined_score,
+                "soft_bonus": 0.0,
+                "id": r.get("id"),
+                "asin": r.get("asin"),
+                "match_reasons": [reason],
+                "fusion": {
+                    "method": "filter_first",
+                    "channels": {
+                        "product": {"rank": 1, "similarity": float(cos_sim), "reason": reason}
+                    },
+                    "taxon_proximity": {
+                        "distance": dist,
+                        "multiplier": mult,
+                    },
+                },
+            })
+
+        scored_candidates.sort(key=lambda x: (x["score"], -(x["price"] or 999999.0)), reverse=True)
+        for rank, item in enumerate(scored_candidates[:limit], 1):
+            item["fusion"]["channels"]["product"]["rank"] = rank
+
+        return {
+            "status": "success",
+            "items": scored_candidates[:limit],
+            "count": len(scored_candidates[:limit]),
+            "strategy": "filter_first_hybrid",
+            "metadata": {
+                "cypher": cypher,
+                "params": self._clean_params_for_metadata(params),
+                "target_taxon": target_cat,
+                "subtree_size": len(rows),
+                "fusion": {"method": "filter_first"},
+            },
+        }
+
     def _execute_vector_search(self, text: str, limit: int, config: Optional[FusionConfig] = None,
-                               mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+                               mask_review_asins: Optional[Sequence[str]] = None,
+                               hyde_product: Optional[str] = None,
+                               hyde_review: Optional[str] = None) -> Dict[str, Any]:
         """Vector retrieval over all enabled channels without filters."""
         config = config or self.fusion_config
         query_vector = self.embedder.embed_query(text)
@@ -393,9 +655,11 @@ class GraphSearchTool:
                 query_vector, None, {}, limit, config, strategy="vector_only",
                 mask_review_asins=mask_review_asins,
             )
+        channel_vectors, hyde_texts = self._build_channel_vectors(text, hyde_product, hyde_review, config)
         return self._execute_fused_search(
             query_vector, None, {}, limit, config, strategy="vector_only",
             mask_review_asins=mask_review_asins, text=text,
+            channel_vectors=channel_vectors, hyde_texts=hyde_texts,
         )
 
     @staticmethod
@@ -419,8 +683,25 @@ LIMIT $depth""",
             )
             return "\n".join(line for line in query.splitlines() if line.strip())
         if channel == "attribute":
-            match_clause = "MATCH (node:ParentProduct)-[:HAS_ATTRIBUTE]->(hit)"
-            reason_expr = "'Attribute Match: ' + coalesce(hit.attribute_name, '') + '=' + coalesce(hit.attribute_value, '')"
+            where_part = f"\n{where_line}" if where_line else ""
+            return_clause = f"""MATCH (node:ParentProduct)-[:HAS_ATTRIBUTE]->(hit){where_part}
+WITH node, hit, score, count {{ (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) }} AS deg
+WITH node,
+     score * (log(1.0 + 265307.0 / (1.0 + deg)) / log(265308.0)) AS score,
+     'Attribute Match: ' + coalesce(hit.attribute_name, '') + '=' + coalesce(hit.attribute_value, '') + ' [deg=' + toString(deg) + ']' AS reason
+ORDER BY score DESC, reason ASC
+WITH node, max(score) AS similarity, head(collect(reason)) AS reason
+RETURN node.parent_asin AS asin, similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth"""
+            query = build_vector_search_query(
+                CHANNEL_INDEXES["attribute"],
+                "$k",
+                yield_alias="hit",
+                score_alias="score",
+                return_clause=return_clause,
+            )
+            return "\n".join(line for line in query.splitlines() if line.strip())
         elif channel == "review":
             match_clause = "MATCH (hit)-[:ABOUT_PRODUCT]->(node:ParentProduct)"
             reason_expr = "'Review Match: ' + coalesce(hit.review_title, '')"
@@ -456,7 +737,9 @@ LIMIT $depth""",
     def _execute_fused_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
                               limit: int, config: FusionConfig, strategy: str,
                               mask_review_asins: Optional[Sequence[str]] = None,
-                              text: Optional[str] = None) -> Dict[str, Any]:
+                              text: Optional[str] = None,
+                              channel_vectors: Optional[Mapping[str, List[float]]] = None,
+                              hyde_texts: Optional[Mapping[str, Optional[str]]] = None) -> Dict[str, Any]:
         """
         Runs one MaxP query per enabled channel, fuses the ranked lists (RRF or CC) and
         fetches display details for the fused top `limit`. Every item carries its
@@ -470,14 +753,18 @@ LIMIT $depth""",
         # GV2-09: Selectivity-based dynamic ANN oversampling for selective Taxon subtrees
         ann_factor = config.ann_k_per_limit
         cat_filter = filter_params.get("category_filter")
+        target_path: Optional[List[str]] = None
         if cat_filter and hasattr(self, "resolver") and self.resolver:
             try:
                 cat_matches = self.resolver.resolve_category(str(cat_filter), k=1)
-                if cat_matches and "product_count" in cat_matches[0]:
-                    pc = cat_matches[0].get("product_count")
-                    if pc and pc < 5000:
-                        ann_factor = min(60, max(30, int(30 * (5000 / max(pc, 500)))))
-                        logger.info(f"[GST:{tag}] Selective Taxon '{cat_filter}' (count={pc}): scaling ann_k_per_limit {config.ann_k_per_limit} -> {ann_factor}")
+                if cat_matches:
+                    if "path" in cat_matches[0] and cat_matches[0]["path"]:
+                        target_path = list(cat_matches[0]["path"])
+                    if "product_count" in cat_matches[0]:
+                        pc = cat_matches[0].get("product_count")
+                        if pc and pc < 5000:
+                            ann_factor = min(60, max(30, int(30 * (5000 / max(pc, 500)))))
+                            logger.info(f"[GST:{tag}] Selective Taxon '{cat_filter}' (count={pc}): scaling ann_k_per_limit {config.ann_k_per_limit} -> {ann_factor}")
             except Exception as e:
                 logger.debug(f"[GST:{tag}] Could not evaluate Taxon subtree size: {e}")
 
@@ -498,7 +785,10 @@ LIMIT $depth""",
 
         with self.db.session() as session:
             for channel, cypher in channel_queries.items():
-                rows = [dict(record) for record in session.run(cypher, params)]
+                ch_params = dict(params)
+                if channel_vectors and channel in channel_vectors and channel_vectors[channel]:
+                    ch_params["vector"] = channel_vectors[channel]
+                rows = [dict(record) for record in session.run(cypher, ch_params)]
                 channel_hits[channel] = [
                     ChannelHit(asin=row["asin"], similarity=float(row["similarity"]), reason=row.get("reason") or "")
                     for row in rows
@@ -507,29 +797,43 @@ LIMIT $depth""",
                 ]
                 logger.info(f"[GST:{tag}] Channel '{channel}': {len(channel_hits[channel])} products")
 
-            fused: List[FusedCandidate] = fuse(channel_hits, config)[:limit]
+            fused: List[FusedCandidate] = fuse(channel_hits, config)
+            candidate_pool = fused[:max(limit * 3, 30)] if target_path else fused[:limit]
             details: Dict[str, Dict[str, Any]] = {}
-            if fused:
-                detail_rows = session.run(DETAIL_QUERY, {"asins": [fc.asin for fc in fused]})
+            if candidate_pool:
+                detail_rows = session.run(DETAIL_QUERY, {"asins": [fc.asin for fc in candidate_pool]})
                 details = {row["asin"]: row for row in (dict(record) for record in detail_rows)}
 
         items: List[Dict[str, Any]] = []
-        for fc in fused:
+        for fc in candidate_pool:
             detail = details.get(fc.asin)
             if detail is None:
                 logger.warning(f"[GST:{tag}] Fused candidate {fc.asin} missing from detail query; dropped.")
                 continue
             ordered_channels = [c for c in config.channels if c in fc.channels]
+
+            # Taxon distance multiplier (RS-10)
+            cand_path = detail.get("primary_taxon_path")
+            if target_path:
+                dist = self._compute_taxon_distance(target_path, cand_path)
+                distance_multiplier = self._get_taxon_distance_multiplier(dist)
+            else:
+                dist = 0
+                distance_multiplier = 1.00
+
+            final_score = fc.score * distance_multiplier
+
             items.append({
                 "title": detail.get("title"),
                 "price": detail.get("price"),
                 "brand": detail.get("brand"),
                 "category": detail.get("category") or [],
+                "primary_taxon_path": cand_path,
                 "features": detail.get("features"),
                 "details_text": detail.get("details_text"),
                 "description": detail.get("description"),
                 "avg_rating": detail.get("avg_rating"),
-                "score": fc.score,
+                "score": final_score,
                 "fused_score": fc.score,
                 "soft_bonus": 0.0,
                 "id": detail.get("id"),
@@ -541,8 +845,16 @@ LIMIT $depth""",
                         c: {"rank": fc.channels[c].rank, "similarity": fc.channels[c].similarity, "reason": fc.channels[c].reason}
                         for c in ordered_channels
                     },
+                    "taxon_proximity": {
+                        "distance": dist,
+                        "multiplier": distance_multiplier,
+                    },
                 },
             })
+
+        if target_path:
+            items.sort(key=lambda x: x["score"], reverse=True)
+            items = items[:limit]
 
         logger.info(f"[GST:{tag}] Fused ({config.name}) results: {len(items)} items found")
         for i, item in enumerate(items):
@@ -552,6 +864,8 @@ LIMIT $depth""",
         combined_cypher = "\n\n".join(f"// channel: {c}\n{q}" for c, q in channel_queries.items())
         combined_cypher += f"\n\n// details\n{DETAIL_QUERY.strip()}"
         clean_params = self._clean_params_for_metadata(params)
+        product_hyde_used = bool(channel_vectors and "product" in channel_vectors and channel_vectors["product"])
+        review_hyde_used = bool(channel_vectors and "review" in channel_vectors and channel_vectors["review"])
         return {
             "status": "success",
             "items": items,
@@ -567,6 +881,13 @@ LIMIT $depth""",
                     for c, hits in channel_hits.items()
                 },
                 "fusion": config.to_dict(),
+                "hyde": {
+                    "enabled": bool(getattr(config, "use_hyde", False)),
+                    "product_used": product_hyde_used,
+                    "review_used": review_hyde_used,
+                    "hyde_product": hyde_texts.get("product") if (hyde_texts and product_hyde_used) else None,
+                    "hyde_review": hyde_texts.get("review") if (hyde_texts and review_hyde_used) else None,
+                },
             },
         }
 

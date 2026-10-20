@@ -5,6 +5,55 @@
 
 ---
 
+## 📅 2026-10-21 (Release R3.1: Precyzja Atrybutów i Hierarchii — Ważenie Rzadkości IDF [RS-03], Stopniowana Bliskość Taksonomiczna LCP [RS-10], Adaptacyjny Porządek Filter-First [RS-07])
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. Stage 1 [GV2-07..GV2-09])
+
+> **Kontekst**: Po wdrożeniu Stage 1 (`GV2-07` .. `GV2-09`) uzyskano skokowy wzrost recallu ($HR@20$ wzrósł z $0.2286$ do $0.3333$, $p = 0.0010$). Jednakże szczegółowa analiza błędów ujawniła trzy wąskie gardła w warstwie wyszukiwania:
+> 1. Dominacja popularnych atrybutów o wysokim stopniu (np. `Color=Black` powiązany z 44,265 produktami, 16.68% katalogu) tworząca bloki remisów w Reciprocal Rank Fusion i tłumiąca rzadkie atrybuty techniczne (np. `Style=Ergonomic Split Keyboard`).
+> 2. Zero-jedynkowa przepaść kategorii (Binary Category Cliff), traktująca bliskie kategorie rodzeństwa (np. `Floorstanding Speakers` vs `Bookshelf Speakers`) identycznie z odległymi pułapkami akcesoriów z innych domen (np. `Camera Cases`).
+> 3. Zjawisko obcinania kandydatów (candidate starvation) w małych, selektywnych poddrzewach taksonomicznych ($product\_count \le 500$), gdzie globalny wektorowy ANN odrzucał produkty przed filtracją grafową Cypher.
+>
+> Zrealizowano pakiet **Release R3.1 (`RS-03` + `RS-10` + `RS-07`)** zgodnie ze specyfikacją techniczną `production_artifacts/Technical_Specification_R3_1.md` oraz raportem badawczym `production_artifacts/Research_Report.md` (§9).
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-21-025**. Wszystkie 65 testów jednostkowych i regresyjnych zakończyło się wynikiem PASS.
+
+#### 🔴 Nowe komponenty
+
+1. **Zestaw testów jednostkowych i weryfikacyjnych R3.1 (`tests/test_r3_1_retrieval_refinements.py` — Critical):**
+   * 7 kompleksowych testów weryfikujących kryteria akceptacyjne `AC-R3.1-01` .. `AC-R3.1-05`:
+     * `test_ac_r3_1_01_attribute_idf_weighting_query_structure`: weryfikacja struktury zapytania MaxP kanału atrybutów z obliczaniem stopnia `count { (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) } AS deg` oraz formułą znormalizowanego IDF w Cypher.
+     * `test_ac_r3_1_01_attribute_idf_weighting_math`: matematyczna weryfikacja współczynników rzadkości — atrybut masowy `Color=Black` tłumiony do $\approx 0.155$ (spadek o 84.5%), atrybut unikalny `deg=1` zachowuje $0.944$ (stosunek wag $5.8\times$).
+     * `test_ac_r3_1_02_compute_taxon_distance`: precyzyjne wyliczanie odległości w drzewie taksonomii przez Longest Common Prefix (LCP): 0 dla liścia/potomka, 1 dla rodzica, 2 dla rodzeństwa, 3–4 dla kuzynów, $\ge 5$ dla odległych gałęzi.
+     * `test_ac_r3_1_02_taxon_distance_multipliers`: odwzorowanie odległości na mnożniki kary: $1.00 \to 0.85 \to 0.70 \to 0.20$.
+     * `test_ac_r3_1_03_fused_search_applies_taxon_distance_rescaling_and_telemetry`: przeskalowanie wyników fuzji i re-ranking kandydatów; produkt z kategorii docelowej wyprzedza produkt z innej domeny mimo wyższego surowego podobieństwa wektorowego; telemetria w `fusion.taxon_proximity`.
+     * `test_ac_r3_1_04_adaptive_filter_first_activation_and_scoring`: aktywacja strategii filter-first dla kategorii $\le 500$ produktów (`Bookshelf Speakers`), obliczanie wektorowego podobieństwa kosinusowego i dopasowania leksykalnego w Pythonie z $100\%$ pokryciem poddrzewa.
+     * `test_ac_r3_1_04_broad_taxon_bypasses_filter_first`: kategorie szerokie ($> 500$) omijają filter-first i kontynuują standardowe wyszukiwanie wieloindeksowe z nadsamplingiem.
+
+2. **Rozdział 17 pracy magisterskiej (`thesis/17-doc-attribute-rarity-taxonomic-distance.md` — High):**
+   * Sformalizowano wkład naukowy: *Attribute Rarity Weighting, Graded Taxonomic Proximity, and Adaptive Filter-First Routing*.
+   * Udokumentowano modele matematyczne: znormalizowane ważenie rzadkości atrybutów $\omega_{\text{IDF}}$, topologiczną odległość LCP $\Delta_{\text{tax}}$, przedziałową funkcję kary $\mu(\Delta_{\text{tax}})$ oraz algorytm selektywnego routingu z gwarancją recallu poddrzewa. Zarejestrowano w `thesis/README.md`.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Ważenie rzadkości atrybutów w `GraphSearchTool._build_channel_query` (`src/tools/graph_search_tool.py` — Critical, RS-03):**
+   * W kanale `attribute` zapytanie MaxP liczy dynamicznie liczbę produktów powiązanych z węzłem atrybutu: `count { (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) } AS deg`.
+   * Surowe podobieństwo wektorowe jest ważone przez znormalizowany IDF: `score * (log(1.0 + 265307.0 / (1.0 + deg)) / log(265308.0))`.
+   * Uzasadnienie trafienia wzbogacono o stopień: `[deg=...]`, zapewniając pełną przejrzystość i wyjaśnialność rankingu.
+
+2. **Stopniowana bliskość taksonomiczna w `GraphSearchTool` (`src/tools/graph_search_tool.py` — Critical, RS-10):**
+   * W `DETAIL_QUERY` dodano pobieranie `head(taxon_paths) AS primary_taxon_path`.
+   * Dodano metody statyczne `_compute_taxon_distance(target_path, cand_path)` oraz `_get_taxon_distance_multiplier(distance)`.
+   * W `_execute_fused_search` przy aktywnym filtrze kategorii obliczana jest odległość taksonomiczna kandydatów do ścieżki docelowej, a wynik fuzji jest skalowany przez mnożnik kary ($1.00 \to 0.85 \to 0.70 \to 0.20$).
+   * Zapisano pełną telemetrię odległości w `item["fusion"]["taxon_proximity"] = {"distance": dist, "multiplier": multiplier}`.
+
+3. **Adaptacyjny porządek wyszukiwania Filter-First (`src/tools/graph_search_tool.py` — Critical, RS-07):**
+   * W `_execute_hybrid_search` sprawdzana jest wielkość poddrzewa docelowego taksonu: jeżeli `1 <= product_count <= 500`, wywoływana jest dedykowana metoda `_execute_filter_first_search`.
+   * Zapytanie Cypher pobiera bezpośrednio od węzła nadrzędnego `:Taxon` wszystkie produkty z poddrzewa spełniające twarde filtry pozakategoryczne (cena, marka) wraz z ich osadzeniami `node.embedding` (czas wykonania $232.4\text{ ms}$ dla 237 produktów).
+   * Podobieństwo kosinusowe i dopasowanie leksykalne tokenów tytułu liczone są w pamięci w Pythonie (`numpy`), gwarantując brak ucinania kandydatów przez globalny ANN indeksu.
+
+---
+
 ## 📅 2026-10-20 (Stage 1: Konsumpcja strukturalna i leksykalna Graph v2 — filtracja poddrzew Taxon, relaksacja MACS BROADER, 4-kanałowy RRF z pełnotekstowym BM25 [GV2-07..GV2-09])
 
 ### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. Release R2b)

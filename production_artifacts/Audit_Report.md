@@ -683,4 +683,28 @@ Following implementation, `scripts/tune_fusion_r2b.py` was executed across all 1
 ### Key Takeaway
 Stage 1 (`GV2-07` .. `GV2-09`) completely resolves the structural category disconnect on Graph v2 and establishes that a 4th lexical retrieval channel (`product_fulltext_index`) combined with Taxon subtree filtering delivers massive, statistically verified gains across all evaluation metrics.
 
+---
+
+# Audit Report: Release R3.1 — Attribute IDF Weighting (RS-03), Graded Taxonomic Distance (RS-10), and Adaptive Filter-First Order (RS-07)
+
+**Date**: 2026-10-21  
+**Spec Audited**: `production_artifacts/Technical_Specification_R3_1.md` (approved 2026-10-21)  
+**Context**: `production_artifacts/Research_Report.md` §9, Vision Decision `2026-10-21-025`  
+**Verdict**: **PASS** (`65 passed` across all suites, including `tests/test_r3_1_retrieval_refinements.py`)
+
+## 1. Spec Compliance Matrix (Release R3.1)
+
+| ID | Acceptance Criterion | Status | Evidence |
+|---|---|---|---|
+| **AC-R3.1-01** | Attribute MaxP query computes degree-based IDF weighting ($\text{score} \times \frac{\log(1 + N / (1 + \text{deg}))}{\log(1 + N)}$), suppressing generic high-degree attributes (`Color=Black`) while elevating rare specifications (`Style=Ergonomic Split Keyboard`) | ✅ PASS | Verified in `tests/test_r3_1_retrieval_refinements.py` (`test_ac_r3_1_01_attribute_idf_weighting_query_structure`, `test_ac_r3_1_01_attribute_idf_weighting_math`). Cypher query asserts `count { (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) } AS deg` and normalized IDF formula. Math assertions verify `deg=44265` yields $\approx 0.155$ while `deg=1` yields $\approx 0.944$ ($5.8\times$ rarity ratio). |
+| **AC-R3.1-02** | `_compute_taxon_distance` correctly identifies topological tree distances: 0 for exact leaf/descendant, 1 for parent, 2 for siblings, 3–4 for cousins, and $\ge 5$ for distant branches/disjoint trees | ✅ PASS | Verified in `tests/test_r3_1_retrieval_refinements.py` (`test_ac_r3_1_02_compute_taxon_distance`, `test_ac_r3_1_02_taxon_distance_multipliers`). Tested against concrete tree paths matching Graph v2 taxonomy lineage. |
+| **AC-R3.1-03** | Fused candidate scores scale by `_get_taxon_distance_multiplier` ($1.00 \to 0.85 \to 0.70 \to 0.20$), re-ranking candidates according to category proximity, with `taxon_proximity` telemetry recorded in `item["fusion"]["taxon_proximity"]` | ✅ PASS | Verified in `tests/test_r3_1_retrieval_refinements.py` (`test_ac_r3_1_03_fused_search_applies_taxon_distance_rescaling_and_telemetry`). Exact match leapfrogs distant candidate (camera bag) despite higher initial raw vector similarity, with `distance` and `multiplier` verified. |
+| **AC-R3.1-04** | When `Taxon.product_count <= 500`, `_execute_filter_first_search` activates, evaluating 100% of candidates in the niche subtree with in-memory vector dot product and full-text match; broad categories ($> 500$) continue with ANN-first oversampling | ✅ PASS | Verified in `tests/test_r3_1_retrieval_refinements.py` (`test_ac_r3_1_04_adaptive_filter_first_activation_and_scoring`, `test_ac_r3_1_04_broad_taxon_bypasses_filter_first`). Benchmark on live Graph v2 verified `Bookshelf Speakers` (237 products) retrieved in $232\text{ ms}$. |
+| **AC-R3.1-05** | Regression test: all existing suites continue to pass without failure | ✅ PASS | Full regression suite passes: `65 passed in 12.70s` across `tests/test_stage1_taxon_and_lexical.py`, `tests/test_graph_search_tool.py`, `tests/test_score_fusion.py`, `tests/test_stage0_graph_v2_wiring.py`, `tests/test_r2b_benchmark_and_metrics.py`, and `tests/test_r3_1_retrieval_refinements.py`. |
+
+## 2. Code Quality & Non-Destructive Integrity Audit
+- **Zero Placeholder Implementations**: All methods (`_compute_taxon_distance`, `_get_taxon_distance_multiplier`, `_execute_filter_first_search`, `_build_channel_query`) are fully implemented and typed.
+- **Backward Compatibility**: When `category` filter is not provided, `distance_multiplier` defaults to `1.00` and `dist = 0`, preserving legacy scoring exactly.
+- **Query Parameterization**: User inputs and category filters remain fully parameterized in Cypher queries (`$category_filter`, `$asins`, etc.).
+
 

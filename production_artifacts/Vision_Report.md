@@ -47,6 +47,19 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-10-21-025: Release R3.1 — Attribute IDF Rarity Weighting (RS-03), Graded Taxonomic Distance (RS-10), and Filter-First Adaptive Search Order (RS-07)
+**Context**: Following Stage 1 (`GV2-07` .. `GV2-09`), empirical analysis revealed two critical retrieval bottlenecks:
+1. The `attribute` channel was dominated by high-frequency generic attributes (e.g., `Color=Black` on 44,265 products, 16.7% of the catalog), creating massive tie blocks in RRF and crowding out rare, high-precision technical specifications (e.g., `GaN`, `144Hz`, `Mechanical`).
+2. Category filtering remained binary (pass/fail), treating sibling categories (e.g. `Floorstanding Speakers` vs `Bookshelf Speakers`) identically to distant accessory traps (e.g. `Speaker Wall Mounts`).
+3. For very small Taxon subtrees ($< 500$ products), global vector ANN search risked candidate starvation prior to Cypher filtering.
+**Decision**:
+1. **Attribute IDF / Rarity Weighting (`RS-03`)**: Scale attribute similarity by normalized inverse document frequency: $\text{score} \times \frac{\log(1 + N / (1 + \text{deg}))}{\log(1 + N)}$, strongly prioritizing rare technical specifications and dampening generic colors/materials.
+2. **Graded Taxonomic Proximity (`RS-10`)**: Compute tree distance from candidate `Taxon.path` to target `Taxon.path` via common ancestor depth: distance 0 (exact leaf/descendant) gets factor 1.0; distance 1–2 (siblings) gets factor 0.85; distance 3–4 (cousins) gets factor 0.70; distance $\ge 5$ (distant/out-of-domain) gets factor 0.20 or filter exclusion.
+3. **Adaptive Filter-First Search Order (`RS-07`)**: For selective subtrees ($< 500$ products), invert search order to Cypher filter-first, evaluating 100% of candidates in the subtree to guarantee recall against ANN truncation.
+**Rationale**: Transforms the attribute channel from a generic noise source into a precision finder, enables graceful substitution without accessory pollution, and eliminates candidate starvation in long-tail categories.
+**Status**: ✅ Accepted
+
+
 ### 📅 2026-10-20-024: Stage 1 Graph v2 Structural & Lexical Consumption — Taxon Subtree Filtering, BROADER MACS Relaxation, and Lexical RRF Channel (GV2-07 .. GV2-09)
 **Context**: Release R2b tuning on live Graph v2 exposed a critical recall cliff ($HR@20$ collapsing from $90.5\%$ on legacy queries to $9.52\%$ on $S_0$–$S_4$). Empirical investigation confirmed that GraphSearchTool was querying legacy Graph v1 `BELONGS_TO_CATEGORY` and `Category.SUBCATEGORY_OF` relationships which do not exist in Graph v2. This caused 100% of category-filtered products to fail the graph condition and fall back to title matching, which failed on title-blind benchmark queries. Furthermore, Graph v2's prebuilt online `product_fulltext_index` and 1,183-node `Taxon` tree were unconsumed by the retrieval engine.
 **Decision**:

@@ -441,3 +441,41 @@ Following Release R2b tuning on live Graph v2, empirical results revealed a mass
 | **S1-D2 (Lexical Channel in Score Fusion)** | 1. Add `product_fulltext_index` as the `lexical` channel in `score_fusion.py` and `GraphSearchTool` MaxP query pipeline.<br>2. Sanitize user queries for Lucene syntax (stripping punctuation/operators to avoid syntax errors).<br>3. Introduce fusion presets `rrf4`, `wrrf4` (`w_prod=0.35, w_attr=0.20, w_rev=0.15, w_lex=0.30`), and `cc4`. |
 | **S1-D3 (Taxon Subtree Selectivity & Dynamic ANN Oversampling)** | 1. In `GraphSearchTool`, inspect `Taxon.product_count` for resolved category filters.<br>2. When `product_count < 5,000`, dynamically scale `ann_k_per_limit` (from 30 up to 60) to prevent ANN truncation of sparse subtrees before post-filtering. |
 
+---
+
+## 9. Release R3.1: Attribute IDF Rarity Weighting (RS-03), Graded Taxonomic Distance (RS-10), and Adaptive Filter-First Order (RS-07)
+
+Following Stage 1 (`GV2-07` .. `GV2-09`), empirical analysis identified three remaining precision bottlenecks in the retrieval pipeline:
+
+### 9.1 Empirical Findings & Methodological Design
+
+1. **Attribute Channel Frequency Distortion (`RS-03`)**:
+   - Live query profiling shows that the `attribute` channel was dominated by high-frequency color and material nodes: `Color=Black` is connected to 44,265 products (16.68% of the catalog), `Color=White` to 8,361 products (3.15%), and `Material=Plastic` to 3,233 products.
+   - Raw cosine similarity ignores document frequency, meaning a match on `Color=Black` receives identical or higher score than a match on rare technical specifications like `Style=Ergonomic Split Keyboard` (degree = 1).
+   - Scaling similarity by normalized Inverse Document Frequency (IDF):
+     $$\text{similarity}_{\text{IDF}} = \text{similarity} \times \frac{\log(1 + N / (1 + \text{deg}))}{\log(1 + N)}$$
+     where $N = 265,307$. For `Color=Black` (deg = 44,265), the weight is $0.155$; for `Ergonomic Split Keyboard` (deg = 1), the weight is $0.944$ (a $6\times$ dynamic differentiation favoring precise technical specs).
+   - Live Cypher execution confirms query latency of $\approx 930\text{ ms}$ with `count { (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) }`, accurately promoting `Style=Ergonomic Split Keyboard` to Rank #1 on split-keyboard queries.
+
+2. **Graded Category Proximity (`RS-10`)**:
+   - Graph v2 taxonomy paths (`Taxon.path`) encode the exact hierarchical lineage from `Electronics` down to leaf categories.
+   - Calculating topological distance via Longest Common Prefix (LCP) depth:
+     - $\text{distance} = (\text{len}(path_{\text{target}}) - \text{common\_depth}) + (\text{len}(path_{\text{cand}}) - \text{common\_depth})$
+     - Distance 0 (Exact leaf / descendant) $\to$ discount factor $1.00$.
+     - Distance 1–2 (Sibling categories sharing immediate parent, e.g. `Floorstanding Speakers` vs `Bookshelf Speakers`) $\to$ discount factor $0.85$.
+     - Distance 3–4 (Cousin categories sharing grandparent, e.g. `Turntables` vs `Bookshelf Speakers`) $\to$ discount factor $0.70$.
+     - Distance $\ge 5$ (Distant branch / out-of-domain) $\to$ discount factor $0.20$ or exclusion.
+   - Integrating this graded multiplier directly into candidate scoring eliminates binary cliff failures and provides natural substitute recommendations when exact items are depleted.
+
+3. **Adaptive Filter-First Search Order (`RS-07`)**:
+   - For highly selective subtrees (`Taxon.product_count < 500`), global ANN vector search risks candidate starvation because the 300 globally nearest items may contain only 0–2 items from the target category.
+   - Filter-first search inverts the execution: Cypher retrieves all candidates in the selective subtree ($\le 500$ items) along with their embeddings/details, then computes exact cosine similarity and full-text scoring in memory, guaranteeing 100% candidate recall on long-tail categories.
+
+### 9.2 Release R3.1 Decisions (R3.1-D1 .. R3.1-D3)
+
+| ID | Decision |
+|---|---|
+| **R3.1-D1 (Attribute IDF Weighting)** | Integrate degree-based normalized IDF scaling into `GraphSearchTool._build_channel_query("attribute", ...)`: `score * (log(1.0 + 265307.0 / (1.0 + deg)) / log(265308.0))`. |
+| **R3.1-D2 (Graded Taxonomic Proximity)** | In `DETAIL_QUERY`, retrieve `head(taxon_paths) AS primary_taxon_path`. In `_execute_fused_search`, compute tree distance between target taxon path and candidate path, scaling fused scores by $[1.00, 0.85, 0.70, 0.20]$. |
+| **R3.1-D3 (Filter-First Adaptive Order)** | When `product_count < 500`, execute Cypher-first subtree candidate retrieval with in-memory vector scoring, bypassing global ANN truncation. |
+
