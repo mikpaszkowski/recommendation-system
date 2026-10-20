@@ -96,3 +96,12 @@ python scripts/run_evaluation.py --module kecr --alpha 0.5
   2. Temporal decay within Cypher pattern comprehensions provides a scalable solution for dynamic preference shifts.
 * **Suggested Baseline Comparisons**: Single-context Vector Search, Non-decayed topological retrieval.
 * **Related Academic Citations**: Research on temporal dynamics in Graph Neural Networks and explainable Knowledge Graph reasoning.
+
+---
+
+## 6. Implementation Hardening & KECR Clarification (2026-10-20, GV2-06)
+
+An academic audit of `src/tools/kecr_tool.py` identified two critical corrections:
+1. **Fabricated 5.0★ Fallback Elimination**: The Cypher query in `KnowledgePathExtractor.extract_paths` previously defaulted sparse fallbacks to `"Top-rated category recommendation based on overall customer satisfaction (" + toString(coalesce(cand.avg_rating, 5.0)) + "★)."`, artificially inventing 5.0★ ratings for items lacking evidence. This was replaced with honest retrieval provenance:
+   $$\text{Fallback} = \begin{cases} \text{"Matched via hybrid semantic retrieval (catalog rating: } r \text{★; no explicit graph path)."} & \text{if } r \neq \text{null} \\ \text{"Matched via hybrid semantic retrieval (no explicit graph path)."} & \text{otherwise} \end{cases}$$
+2. **Academic Nomenclature Precision**: To avoid academic overclaiming, the component is explicitly defined as **KECR-inspired Graph Evidence Path Extraction** (deterministic multi-hop path extraction in Cypher using pattern comprehensions, inspired by KECR's dual-context path grounding principles) rather than an implementation of Ren et al.'s trained neural model. Verified in `tests/test_stage0_graph_v2_wiring.py`.

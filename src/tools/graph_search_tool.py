@@ -32,7 +32,9 @@ MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins
 OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
 OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
 RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
-       collect(DISTINCT c.name) AS category, elementId(node) AS id
+       collect(DISTINCT c.name) AS category, elementId(node) AS id,
+       node.features AS features, node.details_text AS details_text,
+       node.description AS description, node.avg_rating AS avg_rating
 """
 
 # Constraint-satisfaction@K facts (R2a, FR-025): one batched, parameterised read per query.
@@ -103,6 +105,63 @@ class GraphSearchTool:
                     pass
             cleaned[k] = v
         return cleaned
+
+    @staticmethod
+    def _group_soft_preferences(soft_preferences: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+        """
+        Groups soft preferences so that unit variations of the same underlying requirement
+        (e.g., '128', '128GB', '128 GB' for storage) belong to a single group and award
+        at most one bonus unit per requirement, while distinct values (e.g., '128' vs '256')
+        remain in separate groups.
+        """
+        from src.dialog_manager.session_adapter import generate_attribute_unit_variations
+
+        groups: List[Dict[str, Any]] = []
+        for sp in soft_preferences:
+            raw_val = sp.get("value")
+            if raw_val is None or raw_val == "":
+                continue
+            val = str(raw_val).lower().strip()
+            if not val or val == "none":
+                continue
+            cat = str(sp.get("category", "") or "").lower().strip()
+            polarity = float(sp.get("polarity", 0.5))
+            pol_sign = -1 if polarity < 0 else 1
+            req_id = sp.get("requirement_id")
+
+            variations = {val}
+            for v in generate_attribute_unit_variations(cat, val):
+                variations.add(v.lower().strip())
+
+            matched_group = None
+            for g in groups:
+                if g["pol_sign"] != pol_sign:
+                    continue
+                if req_id is not None and g["req_id"] is not None:
+                    if req_id == g["req_id"]:
+                        matched_group = g
+                        break
+                    else:
+                        continue
+                if g["cat"] == cat and (val in g["variations"] or bool(variations & g["all_unit_forms"])):
+                    matched_group = g
+                    break
+
+            if matched_group is not None:
+                matched_group["entries"].append(sp)
+                matched_group["variations"].add(val)
+                matched_group["all_unit_forms"].update(variations)
+            else:
+                groups.append({
+                    "req_id": req_id,
+                    "cat": cat,
+                    "pol_sign": pol_sign,
+                    "variations": {val},
+                    "all_unit_forms": set(variations),
+                    "entries": [sp],
+                })
+
+        return [g["entries"] for g in groups]
 
     def search(self, 
                semantic_query: Optional[str] = "", 
@@ -175,9 +234,10 @@ class GraphSearchTool:
                         result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
                     
                     # Pass 2: Drop Category constraint if still failing
-                    if result.get("count", 0) < 3 and "category" in filters:
+                    if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
                         logger.warning(f"[GST] MACS Triggered: Yield still < 3. Dropping category constraint.")
-                        del filters["category"]
+                        filters.pop("category", None)
+                        filters.pop("categories", None)
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
                         result = self._execute_hybrid_search(text, filters, raw_filters, limit, config)
                 
@@ -204,7 +264,11 @@ class GraphSearchTool:
                     bonus_unit = LEGACY_SOFT_BONUS_UNIT
                 else:
                     bonus_unit = config.soft_bonus_unit()
-                logger.info(f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences (unit={bonus_unit:.4f}).")
+                sp_groups = self._group_soft_preferences(soft_preferences)
+                logger.info(
+                    f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences "
+                    f"({len(sp_groups)} distinct requirement groups, unit={bonus_unit:.4f})."
+                )
                 for item in result["items"]:
                     title_lower = (item.get("title") or "").lower()
                     brand_lower = (item.get("brand") or "").lower()
@@ -212,24 +276,29 @@ class GraphSearchTool:
                     
                     base_score = item.get("score", 0.0)
                     bonus = 0.0
-                    for sp in soft_preferences:
-                        raw_val = sp.get("value")
-                        if raw_val is None or raw_val == "":
-                            continue
-                        val = str(raw_val).lower().strip()
-                        if not val or val == "none":
-                            continue
-                        cat = str(sp.get("category", "") or "").lower().strip()
-                        polarity = float(sp.get("polarity", 0.5))
-                        
-                        # Add heuristic bonus if value appears in title, brand or match reasons
-                        if val.isdigit():
-                            # Require digit boundaries so numbers (e.g. 128, 256, 1) do not match
-                            # as substrings of larger numbers (1280, 2560x1440, 2021)
-                            if re.search(r"(?<!\d)" + re.escape(val) + r"(?!\d)", title_lower):
-                                bonus += (polarity * bonus_unit)
-                        elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
-                            bonus += (polarity * bonus_unit)
+                    for group in sp_groups:
+                        matched_deltas: List[float] = []
+                        for sp in group:
+                            raw_val = sp.get("value")
+                            if raw_val is None or raw_val == "":
+                                continue
+                            val = str(raw_val).lower().strip()
+                            if not val or val == "none":
+                                continue
+                            cat = str(sp.get("category", "") or "").lower().strip()
+                            polarity = float(sp.get("polarity", 0.5))
+                            
+                            # Add heuristic bonus if value appears in title, brand or match reasons
+                            if val.isdigit():
+                                # Require digit boundaries so numbers (e.g. 128, 256, 1) do not match
+                                # as substrings of larger numbers (1280, 2560x1440, 2021)
+                                if re.search(r"(?<!\d)" + re.escape(val) + r"(?!\d)", title_lower):
+                                    matched_deltas.append(polarity * bonus_unit)
+                            elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
+                                matched_deltas.append(polarity * bonus_unit)
+                        if matched_deltas:
+                            # Apply at most one bonus per requirement group (max magnitude among unit variations)
+                            bonus += max(matched_deltas, key=lambda d: abs(d))
                             
                     item["score"] = base_score + bonus
                     item["soft_bonus"] = bonus
@@ -359,6 +428,10 @@ LIMIT $depth""",
                 "price": detail.get("price"),
                 "brand": detail.get("brand"),
                 "category": detail.get("category") or [],
+                "features": detail.get("features"),
+                "details_text": detail.get("details_text"),
+                "description": detail.get("description"),
+                "avg_rating": detail.get("avg_rating"),
                 "score": fc.score,
                 "fused_score": fc.score,
                 "soft_bonus": 0.0,
@@ -454,7 +527,8 @@ LIMIT $depth""",
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
         RETURN node.title as title, node.price as price, b.name as brand, 
                collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
-               match_reasons
+               match_reasons, node.features as features, node.details_text as details_text,
+               node.description as description, node.avg_rating as avg_rating
         ORDER BY score DESC
         LIMIT $limit
         """
@@ -495,7 +569,9 @@ LIMIT $depth""",
         WITH node, b, c, sort_price,
              (bayes_rating * volume_factor) AS relevance_score
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, relevance_score as score, elementId(node) as id, node.parent_asin as asin
+               collect(DISTINCT c.name) as category, relevance_score as score, elementId(node) as id, node.parent_asin as asin,
+               node.features as features, node.details_text as details_text,
+               node.description as description, node.avg_rating as avg_rating
         ORDER BY score DESC, coalesce(price, 999999.0) ASC
         LIMIT {limit}
         """
@@ -534,13 +610,22 @@ LIMIT $depth""",
         RETURN p.parent_asin AS asin, a.attribute_name AS name, a.attribute_value AS value, a.source AS source
         """
         
-        # Query reviews (recent helpful ones)
+        # Query reviews per product (up to $reviews_per_product per ASIN, ordered by Graph v2 properties)
         cypher_rev = """
-        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
-        WHERE p.parent_asin IN $asins
-        RETURN p.parent_asin AS asin, r.review_title AS name, r.review_body AS value, 'user_review' AS source
-        ORDER BY r.helpful_votes DESC, r.timestamp_iso DESC
-        LIMIT 20
+        UNWIND $asins AS asin
+        CALL {
+            WITH asin
+            MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct {parent_asin: asin})
+            RETURN p.parent_asin AS prod_asin,
+                   r.review_title AS name,
+                   r.review_body AS value,
+                   'user_review' AS source
+            ORDER BY coalesce(r.helpful_vote, r.helpful_votes, 0) DESC,
+                     coalesce(r.verified, false) DESC,
+                     coalesce(r.timestamp, 0) DESC
+            LIMIT $reviews_per_product
+        }
+        RETURN prod_asin AS asin, name, value, source
         """
         
         logger.info(f"[GST:Attributes] Fetching attributes and reviews for {len(asins)} products...")
@@ -560,11 +645,10 @@ LIMIT $depth""",
                             "source": record["source"]
                         })
                         
-                # 2. Fetch Reviews
-                result_rev = session.run(cypher_rev, asins=asins)
+                # 2. Fetch Reviews (bounded per product at query level and guarded in Python)
+                result_rev = session.run(cypher_rev, asins=asins, reviews_per_product=5)
                 for record in result_rev:
                     asin = record["asin"]
-                    # Optionally limit reviews per product to avoid context window explosion
                     if asin in result_map and sum(1 for a in result_map[asin] if a["source"] == 'user_review') < 5:
                         result_map[asin].append({
                             "name": f"Review: {record['name']}",
@@ -670,7 +754,7 @@ LIMIT $depth""",
         raw_filters = raw_filters or {}
         
         for key, value in filters.items():
-            if value is None or value == "":
+            if value is None or value == "" or (isinstance(value, (list, tuple)) and not value):
                 logger.debug(f"[GST] Skipping empty filter key: {key}")
                 continue
             
@@ -683,8 +767,13 @@ LIMIT $depth""",
             elif key == "excluded_asins" and isinstance(value, list) and value:
                 where_clauses.append("NOT node.parent_asin IN $excluded_asins")
                 params["excluded_asins"] = value
-            elif key == "brand":
+            elif key == "brand" and not isinstance(value, (list, tuple)):
+                if filters.get("brands"):
+                    # Handled together in the 'brands' OR-list predicate below
+                    continue
                 raw_brand = raw_filters.get("brand", value)
+                if isinstance(raw_brand, (list, tuple)):
+                    raw_brand = raw_brand[0] if raw_brand else value
                 where_clauses.append(
                     "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) "
                     "WHERE toLower(b.name) = toLower($brand_filter) "
@@ -694,8 +783,30 @@ LIMIT $depth""",
                 )
                 params["brand_filter"] = value
                 params["raw_brand_filter"] = raw_brand
-            elif key == "exclude_brand":
+            elif key == "brands" or (key == "brand" and isinstance(value, (list, tuple))):
+                brand_list = [str(b).strip() for b in (value if isinstance(value, (list, tuple)) else [value]) if str(b).strip()]
+                if key == "brands" and isinstance(filters.get("brand"), str) and filters["brand"].strip():
+                    if filters["brand"].strip() not in brand_list:
+                        brand_list.append(filters["brand"].strip())
+                raw_source = raw_filters.get(key) or raw_filters.get("brands") or raw_filters.get("brand") or brand_list
+                raw_brand_list = [str(b).strip() for b in (raw_source if isinstance(raw_source, (list, tuple)) else [raw_source]) if str(b).strip()]
+                if not raw_brand_list:
+                    raw_brand_list = list(brand_list)
+                where_clauses.append(
+                    "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) "
+                    "WHERE ANY(bf IN $brands_filter WHERE toLower(b.name) = toLower(bf) "
+                    "   OR toLower(b.name) CONTAINS toLower(bf) "
+                    "   OR toLower(bf) CONTAINS toLower(b.name)) } "
+                    "OR ANY(rbf IN $raw_brands_filter WHERE toLower(node.title) CONTAINS toLower(rbf)))"
+                )
+                params["brands_filter"] = brand_list
+                params["raw_brands_filter"] = raw_brand_list
+            elif key == "exclude_brand" and not isinstance(value, (list, tuple)):
+                if filters.get("exclude_brands"):
+                    continue
                 raw_ex_brand = raw_filters.get("exclude_brand", value)
+                if isinstance(raw_ex_brand, (list, tuple)):
+                    raw_ex_brand = raw_ex_brand[0] if raw_ex_brand else value
                 where_clauses.append(
                     "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) "
                     "WHERE toLower(eb.name) = toLower($exclude_brand) "
@@ -705,8 +816,31 @@ LIMIT $depth""",
                 )
                 params["exclude_brand"] = value
                 params["raw_ex_brand_filter"] = raw_ex_brand
-            elif key == "category":
+            elif key == "exclude_brands" or (key == "exclude_brand" and isinstance(value, (list, tuple))):
+                ex_brand_list = [str(b).strip() for b in (value if isinstance(value, (list, tuple)) else [value]) if str(b).strip()]
+                if key == "exclude_brands" and isinstance(filters.get("exclude_brand"), str) and filters["exclude_brand"].strip():
+                    if filters["exclude_brand"].strip() not in ex_brand_list:
+                        ex_brand_list.append(filters["exclude_brand"].strip())
+                raw_ex_source = raw_filters.get(key) or raw_filters.get("exclude_brands") or raw_filters.get("exclude_brand") or ex_brand_list
+                raw_ex_brand_list = [str(b).strip() for b in (raw_ex_source if isinstance(raw_ex_source, (list, tuple)) else [raw_ex_source]) if str(b).strip()]
+                if not raw_ex_brand_list:
+                    raw_ex_brand_list = list(ex_brand_list)
+                where_clauses.append(
+                    "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) "
+                    "WHERE ANY(ebf IN $exclude_brands_filter WHERE toLower(eb.name) = toLower(ebf) "
+                    "   OR toLower(eb.name) CONTAINS toLower(ebf) "
+                    "   OR toLower(ebf) CONTAINS toLower(eb.name)) } "
+                    "OR ANY(rebf IN $raw_exclude_brands_filter WHERE toLower(node.title) CONTAINS toLower(rebf)))"
+                )
+                params["exclude_brands_filter"] = ex_brand_list
+                params["raw_exclude_brands_filter"] = raw_ex_brand_list
+            elif key == "category" and not isinstance(value, (list, tuple)):
+                if filters.get("categories"):
+                    continue
                 raw_cat = raw_filters.get("category", value)
+                if isinstance(raw_cat, (list, tuple)):
+                    raw_cat = raw_cat[0] if raw_cat else value
+                raw_cat = str(raw_cat)
                 tokens = [t.strip().lower() for t in raw_cat.split() if len(t.strip()) > 2]
 
                 # Construct conjunction of token matches to handle intervening modifiers in product titles
@@ -730,6 +864,29 @@ LIMIT $depth""",
                 """)
                 params["category_filter"] = value
                 params["raw_category_filter"] = raw_cat
+            elif key == "categories" or (key == "category" and isinstance(value, (list, tuple))):
+                cat_list = [str(c).strip() for c in (value if isinstance(value, (list, tuple)) else [value]) if str(c).strip()]
+                if key == "categories" and isinstance(filters.get("category"), str) and filters["category"].strip():
+                    if filters["category"].strip() not in cat_list:
+                        cat_list.append(filters["category"].strip())
+                raw_cat_source = raw_filters.get(key) or raw_filters.get("categories") or raw_filters.get("category") or cat_list
+                raw_cat_list = [str(c).strip() for c in (raw_cat_source if isinstance(raw_cat_source, (list, tuple)) else [raw_cat_source]) if str(c).strip()]
+                if not raw_cat_list:
+                    raw_cat_list = list(cat_list)
+
+                cat_regexes = [f"(?i).*(^|[^a-z]){re.escape(c)}(s)?([^a-z]|$).*" for c in cat_list]
+                raw_cat_regexes = [f"(?i).*(^|[^a-z]){re.escape(rc)}(s)?([^a-z]|$).*" for rc in raw_cat_list]
+                where_clauses.append("""
+                (
+                    EXISTS {
+                        MATCH (node)-[:BELONGS_TO_CATEGORY]->(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)
+                        WHERE ANY(cat_rx IN $categories_filter WHERE c.name =~ cat_rx OR leaf.name =~ cat_rx)
+                    }
+                    OR ANY(raw_rx IN $raw_categories_filter WHERE toLower(node.title) =~ raw_rx)
+                )
+                """)
+                params["categories_filter"] = cat_regexes
+                params["raw_categories_filter"] = raw_cat_regexes
             # EAV Numeric filters dynamically intercepted with toFloat fallback for string attribute values
             elif key.endswith("_min") and key != "price_min":
                 attr_name = key.replace("_min", "")
@@ -780,9 +937,85 @@ LIMIT $depth""",
                 """)
                 params[key] = float(value)
             else:
-                logger.debug(f"Ignoring unhandled filter key: '{key}' = {value}")
+                logger.warning(f"[GST] Ignoring unhandled filter key: '{key}' = {value}")
             
         return where_clauses, params
+
+    def _normalize_single_brand(self, raw_val: str, label: str = "brand") -> str:
+        """Resolve a single brand string via ResolverService, falling back to raw_val."""
+        BRAND_CONFIDENCE = getattr(self, "BRAND_CONFIDENCE", 0.85)
+        try:
+            matches = self.resolver.resolve_brand(raw_val, k=1)
+            if matches and matches[0]["score"] >= BRAND_CONFIDENCE:
+                logger.info(f"[GST] ✓ Normalized {label} '{raw_val}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
+                return matches[0]["name"]
+            elif matches:
+                logger.warning(f"[GST] ✗ {label.capitalize()} '{raw_val}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {BRAND_CONFIDENCE}. Keeping raw value for title fallback.")
+            else:
+                logger.warning(f"[GST] ✗ No {label} match for '{raw_val}'. Keeping raw value for title fallback.")
+        except Exception as e:
+            logger.warning(f"[GST] {label.capitalize()} normalization failed: {e}")
+        return raw_val
+
+    def _normalize_single_category(self, raw_val: str) -> str:
+        """Resolve a single category string via ResolverService with margin check, falling back to raw_val."""
+        CATEGORY_CONFIDENCE = getattr(self, "CATEGORY_CONFIDENCE", 0.70)
+        CATEGORY_MARGIN = getattr(self, "CATEGORY_MARGIN", 0.05)
+        try:
+            matches = self.resolver.resolve_category(raw_val, k=3)
+            if matches and matches[0]["score"] >= CATEGORY_CONFIDENCE:
+                # Check candidate margin against runner-up candidates to prevent cross-domain drift
+                has_margin = True
+                if matches[0]["score"] < 0.85 and len(matches) > 1:
+                    top = matches[0]
+                    top_name = top.get("name", "").lower()
+                    top_path = [p.lower() for p in (top.get("path") or [])]
+
+                    # Find the first runner-up candidate that is a true cross-domain competitor.
+                    # Candidates that contain the top candidate's name or share taxonomy lineage
+                    # belong to the same taxonomic branch and are not cross-domain competitors.
+                    comp_candidate = None
+                    for runner_up in matches[1:]:
+                        ru_name = runner_up.get("name", "").lower()
+                        ru_path = [p.lower() for p in (runner_up.get("path") or [])]
+                        if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
+                            continue
+                        comp_candidate = runner_up
+                        break
+
+                    if comp_candidate is not None:
+                        margin = top["score"] - comp_candidate["score"]
+                        if margin < CATEGORY_MARGIN:
+                            has_margin = False
+                            logger.warning(
+                                f"[GST] ✗ Category '{raw_val}' failed margin check: "
+                                f"top match '{top['name']}' ({top['score']:.3f}) vs "
+                                f"runner-up '{comp_candidate['name']}' ({comp_candidate['score']:.3f}), "
+                                f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
+                            )
+                    elif len(matches) > 1 and not (top_name in matches[1].get("name", "").lower() or matches[1].get("name", "").lower() in top_name):
+                        margin = top["score"] - matches[1]["score"]
+                        if margin < CATEGORY_MARGIN:
+                            has_margin = False
+                            logger.warning(
+                                f"[GST] ✗ Category '{raw_val}' failed margin check: "
+                                f"top match '{top['name']}' ({top['score']:.3f}) vs "
+                                f"runner-up '{matches[1]['name']}' ({matches[1]['score']:.3f}), "
+                                f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
+                            )
+
+                if has_margin:
+                    logger.info(f"[GST] ✓ Normalized category '{raw_val}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
+                    return matches[0]["name"]
+            elif matches:
+                logger.warning(f"[GST] ✗ Category '{raw_val}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Keeping raw value for title fallback.")
+                candidates = [(m['name'], round(m['score'], 3)) for m in matches]
+                logger.info(f"[GST]   Top candidates: {candidates}")
+            else:
+                logger.warning(f"[GST] ✗ No category match for '{raw_val}'. Keeping raw value for title fallback.")
+        except Exception as e:
+            logger.warning(f"[GST] Category normalization failed: {e}")
+        return raw_val
 
     def _normalize_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize filter values to canonical graph node names using ResolverService.
@@ -795,98 +1028,50 @@ LIMIT $depth""",
         Instead, it remains as the raw string so that the Cypher title fallback logic 
         (e.g., `OR toLower(node.title) CONTAINS $raw`) can still attempt a textual match.
         """
-        BRAND_CONFIDENCE = getattr(self, "BRAND_CONFIDENCE", 0.85)
-        CATEGORY_CONFIDENCE = getattr(self, "CATEGORY_CONFIDENCE", 0.70)
-        CATEGORY_MARGIN = getattr(self, "CATEGORY_MARGIN", 0.05)
-        
         if not self.resolver:
             logger.warning("[GST] ResolverService not available. Skipping normalization.")
             return filters
         
         normalized = dict(filters)
 
-        # Normalize brand
+        # Normalize brand / brands
         if "brand" in normalized and normalized["brand"]:
-            try:
-                matches = self.resolver.resolve_brand(normalized["brand"], k=1)
-                if matches and matches[0]["score"] >= BRAND_CONFIDENCE:
-                    logger.info(f"[GST] ✓ Normalized brand '{normalized['brand']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
-                    normalized["brand"] = matches[0]["name"]
-                elif matches:
-                    logger.warning(f"[GST] ✗ Brand '{normalized['brand']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {BRAND_CONFIDENCE}. Keeping raw value for title fallback.")
-                else:
-                    logger.warning(f"[GST] ✗ No brand match for '{normalized['brand']}'. Keeping raw value for title fallback.")
-            except Exception as e:
-                logger.warning(f"[GST] Brand normalization failed: {e}")
+            if isinstance(normalized["brand"], (list, tuple)):
+                normalized["brand"] = [self._normalize_single_brand(str(b), "brand") for b in normalized["brand"] if b]
+            else:
+                normalized["brand"] = self._normalize_single_brand(str(normalized["brand"]), "brand")
 
-        # Normalize exclude_brand
+        if "brands" in normalized and normalized["brands"]:
+            if isinstance(normalized["brands"], (list, tuple)):
+                normalized["brands"] = [self._normalize_single_brand(str(b), "brands") for b in normalized["brands"] if b]
+            else:
+                normalized["brands"] = [self._normalize_single_brand(str(normalized["brands"]), "brands")]
+
+        # Normalize exclude_brand / exclude_brands
         if "exclude_brand" in normalized and normalized["exclude_brand"]:
-            try:
-                matches = self.resolver.resolve_brand(normalized["exclude_brand"], k=1)
-                if matches and matches[0]["score"] >= BRAND_CONFIDENCE:
-                    logger.info(f"[GST] ✓ Normalized exclude_brand '{normalized['exclude_brand']}' → '{matches[0]['name']}'")
-                    normalized["exclude_brand"] = matches[0]["name"]
-                else:
-                    logger.warning(f"[GST] ✗ Low confidence for exclude_brand. Keeping raw value for title fallback.")
-            except Exception as e:
-                logger.warning(f"[GST] Exclude brand normalization failed: {e}")
+            if isinstance(normalized["exclude_brand"], (list, tuple)):
+                normalized["exclude_brand"] = [self._normalize_single_brand(str(b), "exclude_brand") for b in normalized["exclude_brand"] if b]
+            else:
+                normalized["exclude_brand"] = self._normalize_single_brand(str(normalized["exclude_brand"]), "exclude_brand")
 
-        # Normalize category
+        if "exclude_brands" in normalized and normalized["exclude_brands"]:
+            if isinstance(normalized["exclude_brands"], (list, tuple)):
+                normalized["exclude_brands"] = [self._normalize_single_brand(str(b), "exclude_brands") for b in normalized["exclude_brands"] if b]
+            else:
+                normalized["exclude_brands"] = [self._normalize_single_brand(str(normalized["exclude_brands"]), "exclude_brands")]
+
+        # Normalize category / categories
         if "category" in normalized and normalized["category"]:
-            try:
-                matches = self.resolver.resolve_category(normalized["category"], k=3)
-                if matches and matches[0]["score"] >= CATEGORY_CONFIDENCE:
-                    # Check candidate margin against runner-up candidates to prevent cross-domain drift
-                    has_margin = True
-                    if matches[0]["score"] < 0.85 and len(matches) > 1:
-                        top = matches[0]
-                        top_name = top.get("name", "").lower()
-                        top_path = [p.lower() for p in (top.get("path") or [])]
+            if isinstance(normalized["category"], (list, tuple)):
+                normalized["category"] = [self._normalize_single_category(str(c)) for c in normalized["category"] if c]
+            else:
+                normalized["category"] = self._normalize_single_category(str(normalized["category"]))
 
-                        # Find the first runner-up candidate that is a true cross-domain competitor.
-                        # Candidates that contain the top candidate's name or share taxonomy lineage
-                        # belong to the same taxonomic branch and are not cross-domain competitors.
-                        comp_candidate = None
-                        for runner_up in matches[1:]:
-                            ru_name = runner_up.get("name", "").lower()
-                            ru_path = [p.lower() for p in (runner_up.get("path") or [])]
-                            if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
-                                continue
-                            comp_candidate = runner_up
-                            break
-
-                        if comp_candidate is not None:
-                            margin = top["score"] - comp_candidate["score"]
-                            if margin < CATEGORY_MARGIN:
-                                has_margin = False
-                                logger.warning(
-                                    f"[GST] ✗ Category '{normalized['category']}' failed margin check: "
-                                    f"top match '{top['name']}' ({top['score']:.3f}) vs "
-                                    f"runner-up '{comp_candidate['name']}' ({comp_candidate['score']:.3f}), "
-                                    f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
-                                )
-                        elif len(matches) > 1 and not (top_name in matches[1].get("name", "").lower() or matches[1].get("name", "").lower() in top_name):
-                            margin = top["score"] - matches[1]["score"]
-                            if margin < CATEGORY_MARGIN:
-                                has_margin = False
-                                logger.warning(
-                                    f"[GST] ✗ Category '{normalized['category']}' failed margin check: "
-                                    f"top match '{top['name']}' ({top['score']:.3f}) vs "
-                                    f"runner-up '{matches[1]['name']}' ({matches[1]['score']:.3f}), "
-                                    f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
-                                )
-
-                    if has_margin:
-                        logger.info(f"[GST] ✓ Normalized category '{normalized['category']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
-                        normalized["category"] = matches[0]["name"]
-                elif matches:
-                    logger.warning(f"[GST] ✗ Category '{normalized['category']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Keeping raw value for title fallback.")
-                    candidates = [(m['name'], round(m['score'], 3)) for m in matches]
-                    logger.info(f"[GST]   Top candidates: {candidates}")
-                else:
-                    logger.warning(f"[GST] ✗ No category match for '{normalized['category']}'. Keeping raw value for title fallback.")
-            except Exception as e:
-                logger.warning(f"[GST] Category normalization failed: {e}")
+        if "categories" in normalized and normalized["categories"]:
+            if isinstance(normalized["categories"], (list, tuple)):
+                normalized["categories"] = [self._normalize_single_category(str(c)) for c in normalized["categories"] if c]
+            else:
+                normalized["categories"] = [self._normalize_single_category(str(normalized["categories"]))]
 
         return normalized
 

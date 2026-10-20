@@ -80,12 +80,56 @@ class CriticAgent:
     """
     def __init__(self, llm_handler: SimpleLLMHandler = None):
         self.llm_handler = llm_handler or SimpleLLMHandler()
+        self.last_evaluated_candidates: List[Dict[str, Any]] = []
+
+    @staticmethod
+    def _format_product_features(product: Dict[str, Any]) -> str:
+        """
+        Formats catalog and Graph v2 rich product fields (price, brand, category,
+        avg_rating, features, details_text, description) for Critic evaluation.
+        """
+        header_parts = [
+            f"Price: {product.get('price')}",
+            f"Brand: {product.get('brand')}",
+            f"Category: {product.get('category')}",
+        ]
+        rating = product.get("rating") if product.get("rating") is not None else product.get("avg_rating")
+        if rating is not None:
+            header_parts.append(f"Rating: {rating}")
+        lines = [" | ".join(header_parts)]
+
+        raw_features = product.get("features")
+        if raw_features:
+            if isinstance(raw_features, (list, tuple)):
+                bullets = [str(f).strip() for f in raw_features[:5] if str(f).strip()]
+                if bullets:
+                    lines.append("Feature Bullets: " + "; ".join(bullets)[:600])
+            else:
+                feat_str = str(raw_features).strip()
+                if feat_str:
+                    lines.append("Feature Bullets: " + feat_str[:600])
+
+        details_text = product.get("details_text")
+        if details_text and str(details_text).strip():
+            lines.append("Technical Details: " + str(details_text).strip()[:400])
+
+        description = product.get("description")
+        if description:
+            if isinstance(description, (list, tuple)):
+                desc_str = " ".join(str(d).strip() for d in description if str(d).strip())
+            else:
+                desc_str = str(description).strip()
+            if desc_str:
+                lines.append("Description: " + desc_str[:300])
+
+        return "\n".join(lines)
 
     async def evaluate_candidates(self, user_profile: Dict[str, Any], candidates: List[Dict[str, Any]], attributes_map: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
         """
         Legacy evaluation method (Phase 1).
         """
         if not candidates:
+            self.last_evaluated_candidates = []
             return []
 
         logger.info(f"[CriticAgent] Evaluating {len(candidates)} candidates...")
@@ -96,6 +140,7 @@ class CriticAgent:
             tasks.append(self._evaluate_single_product(user_persona, product, attributes_map))
             
         evaluated_products = await asyncio.gather(*tasks)
+        self.last_evaluated_candidates = list(evaluated_products)
         
         recommended = [p for p in evaluated_products if p.get("is_recommended")]
         recommended.sort(key=lambda x: x.get("semantic_score", 0), reverse=True)
@@ -112,7 +157,7 @@ class CriticAgent:
         if not unstructured_text:
             unstructured_text = "No additional reviews or pros/cons available in the database."
 
-        features = f"Price: {product.get('price')} | Brand: {product.get('brand')} | Category: {product.get('category')}"
+        features = self._format_product_features(product)
         
         prod_title = product.get("title") or product.get("asin") or "Unknown Product"
         prompt = CRITIC_SYSTEM_PROMPT.format(
@@ -141,11 +186,12 @@ class CriticAgent:
         except Exception as e:
             title_display = str(prod_title)[:70]
             logger.error(f"[CriticAgent] Failed to evaluate product {title_display}: {e}")
-            evaluated_product["semantic_score"] = product.get("score", 0) * 100
+            evaluated_product["semantic_score"] = 0
             evaluated_product["reasoning"] = "Evaluation error."
-            evaluated_product["is_recommended"] = True
-            logger.info(
-                f"[CriticAgent] ⚠️ FALLBACK APPROVED (Eval Error): '{title_display}'"
+            evaluated_product["is_recommended"] = False
+            evaluated_product["eval_error"] = True
+            logger.warning(
+                f"[CriticAgent] ⚠️ REJECTED (Fail-Closed Eval Error): '{title_display}'"
             )
             
         return evaluated_product
@@ -174,6 +220,9 @@ class CriticAgent:
                 "id": c.get("id") or c.get("asin", "unknown"),
                 "title": c.get("title", "Unknown"),
                 "price": c.get("price"),
+                "features": c.get("features"),
+                "details_text": c.get("details_text"),
+                "description": c.get("description"),
                 "attributes": c.get("attributes", []), 
                 "reviews": [r.get("review_text", "") for r in c.get("reviews", [])[:3]]
             })

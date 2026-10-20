@@ -1,6 +1,7 @@
 """
-Phase A4 Knowledge-Enhanced Reasoning Path Extraction (KECR).
-Extracts multi-hop reasoning paths bridging user history to conversational candidates.
+Phase A4 KECR-inspired Graph Evidence Path Extraction.
+Extracts deterministic multi-hop reasoning paths in Cypher bridging user history and
+conversational preferences to candidate items (inspired by KECR path grounding).
 """
 
 import logging
@@ -51,8 +52,8 @@ class PathExtractionResult(BaseModel):
 
 class KnowledgePathExtractor:
     """
-    Core engine for Phase A4 dual-context path extraction.
-    Executes the Unified Dual-Context Cypher Query (Query 4) to extract multi-hop paths.
+    Core engine for Phase A4 KECR-inspired dual-context graph evidence path extraction.
+    Executes the Unified Dual-Context Cypher Query (Query 4) to extract deterministic multi-hop paths.
     """
     
     def __init__(self, db_connector: Optional[Any] = None):
@@ -289,7 +290,11 @@ RETURN cand.parent_asin AS target_asin,
        CASE 
          WHEN size(all_evidence) > 0 
          THEN reduce(s = head(all_evidence), x IN tail(all_evidence) | s + "; " + x)
-         ELSE "Top-rated category recommendation based on overall customer satisfaction (" + toString(coalesce(cand.avg_rating, 5.0)) + "★)."
+         ELSE CASE
+           WHEN cand.avg_rating IS NOT NULL
+           THEN "Matched via hybrid semantic retrieval (catalog rating: " + toString(cand.avg_rating) + "★; no explicit graph path)."
+           ELSE "Matched via hybrid semantic retrieval (no explicit graph path)."
+         END
        END AS reasoning_path;
         '''
 

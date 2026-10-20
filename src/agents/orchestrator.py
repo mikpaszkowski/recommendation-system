@@ -605,16 +605,40 @@ class AgentOrchestrator:
                 
             reranked_top = await self.critic_agent.evaluate_candidates(critic_profile, candidates, attributes_map)
             
-            # Replace candidates with the top 3 recommended items from Critic
-            search_result["items"] = reranked_top[:3]
-            logger.info(f"[STEP 3d] Critic recommendation finished. Approved {len(reranked_top)} / {len(candidates)} candidates.")
-            if not reranked_top:
-                logger.warning("[STEP 3d] ⚠️ Critic Agent rejected all candidates (failed constraints or missing requested features).")
+            fallback_partial_items: List[Dict[str, Any]] = []
+            if reranked_top:
+                # Replace candidates with the top 3 recommended items from Critic
+                search_result["items"] = reranked_top[:3]
+                logger.info(f"[STEP 3d] Critic recommendation finished. Approved {len(reranked_top)} / {len(candidates)} candidates.")
+            else:
+                logger.warning(
+                    "[STEP 3d] ⚠️ Critic Agent rejected all candidates (failed constraints or missing requested features). "
+                    "Falling back to top-3 RRF partial matches with explicit Critic caveats."
+                )
+                evaluated_by_asin = {
+                    p.get("asin"): p
+                    for p in (getattr(self.critic_agent, "last_evaluated_candidates", None) or [])
+                    if isinstance(p, dict) and p.get("asin")
+                }
+                for cand in candidates[:3]:
+                    partial_item = dict(cand)
+                    partial_item["partial_match"] = True
+                    eval_entry = evaluated_by_asin.get(cand.get("asin"))
+                    if eval_entry and eval_entry.get("reasoning"):
+                        partial_item["critic_reasoning"] = eval_entry["reasoning"]
+                    else:
+                        partial_item.setdefault(
+                            "critic_reasoning",
+                            "Candidate did not satisfy all requested technical or review constraints during Critic verification.",
+                        )
+                    fallback_partial_items.append(partial_item)
+                search_result["items"] = fallback_partial_items
+                search_result["partial_matches_only"] = True
 
             # =========================================================================
-            # STEP 3d.5: Phase A4 Knowledge-Enhanced Reasoning Path Extraction (KECR)
+            # STEP 3d.5: Phase A4 KECR-inspired Graph Evidence Path Extraction
             # =========================================================================
-            logger.info(f"[STEP 3d.5] Extracting Knowledge-Enhanced Reasoning Paths (KECR)...")
+            logger.info("[STEP 3d.5] Extracting KECR-inspired Graph Evidence Paths...")
             extraction_result = self.kecr_tool.extract_paths(
                 user_id=user_id,
                 candidate_items=search_result["items"],
@@ -625,13 +649,25 @@ class AgentOrchestrator:
 
             # 3e. Generate final response
             logger.info(f"[STEP 3e] Constructing recommendation prompt...")
-            prompt_messages = self.prompt_constructor.construct_recommendation_prompt(
-                user_query=user_message,
-                user_profile=profile,
-                retrieved_items=search_result["items"],
-                preferences=active_filters,
-                graph_reasoning_paths=graph_reasoning_paths
-            )
+            prompt_kwargs: Dict[str, Any] = {
+                "user_query": user_message,
+                "user_profile": profile,
+                "retrieved_items": search_result["items"],
+                "preferences": active_filters,
+                "graph_reasoning_paths": graph_reasoning_paths,
+            }
+            relaxed_list = list(search_result.get("relaxed_constraints") or [])
+            if relaxed_list:
+                try:
+                    pc_sig = inspect.signature(self.prompt_constructor.construct_recommendation_prompt)
+                    if "relaxed_constraints" in pc_sig.parameters or any(
+                        p.kind == inspect.Parameter.VAR_KEYWORD for p in pc_sig.parameters.values()
+                    ):
+                        prompt_kwargs["relaxed_constraints"] = relaxed_list
+                except Exception:
+                    prompt_kwargs["relaxed_constraints"] = relaxed_list
+
+            prompt_messages = self.prompt_constructor.construct_recommendation_prompt(**prompt_kwargs)
             
             logger.info(f"[STEP 3e] Querying LLM for final answer...")
             final_answer = await self.llm_handler.aquery(prompt_messages)
@@ -641,7 +677,8 @@ class AgentOrchestrator:
                 "status": "success" if reranked_top else "rejected_all",
                 "pruned_count": len(candidates) - len(reranked_top),
                 "approved_count": len(reranked_top),
-                "total_candidates": len(candidates)
+                "total_candidates": len(candidates),
+                "fallback_partial_count": len(fallback_partial_items),
             }
 
             result = {
@@ -651,6 +688,7 @@ class AgentOrchestrator:
                 "eval_trace": {
                     "raw_candidates": candidates,
                     "critic_reranked": reranked_top,
+                    "fallback_partial_items": fallback_partial_items,
                     "critic_verdict": critic_verdict,
                     "graph_evidence": graph_reasoning_paths,
                     "search_metadata": search_result.get("metadata", {}),
@@ -660,7 +698,7 @@ class AgentOrchestrator:
                     "clarify_reason": None,
                     "search_params_source": search_params_source,
                     "search_params_fallback": updates.get("param_source") == "fallback",
-                    "relaxed_constraints": list(search_result.get("relaxed_constraints") or []),
+                    "relaxed_constraints": relaxed_list,
                 }
             }
 

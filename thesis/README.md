@@ -40,8 +40,17 @@ where `<one-two-words>` is a 1–2 word slug describing the scientific scope.
 ## Evaluation Summary
 - **Total Thesis Documents**: 13
 - **Active Research Questions**: $\mathbf{RQ_1}$ … $\mathbf{RQ_{13}}$
-- **Previous Evaluated Scope**: Retrieval Score Redesign R2a (2026-10-19) — evaluation foundation (three-valued constraint satisfaction, pre-registered paired statistics, citable-run archive) and the spurious-CLARIFY fix RS-23 with the FR-007a decision flag. Citable evidence: `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (commit `88cdbdf`).
-- **Latest Evaluated Scope (2026-10-20, graph v2 executed)**: the graph v2 build, validation, stamp and v1 → v2 re-baseline (`64ef49b` … `65a0ba0`; records in `graph_versions/v2/`). The results are added to contribution 13 as a dated §7, and the 2026-10-19 text is unchanged.
+- **Latest Evaluated Scope (2026-10-20, Stage 0 Graph v2 Consumption Package: `GV2-01` … `GV2-06`)**:
+  - **Verdict**: Software Engineering / Methodological Hardening (**DOES NOT QUALIFY** as a standalone new thesis chapter under Criterion 4 Anti-Triviality / Plumbing Filter).
+  - **Scope & Academic Alignment**: Closes the theoretical vs. implementation gaps in **Contribution 5 (`5-doc-synthesized-grounding.md`)** and **Contribution 6 (`6-doc-orthogonal-gating.md`)**:
+    - `GV2-01`: Rich Graph v2 textual attributes (`features`, `details_text`, `description`, `avg_rating`) wired to `CriticAgent` and `PromptConstructor`, resolving the blind rejection flaw (previously 8/21 queries in benchmark suffered 100% Critic candidate pruning).
+    - `GV2-02`: Review sorting by `r.helpful_vote DESC, r.timestamp DESC` in per-product subquery (`AI-06`).
+    - `GV2-03`: Multi-value Cypher predicates for `brands[]` and `categories[]`.
+    - `GV2-04`: Unit-variation deduplication in additive scoring (`128`, `128GB`, `128 GB` award $\le 1\times$ bonus).
+    - `GV2-05`: Critic fail-closed enforcement on error (`is_recommended=false`), top-3 RRF partial match fallback with Critic rejection caveats on `rejected_all`, and forwarding of `relaxed_constraints` to generation for transparent disclosure.
+    - `GV2-06`: Removal of fabricated 5.0★ rating fallback in KECR Cypher query and clarification of deterministic Cypher evidence path extraction vs. trained neural model.
+  - **Documentation Action**: Updated `thesis/5-doc-synthesized-grounding.md` (§6) and `thesis/6-doc-orthogonal-gating.md` (§6) with dated hardening notes; 9 regression tests in `tests/test_stage0_graph_v2_wiring.py`.
+- **Previous Evaluated Scope (2026-10-20, graph v2 executed)**: the graph v2 build, validation, stamp and v1 → v2 re-baseline (`64ef49b` … `65a0ba0`; records in `graph_versions/v2/`). The results are added to contribution 13 as a dated §7, and the 2026-10-19 text is unchanged.
   - **Gates**: 18/18 hard gates passed. Ghost signature 0, held-out pairs 0, untitled products 8; `GraphVersion` v2 stamped at commit `0a32604`.
   - **Re-baseline**: three citable v2 runs (`eval_2026-10-20_1114`, `_1128`, `_1142`, commit `4248d03`) against the archived v1 runs. No arm changes significantly (paired randomization, Holm). The rrf3 gain and the falls of vector_only and cypher_only are within the noise at n = 21.
   - **New v1 fact (F-10)**: metadata-less nodes held 35% of vector_only and 10% of rrf3 top-10 slots in the citable v1 runs.

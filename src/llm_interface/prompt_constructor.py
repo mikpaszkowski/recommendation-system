@@ -40,7 +40,8 @@ Follow these steps when responding to users:
                                       conversation_history: Optional[List[Dict[str, str]]] = None,
                                       retrieved_items: Optional[List[Dict[str, Any]]] = None,
                                       preferences: Optional[Dict[str, Any]] = None,
-                                      graph_reasoning_paths: Optional[List[Dict[str, Any]]] = None) -> List[BaseMessage]:
+                                      graph_reasoning_paths: Optional[List[Dict[str, Any]]] = None,
+                                      relaxed_constraints: Optional[List[str]] = None) -> List[BaseMessage]:
         """
         Construct a prompt for generating recommendations.
         
@@ -50,7 +51,8 @@ Follow these steps when responding to users:
             conversation_history: Optional conversation history
             retrieved_items: Optional list of retrieved items
             preferences: Optional weighted preferences (likes/dislikes/constraints)
-            graph_reasoning_paths: Optional list of graph evidence paths (Phase A3)
+            graph_reasoning_paths: Optional list of KECR-inspired graph evidence paths (Phase A3/A4)
+            relaxed_constraints: Optional list of MACS constraint relaxations applied during retrieval
             
         Returns:
             List of LangChain message objects ready for the LLM
@@ -72,6 +74,16 @@ Follow these steps when responding to users:
         if preferences:
             prefs_text = self._format_preferences(preferences)
             prompt_parts.append(f"[PREFERENCES]\n{prefs_text}\n")
+
+        # Add MACS relaxed constraints if any were triggered
+        if relaxed_constraints:
+            relaxed_text = "\n".join(f"- {rc}" for rc in relaxed_constraints if rc)
+            if relaxed_text:
+                prompt_parts.append(
+                    f"[RELAXED CONSTRAINTS]\n"
+                    f"The following hard constraints had to be relaxed to find candidates (you MUST disclose this transparently to the user):\n"
+                    f"{relaxed_text}\n"
+                )
 
         # Add retrieved items if available
         if retrieved_items:
@@ -191,7 +203,8 @@ Follow these steps when responding to users:
     def _format_retrieved_items(self, retrieved_items: List[Dict[str, Any]]) -> str:
         """
         Format retrieved items for inclusion in the prompt.
-        Supports both legacy format ({"details": {...}}) and flat format from GraphSearchTool.
+        Supports both legacy format ({"details": {...}}) and flat format from GraphSearchTool,
+        including Graph v2 fields (features, details_text, description, avg_rating) and Critic metadata.
         
         Args:
             retrieved_items: List of retrieved items
@@ -209,9 +222,40 @@ Follow these steps when responding to users:
             items_parts.append(f"- Category: {details.get('main_category') or details.get('category', 'Unknown')}")
             items_parts.append(f"- Brand: {details.get('store') or details.get('brand') or details.get('detail_brand') or details.get('detail_manufacturer', 'Unknown')}")
             items_parts.append(f"- Price: ${details.get('price', 'Unknown')}")
-            items_parts.append(f"- Rating: {details.get('rating', 'Unknown')}/5.0")
-            items_parts.append(f"- Features: {details.get('features', 'None specified')}")
+            rating_val = details.get('rating') if details.get('rating') is not None else details.get('avg_rating', 'Unknown')
+            items_parts.append(f"- Rating: {rating_val}/5.0")
+
+            raw_features = details.get('features')
+            if isinstance(raw_features, (list, tuple)):
+                bullets = [str(f).strip() for f in raw_features[:5] if str(f).strip()]
+                features_text = "; ".join(bullets)[:500] if bullets else 'None specified'
+            elif raw_features and str(raw_features).strip():
+                features_text = str(raw_features).strip()[:500]
+            else:
+                features_text = 'None specified'
+            items_parts.append(f"- Features: {features_text}")
+
+            details_text = details.get('details_text')
+            if details_text and str(details_text).strip():
+                items_parts.append(f"- Technical Details: {str(details_text).strip()[:350]}")
+
+            description = details.get('description')
+            if description:
+                if isinstance(description, (list, tuple)):
+                    desc_str = " ".join(str(d).strip() for d in description if str(d).strip())
+                else:
+                    desc_str = str(description).strip()
+                if desc_str:
+                    items_parts.append(f"- Description: {desc_str[:250]}")
+
             items_parts.append(f"- Match score: {self._as_float(details.get('score', 0)):.2f}")
+
+            if details.get('partial_match'):
+                items_parts.append("- Match Status: Partial match (Critic did not confirm all requested constraints)")
+            critic_note = details.get('critic_reasoning') or details.get('reasoning')
+            if critic_note and str(critic_note).strip():
+                items_parts.append(f"- Critic Assessment: {str(critic_note).strip()}")
+
             items_parts.append("")
         
         return "\n".join(items_parts)
@@ -233,7 +277,8 @@ Follow these steps to recommend:
 2. Review Candidates: Analyze the provided candidate items.
 3. Synthesize Evidence (CRITICAL): You MUST justify your recommendation by connecting the User's Explicit Preferences directly to the [GRAPH EVIDENCE].
    - Example: "Since you specifically asked for a durable cable [Preference], I recommend this Anker model because our data shows it is frequently reviewed as 'lasting for years' [Graph Evidence]."
-4. Do Not Hallucinate: Do not invent features or reasons that are not explicitly stated in the graph evidence or item details.
+4. Disclose Compromises / Partial Matches: If [RELAXED CONSTRAINTS] is present or an item is marked as 'Partial match', explicitly explain to the user which constraint was relaxed or could not be verified.
+5. Do Not Hallucinate: Do not invent features or reasons that are not explicitly stated in the graph evidence or item details.
 """
         else:
             return """[REASONING PROCESS]
@@ -258,6 +303,7 @@ Follow these steps to recommend:
    - Explain why each item was recommended
    - Connect recommendations to specific user preferences
    - Highlight key features that match their requirements
+   - If [RELAXED CONSTRAINTS] is present or an item is marked as 'Partial match', transparently explain which constraint was relaxed or could not be verified
 """
     
     def _format_graph_evidence(self, graph_reasoning_paths: List[Dict[str, Any]]) -> str:

@@ -4,63 +4,69 @@
 <meta charset="utf-8">
 <title>CRS Detailed Architecture</title>
 <!--
-  Source of diagrams/crs_detailed_architecture_2026-10-17.jpg.
+  Source of diagrams/crs_detailed_architecture_1791405352600.jpg and crs_detailed_architecture_2026-10-17.jpg.
   Render (1600x900 at 2x):
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
     --window-size=1600,900 --force-device-scale-factor=2 \
     --screenshot=diagrams/crs_detailed_architecture.png file://$PWD/diagrams/crs_detailed_architecture.html
+  sips -s format jpeg diagrams/crs_detailed_architecture.png --out diagrams/crs_detailed_architecture_1791405352600.jpg
 -->
 <style>
   :root {
     --bg: #0c141d; --panel: #111c27; --line: #2b3b4b; --ink: #e6edf3; --soft: #93a4b4;
-    --teal: #3fd0c9; --violet: #a88bf0; --amber: #f2b84b; --grey: #5d6b78; --green: #5fd38d;
+    --teal: #3fd0c9; --violet: #a88bf0; --amber: #f2b84b; --grey: #5d6b78; --green: #5fd38d; --blue: #58a6ff;
   }
   * { box-sizing: border-box; margin: 0; }
   html, body { width: 1600px; height: 900px; background: var(--bg); color: var(--ink); overflow: hidden;
     font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; }
-  .frame { padding: 24px 40px; display: grid; gap: 14px; height: 900px; grid-template-rows: auto auto 1fr; }
+  .frame { padding: 22px 38px; display: grid; gap: 12px; height: 900px; grid-template-rows: auto auto 1fr; }
   .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
-  h1 { font-size: 30px; white-space: nowrap; font-weight: 800; letter-spacing: -0.01em; }
-  .sub { color: var(--soft); font-size: 17px; margin-top: 4px; }
-  .legend { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--soft); }
+  h1 { font-size: 29px; white-space: nowrap; font-weight: 800; letter-spacing: -0.01em; }
+  .sub { color: var(--soft); font-size: 16px; margin-top: 3px; }
+  .legend { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--soft); }
   .legend span { white-space: nowrap; display: flex; align-items: center; gap: 7px; }
-  .sw { width: 26px; height: 14px; border-radius: 3px; border: 2px solid var(--teal); }
+  .sw { width: 24px; height: 13px; border-radius: 3px; border: 2px solid var(--teal); }
   .sw.r1 { border: 2px solid var(--amber); }
-  .sw.off { border: 2px dotted var(--grey); }
   .sw.r2 { border: 2px solid var(--green); }
+  .sw.gv2 { border: 2px solid var(--blue); }
+  .sw.off { border: 2px dotted var(--grey); }
 
   .flow { display: grid; grid-template-columns: 70px 300px 30px 470px 30px 270px 30px 290px; align-items: stretch; }
   .user { display: grid; place-items: center; align-content: center; gap: 6px; color: var(--teal); font-size: 13px; text-align: center; }
   .user .head { width: 22px; height: 22px; border: 2px solid var(--teal); border-radius: 50%; }
   .user .body { width: 36px; height: 16px; border: 2px solid var(--teal); border-bottom: none; border-radius: 18px 18px 0 0; margin-top: -4px; }
   .arrow { display: grid; place-items: center; color: var(--teal); font-size: 24px; }
-  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-  .col h2 { font-size: 16px; font-weight: 700; text-align: center; }
-  .col .k { font-size: 11px; color: var(--soft); text-align: center; text-transform: uppercase; letter-spacing: .08em; }
-  .box { border: 2px solid var(--teal); border-radius: 7px; padding: 7px 9px; font-size: 14.5px; text-align: center; line-height: 1.25; }
-  .box small { display: block; color: var(--soft); font-size: 11.5px; margin-top: 2px; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px 12px; display: flex; flex-direction: column; gap: 7px; }
+  .col h2 { font-size: 15.5px; font-weight: 700; text-align: center; }
+  .col .k { font-size: 10.5px; color: var(--soft); text-align: center; text-transform: uppercase; letter-spacing: .08em; }
+  .box { border: 2px solid var(--teal); border-radius: 7px; padding: 6px 8px; font-size: 14px; text-align: center; line-height: 1.25; }
+  .box small { display: block; color: var(--soft); font-size: 11px; margin-top: 2px; }
   .box.v { border-color: var(--violet); }
   .box.r1 { border: 2px solid var(--amber); }
   .box.r2 { border: 2px solid var(--green); }
+  .box.gv2 { border: 2px solid var(--blue); }
   .box.off { border: 2px dotted var(--grey); color: var(--soft); }
-  .down { text-align: center; color: var(--violet); font-size: 14px; line-height: 1; }
+  .down { text-align: center; color: var(--violet); font-size: 13px; line-height: 1; }
   .row { display: flex; gap: 6px; }
   .row > * { flex: 1; }
-  .inner { border: 1px solid var(--line); border-radius: 8px; padding: 7px; display: flex; flex-direction: column; gap: 5px; }
-  .inner .lbl { font-size: 12px; color: var(--soft); text-align: center; }
-  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--bg); background: var(--amber); border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+  .inner { border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+  .inner .lbl { font-size: 11.5px; color: var(--soft); text-align: center; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--bg); background: var(--amber); border-radius: 3px; padding: 1px 5px; margin-left: 4px; vertical-align: 1px; }
+  .badge.r2 { background: var(--green); }
+  .badge.gv2 { background: var(--blue); color: var(--bg); }
 
-  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .card { border: 2px solid var(--teal); border-radius: 10px; padding: 10px 14px; font-size: 13.6px; line-height: 1.36; display: flex; flex-direction: column; gap: 5px; }
-  .card:nth-child(2) { border-color: var(--violet); }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .card { border: 2px solid var(--teal); border-radius: 10px; padding: 9px 13px; font-size: 13.2px; line-height: 1.34; display: flex; flex-direction: column; gap: 4px; }
+  .card:nth-child(2) { border-color: var(--blue); }
   .card:nth-child(3) { border-color: var(--violet); }
-  .card h3 { font-size: 16px; font-weight: 700; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .card:nth-child(4) { border-color: var(--teal); }
+  .card h3 { font-size: 15px; font-weight: 700; border-bottom: 1px solid var(--line); padding-bottom: 5px; }
   .card b { color: var(--ink); }
   .card p, .card li { color: #c9d4de; }
   .card ul { padding-left: 16px; display: grid; gap: 2px; }
   .r1t { color: var(--amber); font-weight: 700; }
   .r2t { color: var(--green); font-weight: 700; }
-  .badge.r2 { background: var(--green); }
+  .gv2t { color: var(--blue); font-weight: 700; }
   .offt { color: var(--soft); }
 </style>
 </head>
@@ -69,12 +75,13 @@
   <div class="top">
     <div>
       <h1>AI Conversational Recommendation System — Technical Blueprint</h1>
-      <p class="sub">CRS 2.0 with Hybrid GraphRAG · flows as of 2026-10-19 · Neo4j 5.14 · gpt-4o</p>
+      <p class="sub">CRS 2.0 with Hybrid GraphRAG · flows as of 2026-10-20 · Neo4j 5.14 · gpt-4o · Graph v2</p>
     </div>
     <div class="legend">
       <span><i class="sw"></i>implemented</span>
       <span><i class="sw r1"></i>new in R1 (AFP-002 via RRF)</span>
       <span><i class="sw r2"></i>new in R2a (RS-23 CLARIFY fix)</span>
+      <span><i class="sw gv2"></i>new in Graph v2 / Stage 0 (GV2-01..06)</span>
       <span><i class="sw off"></i>inactive on live graph</span>
     </div>
   </div>
@@ -101,41 +108,41 @@
         <div class="box">Entity Resolver<small>exact → substring / regex → vector</small></div>
       </div>
       <div class="inner">
-        <span class="lbl">Multi-Index Vector Search</span>
+        <span class="lbl">Multi-Index Vector Search (Graph v2)</span>
         <div class="row">
-          <div class="box">Product titles<small>39% untitled ghost nodes</small></div>
-          <div class="box">EAV attributes</div>
-          <div class="box">Reviews<small>on 2.2% of products · 0.5% of titled</small></div>
+          <div class="box gv2">Product titles<span class="badge gv2">v2</span><small>13,018 products · 0 ghost nodes</small></div>
+          <div class="box">EAV attributes<small>color · material · style · size</small></div>
+          <div class="box gv2">Reviews<span class="badge gv2">v2</span><small>99.995% coverage · helpfulness sorted</small></div>
         </div>
         <div class="down">▼</div>
-        <div class="box r1">One list per channel, best match per product → RRF (k = 60)<span class="badge">R1</span><small>replaces sum(score) · arms rrf2 / wrrf3 / cc3 / sum_legacy · per-channel ranks to eval_trace</small></div>
+        <div class="box r1">One list per channel, best match per product → RRF (k = 60)<span class="badge">R1</span><small>arms rrf2 / rrf3 / wrrf3 / cc3 · per-channel ranks to eval_trace</small></div>
       </div>
       <div class="row">
-        <div class="box">Cypher constraints<small>price · category · brand</small></div>
-        <div class="box">MACS relaxation<small>if &lt; 3 results</small></div>
+        <div class="box gv2">Cypher constraints<span class="badge gv2">GV2</span><small>price · brands[] · categories[]</small></div>
+        <div class="box">MACS relaxation<small>budget +15% · drop category</small></div>
       </div>
-      <div class="box r1">Soft-preference bonus<span class="badge">R1</span><small>scaled to the fused score</small></div>
+      <div class="box gv2">Soft-preference bonus<span class="badge gv2">GV2</span><small>unit-deduplicated (max) · scaled to fused score</small></div>
     </div>
     <div class="arrow">➜</div>
 
     <div class="col">
       <span class="k">Process flow</span><h2>Critic &amp; Graph Reasoning</h2>
-      <div class="box v">Critic Agent<small>per-item LLM check · 20 candidates</small></div>
+      <div class="box gv2">Critic Agent (LLM)<span class="badge gv2">GV2</span><small>rich text: features, details, desc, rating · fail-closed</small></div>
       <div class="down">▼</div>
-      <div class="box">Top-3</div>
+      <div class="box gv2">Top-3 / Fallback<span class="badge gv2">GV2</span><small>approved top-3 or partial matches with Critic caveats</small></div>
       <div class="down">▼</div>
-      <div class="box">KECR reasoning paths<small>conversational match · sparse fallback</small></div>
-      <div class="box off">Historical &amp; co-purchase paths<small>schema mismatch · AI-03</small></div>
+      <div class="box gv2">KECR evidence paths<span class="badge gv2">GV2</span><small>conversational match · honest fallback (no 5.0★)</small></div>
+      <div class="box off">Historical &amp; co-purchase paths<small>schema mismatch · AI-03 (inactive)</small></div>
     </div>
     <div class="arrow">➜</div>
 
     <div class="col">
       <span class="k">Process flow</span><h2>Explainable Generation</h2>
-      <div class="box">Prompt Constructor<small>top-3 + [GRAPH EVIDENCE]</small></div>
+      <div class="box gv2">Prompt Constructor<span class="badge gv2">GV2</span><small>top-3 / partials + [GRAPH EVIDENCE] + [RELAXED CONSTRAINTS]</small></div>
       <div class="down">▼</div>
       <div class="box v">LLM (gpt-4o)</div>
       <div class="down">▼</div>
-      <div class="box">Recommendation with graph evidence</div>
+      <div class="box">Recommendation with transparent evidence &amp; caveats</div>
     </div>
   </div>
 
@@ -144,26 +151,25 @@
       <h3>1. Preference Parser &amp; Router</h3>
       <p><b>Hard constraints:</b> price, brand include / exclude, category. <b>Soft preferences:</b> value + polarity; attributes the catalog cannot filter on are demoted here.</p>
       <p><b>Router actions:</b> SEARCH · CLARIFY · UPDATE_PROFILE · READ_PROFILE · ANSWER.</p>
-      <p><span class="r2t">R2a:</span> head noun of the requested product = category. <b>Guardrail:</b> SEARCH without a category → one recovery call, used only if product_type_decided is true, else CLARIFY. <b>Override:</b> category + brand → SEARCH.</p>
+      <p><span class="r2t">R2a:</span> head noun of requested product = category. <b>Guardrail:</b> SEARCH without category → recovery call, accepted only if product_type_decided is true, else CLARIFY. <b>Override:</b> category + brand → SEARCH.</p>
     </div>
     <div class="card">
-      <h3>2. Multi-Index Search, Fusion &amp; MACS</h3>
-      <p><b>Before R1:</b> sum(score) over every matching node, weights 1.0 / 0.8 / 0.9, 600 nodes per index. Products with many reviews or attributes win (hub bias).</p>
-      <p><span class="r1t">R1:</span> each product once per channel by its best match, ranked after filters, fused by RRF (k = 60). Soft bonus scaled to the fused score.</p>
-      <p><b>MACS:</b> fewer than 3 results → widen the budget by 15%, then drop the category.</p>
+      <h3>2. Multi-Index Retrieval &amp; Graph v2</h3>
+      <p><span class="r1t">R1:</span> Each product once per channel by best match, fused by RRF (k = 60).</p>
+      <p><span class="gv2t">Graph v2 (GV2-01..04):</span> 13,018 products, 0 ghost nodes, 99.995% review coverage sorted by helpful_vote DESC per product (AI-06). Multi-value brands/categories list filters (GV2-03) and deduplicated soft-preference bonuses across unit variations (GV2-04).</p>
+      <p><b>MACS:</b> yield &lt; 3 → widen budget ceiling/floor by 15%, then drop category.</p>
     </div>
     <div class="card">
       <h3>3. Critic &amp; KECR Reasoning</h3>
-      <p><b>Critic:</b> one LLM check per candidate (20 calls). A batched listwise rerank is planned (R4, AI-08).</p>
-      <p><b>KECR:</b> conversational-match and sparse-fallback paths for the top-3, with gating α (0–1).</p>
-      <p class="offt">Historical and co-purchase paths do not fire on the live graph: reviews link via ABOUT_PRODUCT without timestamps, and BOUGHT_TOGETHER does not exist (AI-03).</p>
+      <p><span class="gv2t">Critic (GV2-01/05):</span> evaluates candidate price, brand, category AND Graph v2 features, technical details, description, rating. Fail-closed on error (is_recommended=false). When all 20 rejected, falls back to top-3 partial matches with Critic rejection caveats.</p>
+      <p><span class="gv2t">KECR (GV2-06):</span> deterministic Cypher graph evidence path extraction; conversational match and honest fallback without fabricated 5.0★ rating.</p>
+      <p class="offt">Historical &amp; co-purchase paths inactive on live graph (schema mismatch · AI-03).</p>
     </div>
     <div class="card">
-      <h3>4. Explainable Synthesis</h3>
-      <p><b>Prompt construction:</b> top-3 items and their KECR paths injected as [GRAPH EVIDENCE]; the LLM must stay within graph facts.</p>
-      <p><span class="r1t">R1:</span> per-channel ranks and fused score per candidate in eval_trace (seed of the evidence ledger).</p>
-      <p><span class="r2t">R2a:</span> clarify_reason and category_resolution in eval_trace; citable runs in evaluations_archive/.</p>
-      <p><b>Roadmap:</b> R2a done · R2b benchmark v2 · R3 search order &amp; HyDE · R4 feature fit &amp; LLM judge · R5 labels &amp; review aspects.</p>
+      <h3>4. Explainable Synthesis &amp; Roadmap</h3>
+      <p><span class="gv2t">Synthesis (GV2-01/05):</span> Prompt constructor injects rich features, catalog avg_rating, [RELAXED CONSTRAINTS], and partial match status. LLM transparently discloses trade-offs and unverified constraints.</p>
+      <p><span class="r1t">R1/R2a:</span> per-channel ranks, clarify_reason, category_resolution in eval_trace; citable runs in evaluations_archive/.</p>
+      <p><b>Roadmap:</b> Graph v2 Stage 0 done · R2b benchmark v2 · Stage 1 Taxon &amp; Lexical RRF channel · R3 search order · R4 feature fit &amp; LLM judge.</p>
     </div>
   </div>
 </div>
