@@ -284,7 +284,7 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
 * [ ] **AI-11** Parameterise the category title filter Cypher in `GraphSearchTool._build_filters` (currently string-interpolated).
 
 ### A1.1 — Retrieval Score Redesign (Roadmap R1–R5)
-**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). **R2a followed on 2026-10-18 (see the R2 block below).** Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-24) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
+**Status (2026-10-17): R1 implemented and audited (PASS WITH FIXES, `production_artifacts/Audit_Report.md`)** on `feature/afp-002-vector-aggregation`. Live eval: `evaluations/eval_2026-10-17_1937` (popularity bias down, hit rate unchanged within one query). **R2a followed on 2026-10-18 (see the R2 block below).** Design, principles (P-1 … P-10) and the full work-package catalogue (RS-01 … RS-25) are in `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 Goal: the retrieval score measures how well a product matches the request, not how many texts about it resemble the query. Ranking order: feature fit → channel agreement (RRF) → review experience. Unknown evidence is never scored as a mismatch.
 
 **R1 — RRF fusion (AFP-002, AI-01)**. Gate: live eval vs `eval_2026-10-09_1336`.
@@ -307,6 +307,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 *R2b (open)*
 * [ ] **RS-21** Benchmark v2 (Vision 2026-10-18-014): about 200 retrieval queries over strata S0–S4 (control, cold, sparse title, accessory trap, many-feature trade-off) plus about 30 ambiguous queries, hashed tuning/test split, leakage check, user review of test utterances. Legacy-21 moves to the tuning side.
 * [ ] **RS-02 (evidence)** Decide the `rrf2` default on the tuning split by the rule in Vision 2026-10-18-015 §4; confirm once on test in R3.
+* [ ] **RS-25** Fusion tuning (added 2026-10-20). Test `wrrf3` vs `rrf3` as a pre-registered comparison on the tuning split: `wrrf3` led on every metric in the R2a exit gate and was significant vs `sum_legacy` after Holm, but its weights (0.60 / 0.25 / 0.15) were never tuned, so this is a hypothesis (`production_artifacts/Audit_Report.md`, "R2a exit gate"). Tune channel weights, the RRF `k` (default 60) and the per-channel candidate depth (`k = 600`) on the tuning split only (Vision 2026-10-17-013 §3); confirm the chosen setting once on the test split in R3.
 
 **R3 — Search order & query side**.
 * [ ] **RS-07** Adaptive order by filter selectivity: filter-first with exact scoring vs ANN-first with oversampling.
@@ -497,7 +498,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 | GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
 | F4 | Graph v2 Rebuild (ghost fix) | Foundation F4 | ✅ Done 2026-10-20 (graph v2 live, stamped, baseline accepted) |
-| RS-01 … RS-24 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 and R2a done (RS-01, 02 ablation, 05, 20, 23); R2b (RS-21, RS-02 evidence) and R3–R5 open |
+| RS-01 … RS-25 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 and R2a done (RS-01, 02 ablation, 05, 20, 23); R2b (RS-21, RS-02 evidence, RS-25) and R3–R5 open |
 
 ---
 
