@@ -637,6 +637,15 @@ class GraphSearchTool:
                 "params": self._clean_params_for_metadata(params),
                 "target_taxon": target_cat,
                 "subtree_size": len(rows),
+                "channel_hits": {
+                    "product": [
+                        {"asin": item["asin"], "similarity": item["fusion"]["channels"]["product"]["similarity"], "reason": item["match_reasons"][0]}
+                        for item in scored_candidates
+                    ],
+                    "attribute": [],
+                    "review": [],
+                    "lexical": [],
+                },
                 "fusion": {"method": "filter_first"},
             },
         }
