@@ -49,3 +49,14 @@ def test_git_failure_exits_2() -> None:
     """git failure -> exit 2."""
     run, _ = _runner("", code=128)
     assert _cli().main(["--base", "nope"], runner=run) == 2
+
+
+def test_docs_and_compose_are_allowed() -> None:
+    """A-7: documentation (.md, including deleted docs) and docker-compose.yml never block the baseline; code still does."""
+    module = _cli()
+    run, _ = _runner("src/README.md\nsrc/knowledge_graph/DOCKER.md\nsrc/knowledge_graph/QUICKSTART.md\n"
+                     "src/knowledge_graph/docker-compose.yml\nsrc/evaluation/provenance.py\n")
+    assert module.main(["--base", "88cdbdf"], runner=run) == 0
+    assert not module.is_allowed("src/tools/graph_search_tool.py")
+    assert not module.is_allowed("src/knowledge_graph/docker-compose.override.yml")
+

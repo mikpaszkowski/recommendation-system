@@ -4,7 +4,9 @@ Baseline-commit allow-list check for the v2 baseline re-run (Technical Specifica
 
 Prints `git diff --name-only <base> <head> -- src scripts live_eval_dataset.json` and exits 1 if any
 path is outside the allow-list, so the retrieval code at baseline commit B is identical to the v1
-reference runs (commit 88cdbdf) apart from the graph v2 work.
+reference runs (commit 88cdbdf) apart from the graph v2 work. Documentation files (`.md`) are always
+allowed, and so is `src/knowledge_graph/docker-compose.yml` (volume and memory via env, G-2 / G-7):
+neither can change retrieval behaviour (spec §13 A-7, user decision 2026-10-20).
 
 Exit codes: 0 every changed path allowed; 1 a path outside the allow-list; 2 git failure.
 
@@ -44,7 +46,9 @@ ALLOWED_EXACT: Tuple[str, ...] = (
     "src/llm_interface/prompts/graph_cypher_prompt.py",
     "scripts/evaluate_retrieval.py",
     "scripts/archive_eval_run.py",
+    "src/knowledge_graph/docker-compose.yml",
 )
+ALLOWED_SUFFIXES: Tuple[str, ...] = (".md",)
 ALLOWED_PREFIXES: Tuple[str, ...] = (
     "src/knowledge_graph/graph_v2/",
     "scripts/graph_ingestion/",
@@ -60,8 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def is_allowed(path: str) -> bool:
-    """True if `path` is in ALLOWED_EXACT or under an ALLOWED_PREFIXES entry."""
-    return path in ALLOWED_EXACT or any(path.startswith(prefix) for prefix in ALLOWED_PREFIXES)
+    """True if `path` is in ALLOWED_EXACT, under an ALLOWED_PREFIXES entry, or a documentation file (ALLOWED_SUFFIXES)."""
+    return (
+        path in ALLOWED_EXACT
+        or any(path.startswith(prefix) for prefix in ALLOWED_PREFIXES)
+        or path.endswith(ALLOWED_SUFFIXES)
+    )
 
 
 def changed_paths(base: str, head: str, runner: GitRunner) -> List[str]:
