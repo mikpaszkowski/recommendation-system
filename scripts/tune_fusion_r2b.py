@@ -219,6 +219,7 @@ def run_tuning(benchmark_path: Path, output_path: Path) -> Dict[str, Any]:
                 structured_filters=dict(item.get("structured_filters") or {}),
                 soft_preferences=list(item.get("soft_preferences") or []),
                 limit=20,
+                fusion_config=FUSION_ARMS["rrf4"],
                 mask_review_asins=mask_asins,
             )
             raw_channel_hits = (res.get("metadata") or {}).get("channel_hits") or {}
@@ -227,7 +228,7 @@ def run_tuning(benchmark_path: Path, output_path: Path) -> Dict[str, Any]:
                     h if isinstance(h, ChannelHit) else ChannelHit(asin=h["asin"], similarity=float(h["similarity"]), reason=h.get("reason", ""))
                     for h in (raw_channel_hits.get(ch) or [])
                 ]
-                for ch in ("product", "attribute", "review")
+                for ch in ("product", "attribute", "review", "lexical")
             }
             cached_queries.append({
                 "query_id": qid,

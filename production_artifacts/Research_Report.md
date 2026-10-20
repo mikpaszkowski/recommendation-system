@@ -391,3 +391,53 @@ When §1–§6 were written on 2026-10-18, the live graph was **Graph v1** (39.3
 | **R2b-D3 (Deterministic & Fast Benchmark Generation + Split Freeze)** | A new script `scripts/build_benchmark_v2.py` selects targets deterministically from live Graph v2 across $\ge 15$ distinct `Category` / `Taxon` domains, synthesizes title-blind utterances + `gold_constraints` (with an option for deterministic template-free attribute/feature composition or batched async LLM generation with caching), runs automatic leakage checks (model-code ban, unflagged brand ban, title content-token overlap $\le 0.30$, pure-Python TF-IDF rank $> 1$ for test split), assigns the hashed grouped split (`sha256(salt + parent_asin) % 100 < 60` $\rightarrow$ `test`, else `tuning`; `legacy-21` merged with `split = "tuning"` and `stratum = "legacy"`), and writes `evaluations/benchmarks/benchmark_v2.json` + `evaluations/benchmarks/benchmark_v2_manifest.json`.<br>`scripts/evaluate_retrieval.py` gains `--split {all,tuning,test,legacy}` and `--confirm-test` (logging every `test` split evaluation to `evaluations_archive/test_split_access_log.jsonl`). |
 | **R2b-D4 (RS-02 & RS-25 Tuning Protocol on Graph v2)** | Once `benchmark_v2.json` is frozen, run the tuning split (`--split tuning`) to evaluate:<br>• **RS-02**: `hybrid@rrf2` vs `hybrid@rrf3` (ΔHR@20 lower CI bound $\ge -0.05$ and unique review finds $\le 2\%$, plus latency and S1/S0 strata comparison under 99.995% review embedding coverage).<br>• **RS-25**: pre-registered comparison of `hybrid@wrrf3` vs `hybrid@rrf3`, plus a grid evaluation over channel weights $(w_{\text{prod}}, w_{\text{attr}}, w_{\text{rev}})$ and RRF constant $k \in \{20, 40, 60, 100\}$ via fast offline/in-memory replay of per-channel candidate lists from the tuning run (requiring zero extra LLM calls!). |
 
+---
+
+## 8. Stage 1 Graph v2 Structural & Lexical Consumption (GV2-07 .. GV2-09)
+
+Following Release R2b tuning on live Graph v2, empirical results revealed a massive recall cliff: while legacy queries attained $HR@20 = 90.5\%$, stratified queries $S_0$–$S_4$ achieved only $9.52\%$ across all retrieval arms. Forensic investigation of Neo4j Cypher logs and query execution traces pinpointed the exact structural and lexical causes, motivating the Stage 1 architecture.
+
+### 8.1 Empirical Root Cause Analysis
+
+1. **The Graph v2 Category Disconnect (`GV2-07`, `RS-24`, `RS-10`)**:
+   - In Graph v1, products were connected via `(:ParentProduct)-[:BELONGS_TO_CATEGORY]->(:Category)`.
+   - In Graph v2, the schema upgraded to a 1,183-node taxonomy: `(:ParentProduct)-[:IN_TAXON]->(:Taxon)-[:BROADER*1..7]->(:Taxon)`. The old `BELONGS_TO_CATEGORY` edges and `Category.SUBCATEGORY_OF` relationships do not exist (`GQLSTATUS 01N42`).
+   - `GraphSearchTool._build_filters` was still generating:
+     ```cypher
+     EXISTS {
+         MATCH (node)-[:BELONGS_TO_CATEGORY]->(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)
+         ...
+     } OR {title_condition}
+     ```
+   - Because the `EXISTS` pattern evaluates to `FALSE` for 100% of products in Graph v2, Cypher was forced to fall back on `toLower(node.title) CONTAINS ...` for every category query.
+   - Because Benchmark v2 queries are strictly title-blind (content-token overlap $\le 0.30$), catalog products whose titles do not contain the literal category name were systematically excluded by the filter, producing the artificial recall collapse.
+
+2. **`Taxon` Resolution Feasibility**:
+   - Graph v2 contains exactly 1,183 `:Taxon` nodes.
+   - Cypher exact match (`toLower(t.name) = toLower($name)`) executes in $< 180\text{ ms}$.
+   - Whole-token word-boundary regex (`t.name =~ '(?i).*(^|[^a-z])<name>(s)?([^a-z]|$).*'`) executes in $\approx 100\text{ ms}$.
+   - Full in-memory vector projection over all 1,183 taxa (`(1183, 384) @ (384,)`) executes in $< 8\text{ ms}$ on CPU, enabling zero-database-write semantic resolution for unmapped categories.
+
+3. **MACS Relaxation via Taxonomic Generalization**:
+   - Existing MACS relaxation dropped the category filter entirely whenever yield $< 3$, losing all semantic constraints.
+   - In Graph v2, every non-root Taxon node has an explicit `[:BROADER]` edge to its taxonomic parent (e.g., `Bookshelf Speakers` $\xrightarrow{\text{BROADER}}$ `Speakers` $\xrightarrow{\text{BROADER}}$ `Home Audio` $\xrightarrow{\text{BROADER}}$ `Electronics`).
+   - Relaxing by stepping up 1 level of `BROADER` preserves domain boundaries while expanding candidate volume.
+
+4. **Lexical Channel via Online Full-Text Index (`GV2-08`, `RS-03`)**:
+   - `SHOW INDEXES` confirms `product_fulltext_index` is online on `ParentProduct` across `title`, `description`, `features`, and `details_text`.
+   - Lucene BM25 queries (`CALL db.index.fulltext.queryNodes('product_fulltext_index', $query)`) return rich textual matches in $< 25\text{ ms}$.
+   - Integrating `lexical` as a 4th MaxP retrieval channel in `score_fusion.py` enables RRF4 / WRRF4 fusion, bridging dense vector blindness to specific technical terms, part numbers, and catalog tokens.
+
+5. **Selectivity-Based Filter-Before-ANN (`GV2-09`, `RS-07`)**:
+   - Each `Taxon` node stores `t.product_count`, representing the total recursive product count in its subtree.
+   - 95% of taxa have `product_count < 5,000` products (average = 920 products).
+   - For subtrees with $< 5,000$ products, global vector search over 114,021 products risks truncating the target category before post-filtering. Dynamic oversampling or Cypher-anchored pre-filtering guarantees high candidate yield for selective categories.
+
+### 8.2 Stage 1 Decision Proposals (S1-D1 .. S1-D3)
+
+| ID | Decision |
+|---|---|
+| **S1-D1 (Taxon Resolver & Hierarchical Filter)** | 1. Repoint `ResolverService.resolve_category` to `:Taxon` (Tier 1 exact, Tier 2 word-boundary regex, Tier 3 in-memory vector similarity).<br>2. Update `GraphSearchTool._build_filters` to use `MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)` matching leaf or ancestor.<br>3. Keep title regex fallback strictly for products without `IN_TAXON` edges.<br>4. Update MACS relaxation in `GraphSearchTool.search`: if candidates $< 3$, query `(child:Taxon)-[:BROADER]->(parent:Taxon)` and step up to parent before dropping category. |
+| **S1-D2 (Lexical Channel in Score Fusion)** | 1. Add `product_fulltext_index` as the `lexical` channel in `score_fusion.py` and `GraphSearchTool` MaxP query pipeline.<br>2. Sanitize user queries for Lucene syntax (stripping punctuation/operators to avoid syntax errors).<br>3. Introduce fusion presets `rrf4`, `wrrf4` (`w_prod=0.35, w_attr=0.20, w_rev=0.15, w_lex=0.30`), and `cc4`. |
+| **S1-D3 (Taxon Subtree Selectivity & Dynamic ANN Oversampling)** | 1. In `GraphSearchTool`, inspect `Taxon.product_count` for resolved category filters.<br>2. When `product_count < 5,000`, dynamically scale `ann_k_per_limit` (from 30 up to 60) to prevent ANN truncation of sparse subtrees before post-filtering. |
+

@@ -1,6 +1,6 @@
 {
   "release": "R2b",
-  "timestamp": "2026-10-20T17:30:41.629372+00:00",
+  "timestamp": "2026-10-20T19:44:53.628183+00:00",
   "benchmark": "evaluations/benchmarks/benchmark_v2.json",
   "split_evaluated": "tuning",
   "test_split_touched": false,
@@ -45,46 +45,46 @@
       },
       "overall_tuning": {
         "n": 105,
-        "mean_strict_hit@1": 0.0667,
-        "mean_strict_hit@5": 0.1429,
-        "mean_strict_hit@10": 0.2381,
-        "mean_strict_hit@20": 0.2571,
-        "mean_strict_ndcg@5": 0.1087,
-        "mean_strict_ndcg@10": 0.1401,
-        "mean_strict_ndcg@20": 0.1445,
-        "mean_mrr": 0.1115,
+        "mean_strict_hit@1": 0.0952,
+        "mean_strict_hit@5": 0.1524,
+        "mean_strict_hit@10": 0.219,
+        "mean_strict_hit@20": 0.2286,
+        "mean_strict_ndcg@5": 0.1265,
+        "mean_strict_ndcg@10": 0.1477,
+        "mean_strict_ndcg@20": 0.1499,
+        "mean_mrr": 0.1269,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.6921,
-        "mean_head_popularity_bias@5": 0.1984
+        "mean_review_cap_bias@5": 0.6616,
+        "mean_head_popularity_bias@5": 0.1696
       },
       "s0_s4_tuning": {
         "n": 84,
-        "mean_strict_hit@1": 0.0357,
-        "mean_strict_hit@5": 0.0476,
-        "mean_strict_hit@10": 0.0952,
-        "mean_strict_hit@20": 0.0952,
-        "mean_strict_ndcg@5": 0.0432,
-        "mean_strict_ndcg@10": 0.058,
-        "mean_strict_ndcg@20": 0.058,
-        "mean_mrr": 0.0474,
+        "mean_strict_hit@1": 0.0714,
+        "mean_strict_hit@5": 0.1071,
+        "mean_strict_hit@10": 0.1548,
+        "mean_strict_hit@20": 0.1548,
+        "mean_strict_ndcg@5": 0.0911,
+        "mean_strict_ndcg@10": 0.1058,
+        "mean_strict_ndcg@20": 0.1058,
+        "mean_mrr": 0.0914,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.6624,
-        "mean_head_popularity_bias@5": 0.1466
+        "mean_review_cap_bias@5": 0.6705,
+        "mean_head_popularity_bias@5": 0.1354
       },
       "by_stratum": {
         "S0": {
           "n": 14,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0,
-          "mean_strict_hit@10": 0.1429,
-          "mean_strict_hit@20": 0.1429,
-          "mean_strict_ndcg@5": 0.0,
-          "mean_strict_ndcg@10": 0.0445,
-          "mean_strict_ndcg@20": 0.0445,
-          "mean_mrr": 0.0173,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.3571,
+          "mean_strict_hit@20": 0.3571,
+          "mean_strict_ndcg@5": 0.1165,
+          "mean_strict_ndcg@10": 0.1835,
+          "mean_strict_ndcg@20": 0.1835,
+          "mean_mrr": 0.1334,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6051,
-          "mean_head_popularity_bias@5": 0.1641
+          "mean_review_cap_bias@5": 0.6462,
+          "mean_head_popularity_bias@5": 0.1308
         },
         "S1": {
           "n": 17,
@@ -97,8 +97,8 @@
           "mean_strict_ndcg@20": 0.1176,
           "mean_mrr": 0.1176,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6059,
-          "mean_head_popularity_bias@5": 0.1235
+          "mean_review_cap_bias@5": 0.6294,
+          "mean_head_popularity_bias@5": 0.1471
         },
         "S2": {
           "n": 18,
@@ -111,50 +111,50 @@
           "mean_strict_ndcg@20": 0.0556,
           "mean_mrr": 0.0556,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5611,
-          "mean_head_popularity_bias@5": 0.0889
+          "mean_review_cap_bias@5": 0.5529,
+          "mean_head_popularity_bias@5": 0.1412
         },
         "S3": {
           "n": 19,
           "mean_strict_hit@1": 0.0,
           "mean_strict_hit@5": 0.0,
-          "mean_strict_hit@10": 0.0526,
-          "mean_strict_hit@20": 0.0526,
+          "mean_strict_hit@10": 0.0,
+          "mean_strict_hit@20": 0.0,
           "mean_strict_ndcg@5": 0.0,
-          "mean_strict_ndcg@10": 0.0152,
-          "mean_strict_ndcg@20": 0.0152,
-          "mean_mrr": 0.0053,
+          "mean_strict_ndcg@10": 0.0,
+          "mean_strict_ndcg@20": 0.0,
+          "mean_mrr": 0.0,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.8351,
-          "mean_head_popularity_bias@5": 0.207
+          "mean_review_cap_bias@5": 0.7842,
+          "mean_head_popularity_bias@5": 0.1158
         },
         "S4": {
           "n": 16,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0625,
-          "mean_strict_hit@10": 0.125,
-          "mean_strict_hit@20": 0.125,
-          "mean_strict_ndcg@5": 0.0394,
-          "mean_strict_ndcg@10": 0.0603,
-          "mean_strict_ndcg@20": 0.0603,
-          "mean_mrr": 0.0402,
+          "mean_strict_hit@1": 0.125,
+          "mean_strict_hit@5": 0.25,
+          "mean_strict_hit@10": 0.3125,
+          "mean_strict_hit@20": 0.3125,
+          "mean_strict_ndcg@5": 0.1886,
+          "mean_strict_ndcg@10": 0.2074,
+          "mean_strict_ndcg@20": 0.2074,
+          "mean_mrr": 0.1757,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6781,
-          "mean_head_popularity_bias@5": 0.15
+          "mean_review_cap_bias@5": 0.724,
+          "mean_head_popularity_bias@5": 0.1437
         },
         "legacy": {
           "n": 21,
           "mean_strict_hit@1": 0.1905,
-          "mean_strict_hit@5": 0.5238,
-          "mean_strict_hit@10": 0.8095,
-          "mean_strict_hit@20": 0.9048,
-          "mean_strict_ndcg@5": 0.3705,
-          "mean_strict_ndcg@10": 0.4681,
-          "mean_strict_ndcg@20": 0.4906,
-          "mean_mrr": 0.3677,
+          "mean_strict_hit@5": 0.3333,
+          "mean_strict_hit@10": 0.4762,
+          "mean_strict_hit@20": 0.5238,
+          "mean_strict_ndcg@5": 0.2681,
+          "mean_strict_ndcg@10": 0.3153,
+          "mean_strict_ndcg@20": 0.3265,
+          "mean_mrr": 0.2687,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.8095,
-          "mean_head_popularity_bias@5": 0.4032
+          "mean_review_cap_bias@5": 0.625,
+          "mean_head_popularity_bias@5": 0.31
         }
       }
     },
@@ -179,115 +179,115 @@
       "overall_tuning": {
         "n": 105,
         "mean_strict_hit@1": 0.0857,
-        "mean_strict_hit@5": 0.1333,
-        "mean_strict_hit@10": 0.1714,
-        "mean_strict_hit@20": 0.2095,
-        "mean_strict_ndcg@5": 0.1103,
-        "mean_strict_ndcg@10": 0.1222,
-        "mean_strict_ndcg@20": 0.1318,
-        "mean_mrr": 0.11,
+        "mean_strict_hit@5": 0.1238,
+        "mean_strict_hit@10": 0.1524,
+        "mean_strict_hit@20": 0.2476,
+        "mean_strict_ndcg@5": 0.1066,
+        "mean_strict_ndcg@10": 0.1155,
+        "mean_strict_ndcg@20": 0.1396,
+        "mean_mrr": 0.1109,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.6097,
-        "mean_head_popularity_bias@5": 0.1497
+        "mean_review_cap_bias@5": 0.5982,
+        "mean_head_popularity_bias@5": 0.138
       },
       "s0_s4_tuning": {
         "n": 84,
-        "mean_strict_hit@1": 0.0357,
-        "mean_strict_hit@5": 0.0595,
-        "mean_strict_hit@10": 0.0714,
-        "mean_strict_hit@20": 0.1071,
-        "mean_strict_ndcg@5": 0.0478,
-        "mean_strict_ndcg@10": 0.0518,
-        "mean_strict_ndcg@20": 0.0608,
-        "mean_mrr": 0.0482,
+        "mean_strict_hit@1": 0.0595,
+        "mean_strict_hit@5": 0.0833,
+        "mean_strict_hit@10": 0.119,
+        "mean_strict_hit@20": 0.2143,
+        "mean_strict_ndcg@5": 0.0745,
+        "mean_strict_ndcg@10": 0.0857,
+        "mean_strict_ndcg@20": 0.1094,
+        "mean_mrr": 0.0821,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.5926,
-        "mean_head_popularity_bias@5": 0.1104
+        "mean_review_cap_bias@5": 0.6093,
+        "mean_head_popularity_bias@5": 0.1177
       },
       "by_stratum": {
         "S0": {
           "n": 14,
           "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0714,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.1429,
-          "mean_strict_ndcg@5": 0.0276,
-          "mean_strict_ndcg@10": 0.0276,
-          "mean_strict_ndcg@20": 0.0455,
-          "mean_mrr": 0.019,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.2143,
+          "mean_strict_hit@20": 0.3571,
+          "mean_strict_ndcg@5": 0.0901,
+          "mean_strict_ndcg@10": 0.1108,
+          "mean_strict_ndcg@20": 0.1465,
+          "mean_mrr": 0.0881,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6974,
-          "mean_head_popularity_bias@5": 0.1179
+          "mean_review_cap_bias@5": 0.5692,
+          "mean_head_popularity_bias@5": 0.1
         },
         "S1": {
           "n": 17,
           "mean_strict_hit@1": 0.1176,
           "mean_strict_hit@5": 0.1176,
-          "mean_strict_hit@10": 0.1176,
-          "mean_strict_hit@20": 0.1176,
+          "mean_strict_hit@10": 0.1765,
+          "mean_strict_hit@20": 0.1765,
           "mean_strict_ndcg@5": 0.1176,
-          "mean_strict_ndcg@10": 0.1176,
-          "mean_strict_ndcg@20": 0.1176,
-          "mean_mrr": 0.1176,
+          "mean_strict_ndcg@10": 0.1362,
+          "mean_strict_ndcg@20": 0.1362,
+          "mean_mrr": 0.125,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5,
-          "mean_head_popularity_bias@5": 0.1235
+          "mean_review_cap_bias@5": 0.6412,
+          "mean_head_popularity_bias@5": 0.1353
         },
         "S2": {
           "n": 18,
           "mean_strict_hit@1": 0.0556,
           "mean_strict_hit@5": 0.0556,
           "mean_strict_hit@10": 0.0556,
-          "mean_strict_hit@20": 0.0556,
+          "mean_strict_hit@20": 0.1111,
           "mean_strict_ndcg@5": 0.0556,
           "mean_strict_ndcg@10": 0.0556,
-          "mean_strict_ndcg@20": 0.0556,
-          "mean_mrr": 0.0556,
+          "mean_strict_ndcg@20": 0.0689,
+          "mean_mrr": 0.0588,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.4722,
-          "mean_head_popularity_bias@5": 0.0556
+          "mean_review_cap_bias@5": 0.5275,
+          "mean_head_popularity_bias@5": 0.1255
         },
         "S3": {
           "n": 19,
           "mean_strict_hit@1": 0.0,
           "mean_strict_hit@5": 0.0,
           "mean_strict_hit@10": 0.0,
-          "mean_strict_hit@20": 0.1053,
+          "mean_strict_hit@20": 0.0526,
           "mean_strict_ndcg@5": 0.0,
           "mean_strict_ndcg@10": 0.0,
-          "mean_strict_ndcg@20": 0.0264,
-          "mean_mrr": 0.0071,
+          "mean_strict_ndcg@20": 0.0132,
+          "mean_mrr": 0.0035,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6772,
-          "mean_head_popularity_bias@5": 0.1333
+          "mean_review_cap_bias@5": 0.6684,
+          "mean_head_popularity_bias@5": 0.0947
         },
         "S4": {
           "n": 16,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0625,
-          "mean_strict_hit@10": 0.125,
-          "mean_strict_hit@20": 0.125,
-          "mean_strict_ndcg@5": 0.0394,
-          "mean_strict_ndcg@10": 0.0603,
-          "mean_strict_ndcg@20": 0.0603,
-          "mean_mrr": 0.0402,
+          "mean_strict_hit@1": 0.125,
+          "mean_strict_hit@5": 0.125,
+          "mean_strict_hit@10": 0.1875,
+          "mean_strict_hit@20": 0.4375,
+          "mean_strict_ndcg@5": 0.125,
+          "mean_strict_ndcg@10": 0.1458,
+          "mean_strict_ndcg@20": 0.2084,
+          "mean_mrr": 0.1508,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6406,
-          "mean_head_popularity_bias@5": 0.125
+          "mean_review_cap_bias@5": 0.6256,
+          "mean_head_popularity_bias@5": 0.1333
         },
         "legacy": {
           "n": 21,
-          "mean_strict_hit@1": 0.2857,
-          "mean_strict_hit@5": 0.4286,
-          "mean_strict_hit@10": 0.5714,
-          "mean_strict_hit@20": 0.619,
-          "mean_strict_ndcg@5": 0.3601,
-          "mean_strict_ndcg@10": 0.4038,
-          "mean_strict_ndcg@20": 0.416,
-          "mean_mrr": 0.3572,
+          "mean_strict_hit@1": 0.1905,
+          "mean_strict_hit@5": 0.2857,
+          "mean_strict_hit@10": 0.2857,
+          "mean_strict_hit@20": 0.381,
+          "mean_strict_ndcg@5": 0.2348,
+          "mean_strict_ndcg@10": 0.2348,
+          "mean_strict_ndcg@20": 0.2603,
+          "mean_mrr": 0.226,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6808,
-          "mean_head_popularity_bias@5": 0.3125
+          "mean_review_cap_bias@5": 0.5533,
+          "mean_head_popularity_bias@5": 0.22
         }
       }
     },
@@ -313,46 +313,46 @@
       },
       "overall_tuning": {
         "n": 105,
-        "mean_strict_hit@1": 0.0762,
-        "mean_strict_hit@5": 0.1714,
+        "mean_strict_hit@1": 0.0857,
+        "mean_strict_hit@5": 0.1429,
         "mean_strict_hit@10": 0.2095,
-        "mean_strict_hit@20": 0.2476,
-        "mean_strict_ndcg@5": 0.1281,
-        "mean_strict_ndcg@10": 0.1402,
-        "mean_strict_ndcg@20": 0.1502,
-        "mean_mrr": 0.1215,
+        "mean_strict_hit@20": 0.2381,
+        "mean_strict_ndcg@5": 0.1205,
+        "mean_strict_ndcg@10": 0.1421,
+        "mean_strict_ndcg@20": 0.1494,
+        "mean_mrr": 0.1236,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.6229,
-        "mean_head_popularity_bias@5": 0.158
+        "mean_review_cap_bias@5": 0.6145,
+        "mean_head_popularity_bias@5": 0.1461
       },
       "s0_s4_tuning": {
         "n": 84,
-        "mean_strict_hit@1": 0.0357,
-        "mean_strict_hit@5": 0.0595,
-        "mean_strict_hit@10": 0.0595,
-        "mean_strict_hit@20": 0.0952,
-        "mean_strict_ndcg@5": 0.0478,
-        "mean_strict_ndcg@10": 0.0478,
-        "mean_strict_ndcg@20": 0.0573,
-        "mean_mrr": 0.0469,
+        "mean_strict_hit@1": 0.0714,
+        "mean_strict_hit@5": 0.0952,
+        "mean_strict_hit@10": 0.131,
+        "mean_strict_hit@20": 0.1667,
+        "mean_strict_ndcg@5": 0.0865,
+        "mean_strict_ndcg@10": 0.0982,
+        "mean_strict_ndcg@20": 0.1073,
+        "mean_mrr": 0.0908,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.5709,
-        "mean_head_popularity_bias@5": 0.1008
+        "mean_review_cap_bias@5": 0.612,
+        "mean_head_popularity_bias@5": 0.1085
       },
       "by_stratum": {
         "S0": {
           "n": 14,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0714,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.1429,
-          "mean_strict_ndcg@5": 0.0276,
-          "mean_strict_ndcg@10": 0.0276,
-          "mean_strict_ndcg@20": 0.0469,
-          "mean_mrr": 0.0202,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.2857,
+          "mean_strict_hit@20": 0.3571,
+          "mean_strict_ndcg@5": 0.1165,
+          "mean_strict_ndcg@10": 0.1645,
+          "mean_strict_ndcg@20": 0.1828,
+          "mean_mrr": 0.1331,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6051,
-          "mean_head_popularity_bias@5": 0.1487
+          "mean_review_cap_bias@5": 0.5846,
+          "mean_head_popularity_bias@5": 0.1
         },
         "S1": {
           "n": 17,
@@ -365,64 +365,64 @@
           "mean_strict_ndcg@20": 0.1176,
           "mean_mrr": 0.1176,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5353,
-          "mean_head_popularity_bias@5": 0.1
+          "mean_review_cap_bias@5": 0.6176,
+          "mean_head_popularity_bias@5": 0.1235
         },
         "S2": {
           "n": 18,
           "mean_strict_hit@1": 0.0556,
           "mean_strict_hit@5": 0.0556,
           "mean_strict_hit@10": 0.0556,
-          "mean_strict_hit@20": 0.0556,
+          "mean_strict_hit@20": 0.1111,
           "mean_strict_ndcg@5": 0.0556,
           "mean_strict_ndcg@10": 0.0556,
-          "mean_strict_ndcg@20": 0.0556,
-          "mean_mrr": 0.0556,
+          "mean_strict_ndcg@20": 0.0698,
+          "mean_mrr": 0.0595,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5056,
-          "mean_head_popularity_bias@5": 0.0778
+          "mean_review_cap_bias@5": 0.5059,
+          "mean_head_popularity_bias@5": 0.1059
         },
         "S3": {
           "n": 19,
           "mean_strict_hit@1": 0.0,
           "mean_strict_hit@5": 0.0,
           "mean_strict_hit@10": 0.0,
-          "mean_strict_hit@20": 0.0526,
+          "mean_strict_hit@20": 0.0,
           "mean_strict_ndcg@5": 0.0,
           "mean_strict_ndcg@10": 0.0,
-          "mean_strict_ndcg@20": 0.0138,
-          "mean_mrr": 0.004,
+          "mean_strict_ndcg@20": 0.0,
+          "mean_mrr": 0.0,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6246,
-          "mean_head_popularity_bias@5": 0.1123
+          "mean_review_cap_bias@5": 0.6579,
+          "mean_head_popularity_bias@5": 0.0737
         },
         "S4": {
           "n": 16,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0625,
-          "mean_strict_hit@10": 0.0625,
-          "mean_strict_hit@20": 0.125,
-          "mean_strict_ndcg@5": 0.0394,
-          "mean_strict_ndcg@10": 0.0394,
-          "mean_strict_ndcg@20": 0.0558,
-          "mean_mrr": 0.0361,
+          "mean_strict_hit@1": 0.125,
+          "mean_strict_hit@5": 0.1875,
+          "mean_strict_hit@10": 0.25,
+          "mean_strict_hit@20": 0.3125,
+          "mean_strict_ndcg@5": 0.1644,
+          "mean_strict_ndcg@10": 0.1841,
+          "mean_strict_ndcg@20": 0.1998,
+          "mean_mrr": 0.1682,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5906,
-          "mean_head_popularity_bias@5": 0.075
+          "mean_review_cap_bias@5": 0.6865,
+          "mean_head_popularity_bias@5": 0.1437
         },
         "legacy": {
           "n": 21,
-          "mean_strict_hit@1": 0.2381,
-          "mean_strict_hit@5": 0.619,
-          "mean_strict_hit@10": 0.8095,
-          "mean_strict_hit@20": 0.8571,
-          "mean_strict_ndcg@5": 0.449,
-          "mean_strict_ndcg@10": 0.5096,
-          "mean_strict_ndcg@20": 0.5218,
-          "mean_mrr": 0.4199,
+          "mean_strict_hit@1": 0.1429,
+          "mean_strict_hit@5": 0.3333,
+          "mean_strict_hit@10": 0.5238,
+          "mean_strict_hit@20": 0.5238,
+          "mean_strict_ndcg@5": 0.2568,
+          "mean_strict_ndcg@10": 0.3177,
+          "mean_strict_ndcg@20": 0.3177,
+          "mean_mrr": 0.255,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.8286,
-          "mean_head_popularity_bias@5": 0.3841
+          "mean_review_cap_bias@5": 0.625,
+          "mean_head_popularity_bias@5": 0.3
         }
       }
     },
@@ -449,45 +449,45 @@
       "overall_tuning": {
         "n": 105,
         "mean_strict_hit@1": 0.0762,
-        "mean_strict_hit@5": 0.1619,
-        "mean_strict_hit@10": 0.2095,
-        "mean_strict_hit@20": 0.2571,
-        "mean_strict_ndcg@5": 0.1208,
-        "mean_strict_ndcg@10": 0.1362,
-        "mean_strict_ndcg@20": 0.1484,
-        "mean_mrr": 0.1171,
+        "mean_strict_hit@5": 0.1714,
+        "mean_strict_hit@10": 0.181,
+        "mean_strict_hit@20": 0.2381,
+        "mean_strict_ndcg@5": 0.126,
+        "mean_strict_ndcg@10": 0.129,
+        "mean_strict_ndcg@20": 0.1429,
+        "mean_mrr": 0.1157,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.6768,
-        "mean_head_popularity_bias@5": 0.2042
+        "mean_review_cap_bias@5": 0.6557,
+        "mean_head_popularity_bias@5": 0.1696
       },
       "s0_s4_tuning": {
         "n": 84,
-        "mean_strict_hit@1": 0.0357,
-        "mean_strict_hit@5": 0.0476,
-        "mean_strict_hit@10": 0.1071,
-        "mean_strict_hit@20": 0.1071,
-        "mean_strict_ndcg@5": 0.0432,
-        "mean_strict_ndcg@10": 0.0625,
-        "mean_strict_ndcg@20": 0.0625,
-        "mean_mrr": 0.0497,
+        "mean_strict_hit@1": 0.0595,
+        "mean_strict_hit@5": 0.119,
+        "mean_strict_hit@10": 0.119,
+        "mean_strict_hit@20": 0.1667,
+        "mean_strict_ndcg@5": 0.0916,
+        "mean_strict_ndcg@10": 0.0916,
+        "mean_strict_ndcg@20": 0.1031,
+        "mean_mrr": 0.0852,
         "mean_popularity_bias@5": 1.0,
-        "mean_review_cap_bias@5": 0.6432,
-        "mean_head_popularity_bias@5": 0.1538
+        "mean_review_cap_bias@5": 0.6535,
+        "mean_head_popularity_bias@5": 0.1305
       },
       "by_stratum": {
         "S0": {
           "n": 14,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0,
-          "mean_strict_hit@10": 0.1429,
-          "mean_strict_hit@20": 0.1429,
-          "mean_strict_ndcg@5": 0.0,
-          "mean_strict_ndcg@10": 0.0453,
-          "mean_strict_ndcg@20": 0.0453,
-          "mean_mrr": 0.0181,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.2143,
+          "mean_strict_hit@10": 0.2143,
+          "mean_strict_hit@20": 0.3571,
+          "mean_strict_ndcg@5": 0.1473,
+          "mean_strict_ndcg@10": 0.1473,
+          "mean_strict_ndcg@20": 0.183,
+          "mean_mrr": 0.1346,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6513,
-          "mean_head_popularity_bias@5": 0.1795
+          "mean_review_cap_bias@5": 0.6154,
+          "mean_head_popularity_bias@5": 0.1154
         },
         "S1": {
           "n": 17,
@@ -500,198 +500,672 @@
           "mean_strict_ndcg@20": 0.1176,
           "mean_mrr": 0.1176,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5706,
-          "mean_head_popularity_bias@5": 0.1118
+          "mean_review_cap_bias@5": 0.6882,
+          "mean_head_popularity_bias@5": 0.1235
         },
         "S2": {
           "n": 18,
           "mean_strict_hit@1": 0.0556,
           "mean_strict_hit@5": 0.0556,
           "mean_strict_hit@10": 0.0556,
-          "mean_strict_hit@20": 0.0556,
+          "mean_strict_hit@20": 0.1111,
           "mean_strict_ndcg@5": 0.0556,
           "mean_strict_ndcg@10": 0.0556,
-          "mean_strict_ndcg@20": 0.0556,
-          "mean_mrr": 0.0556,
+          "mean_strict_ndcg@20": 0.0682,
+          "mean_mrr": 0.0583,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5833,
-          "mean_head_popularity_bias@5": 0.1111
+          "mean_review_cap_bias@5": 0.4824,
+          "mean_head_popularity_bias@5": 0.1294
         },
         "S3": {
           "n": 19,
           "mean_strict_hit@1": 0.0,
           "mean_strict_hit@5": 0.0,
-          "mean_strict_hit@10": 0.0526,
-          "mean_strict_hit@20": 0.0526,
+          "mean_strict_hit@10": 0.0,
+          "mean_strict_hit@20": 0.0,
           "mean_strict_ndcg@5": 0.0,
-          "mean_strict_ndcg@10": 0.0166,
-          "mean_strict_ndcg@20": 0.0166,
-          "mean_mrr": 0.0066,
+          "mean_strict_ndcg@10": 0.0,
+          "mean_strict_ndcg@20": 0.0,
+          "mean_mrr": 0.0,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.7719,
-          "mean_head_popularity_bias@5": 0.2175
+          "mean_review_cap_bias@5": 0.7632,
+          "mean_head_popularity_bias@5": 0.1368
         },
         "S4": {
           "n": 16,
-          "mean_strict_hit@1": 0.0,
-          "mean_strict_hit@5": 0.0625,
-          "mean_strict_hit@10": 0.1875,
-          "mean_strict_hit@20": 0.1875,
-          "mean_strict_ndcg@5": 0.0394,
-          "mean_strict_ndcg@10": 0.0814,
-          "mean_strict_ndcg@20": 0.0814,
-          "mean_mrr": 0.0495,
+          "mean_strict_hit@1": 0.0625,
+          "mean_strict_hit@5": 0.25,
+          "mean_strict_hit@10": 0.25,
+          "mean_strict_hit@20": 0.3125,
+          "mean_strict_ndcg@5": 0.1644,
+          "mean_strict_ndcg@10": 0.1644,
+          "mean_strict_ndcg@20": 0.1791,
+          "mean_mrr": 0.1389,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6281,
+          "mean_review_cap_bias@5": 0.699,
+          "mean_head_popularity_bias@5": 0.1438
+        },
+        "legacy": {
+          "n": 21,
+          "mean_strict_hit@1": 0.1429,
+          "mean_strict_hit@5": 0.381,
+          "mean_strict_hit@10": 0.4286,
+          "mean_strict_hit@20": 0.5238,
+          "mean_strict_ndcg@5": 0.2636,
+          "mean_strict_ndcg@10": 0.2786,
+          "mean_strict_ndcg@20": 0.3023,
+          "mean_mrr": 0.2377,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.665,
+          "mean_head_popularity_bias@5": 0.33
+        }
+      }
+    },
+    "rrf4": {
+      "config": {
+        "name": "rrf4",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review",
+          "lexical"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0,
+          "lexical": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.01639344262295082
+      },
+      "overall_tuning": {
+        "n": 105,
+        "mean_strict_hit@1": 0.1048,
+        "mean_strict_hit@5": 0.2,
+        "mean_strict_hit@10": 0.2571,
+        "mean_strict_hit@20": 0.3238,
+        "mean_strict_ndcg@5": 0.1569,
+        "mean_strict_ndcg@10": 0.176,
+        "mean_strict_ndcg@20": 0.1928,
+        "mean_mrr": 0.1552,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6459,
+        "mean_head_popularity_bias@5": 0.1517
+      },
+      "s0_s4_tuning": {
+        "n": 84,
+        "mean_strict_hit@1": 0.0833,
+        "mean_strict_hit@5": 0.1429,
+        "mean_strict_hit@10": 0.1905,
+        "mean_strict_hit@20": 0.2738,
+        "mean_strict_ndcg@5": 0.1125,
+        "mean_strict_ndcg@10": 0.1284,
+        "mean_strict_ndcg@20": 0.1493,
+        "mean_mrr": 0.1151,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6488,
+        "mean_head_popularity_bias@5": 0.1143
+      },
+      "by_stratum": {
+        "S0": {
+          "n": 14,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.2143,
+          "mean_strict_hit@10": 0.3571,
+          "mean_strict_hit@20": 0.5,
+          "mean_strict_ndcg@5": 0.1522,
+          "mean_strict_ndcg@10": 0.1967,
+          "mean_strict_ndcg@20": 0.2306,
+          "mean_mrr": 0.1565,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6714,
+          "mean_head_popularity_bias@5": 0.1429
+        },
+        "S1": {
+          "n": 17,
+          "mean_strict_hit@1": 0.1176,
+          "mean_strict_hit@5": 0.1176,
+          "mean_strict_hit@10": 0.1176,
+          "mean_strict_hit@20": 0.1765,
+          "mean_strict_ndcg@5": 0.1176,
+          "mean_strict_ndcg@10": 0.1176,
+          "mean_strict_ndcg@20": 0.1324,
+          "mean_mrr": 0.1216,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.7176,
+          "mean_head_popularity_bias@5": 0.1294
+        },
+        "S2": {
+          "n": 18,
+          "mean_strict_hit@1": 0.0556,
+          "mean_strict_hit@5": 0.1111,
+          "mean_strict_hit@10": 0.1667,
+          "mean_strict_hit@20": 0.2222,
+          "mean_strict_ndcg@5": 0.0795,
+          "mean_strict_ndcg@10": 0.0993,
+          "mean_strict_ndcg@20": 0.1148,
+          "mean_mrr": 0.0838,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.4722,
+          "mean_head_popularity_bias@5": 0.0778
+        },
+        "S3": {
+          "n": 19,
+          "mean_strict_hit@1": 0.0,
+          "mean_strict_hit@5": 0.0526,
+          "mean_strict_hit@10": 0.0526,
+          "mean_strict_hit@20": 0.0526,
+          "mean_strict_ndcg@5": 0.0263,
+          "mean_strict_ndcg@10": 0.0263,
+          "mean_strict_ndcg@20": 0.0263,
+          "mean_mrr": 0.0175,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6421,
+          "mean_head_popularity_bias@5": 0.0842
+        },
+        "S4": {
+          "n": 16,
+          "mean_strict_hit@1": 0.1875,
+          "mean_strict_hit@5": 0.25,
+          "mean_strict_hit@10": 0.3125,
+          "mean_strict_hit@20": 0.5,
+          "mean_strict_ndcg@5": 0.2117,
+          "mean_strict_ndcg@10": 0.2339,
+          "mean_strict_ndcg@20": 0.2812,
+          "mean_mrr": 0.2234,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.7625,
           "mean_head_popularity_bias@5": 0.15
         },
         "legacy": {
           "n": 21,
-          "mean_strict_hit@1": 0.2381,
-          "mean_strict_hit@5": 0.619,
-          "mean_strict_hit@10": 0.619,
-          "mean_strict_hit@20": 0.8571,
-          "mean_strict_ndcg@5": 0.4311,
-          "mean_strict_ndcg@10": 0.4311,
-          "mean_strict_ndcg@20": 0.492,
-          "mean_mrr": 0.387,
+          "mean_strict_hit@1": 0.1905,
+          "mean_strict_hit@5": 0.4286,
+          "mean_strict_hit@10": 0.5238,
+          "mean_strict_hit@20": 0.5238,
+          "mean_strict_ndcg@5": 0.3345,
+          "mean_strict_ndcg@10": 0.3664,
+          "mean_strict_ndcg@20": 0.3664,
+          "mean_mrr": 0.3155,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.8095,
-          "mean_head_popularity_bias@5": 0.4032
+          "mean_review_cap_bias@5": 0.6341,
+          "mean_head_popularity_bias@5": 0.3016
+        }
+      }
+    },
+    "wrrf4": {
+      "config": {
+        "name": "wrrf4",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review",
+          "lexical"
+        ],
+        "weights": {
+          "product": 0.35,
+          "attribute": 0.2,
+          "review": 0.15,
+          "lexical": 0.3
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.004098360655737705
+      },
+      "overall_tuning": {
+        "n": 105,
+        "mean_strict_hit@1": 0.0952,
+        "mean_strict_hit@5": 0.2,
+        "mean_strict_hit@10": 0.2381,
+        "mean_strict_hit@20": 0.3238,
+        "mean_strict_ndcg@5": 0.1519,
+        "mean_strict_ndcg@10": 0.1647,
+        "mean_strict_ndcg@20": 0.1861,
+        "mean_mrr": 0.147,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6135,
+        "mean_head_popularity_bias@5": 0.1422
+      },
+      "s0_s4_tuning": {
+        "n": 84,
+        "mean_strict_hit@1": 0.0714,
+        "mean_strict_hit@5": 0.1429,
+        "mean_strict_hit@10": 0.1667,
+        "mean_strict_hit@20": 0.2738,
+        "mean_strict_ndcg@5": 0.1086,
+        "mean_strict_ndcg@10": 0.1164,
+        "mean_strict_ndcg@20": 0.1431,
+        "mean_mrr": 0.1077,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6155,
+        "mean_head_popularity_bias@5": 0.1048
+      },
+      "by_stratum": {
+        "S0": {
+          "n": 14,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.2143,
+          "mean_strict_hit@10": 0.2857,
+          "mean_strict_hit@20": 0.5,
+          "mean_strict_ndcg@5": 0.1522,
+          "mean_strict_ndcg@10": 0.1777,
+          "mean_strict_ndcg@20": 0.2291,
+          "mean_mrr": 0.1555,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6,
+          "mean_head_popularity_bias@5": 0.1286
+        },
+        "S1": {
+          "n": 17,
+          "mean_strict_hit@1": 0.1176,
+          "mean_strict_hit@5": 0.1176,
+          "mean_strict_hit@10": 0.1176,
+          "mean_strict_hit@20": 0.1765,
+          "mean_strict_ndcg@5": 0.1176,
+          "mean_strict_ndcg@10": 0.1176,
+          "mean_strict_ndcg@20": 0.1324,
+          "mean_mrr": 0.1216,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6706,
+          "mean_head_popularity_bias@5": 0.0941
+        },
+        "S2": {
+          "n": 18,
+          "mean_strict_hit@1": 0.0556,
+          "mean_strict_hit@5": 0.1667,
+          "mean_strict_hit@10": 0.1667,
+          "mean_strict_hit@20": 0.2222,
+          "mean_strict_ndcg@5": 0.1034,
+          "mean_strict_ndcg@10": 0.1034,
+          "mean_strict_ndcg@20": 0.1189,
+          "mean_mrr": 0.0884,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.4722,
+          "mean_head_popularity_bias@5": 0.0667
+        },
+        "S3": {
+          "n": 19,
+          "mean_strict_hit@1": 0.0,
+          "mean_strict_hit@5": 0.0526,
+          "mean_strict_hit@10": 0.0526,
+          "mean_strict_hit@20": 0.0526,
+          "mean_strict_ndcg@5": 0.0263,
+          "mean_strict_ndcg@10": 0.0263,
+          "mean_strict_ndcg@20": 0.0263,
+          "mean_mrr": 0.0175,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6211,
+          "mean_head_popularity_bias@5": 0.0947
+        },
+        "S4": {
+          "n": 16,
+          "mean_strict_hit@1": 0.125,
+          "mean_strict_hit@5": 0.1875,
+          "mean_strict_hit@10": 0.25,
+          "mean_strict_hit@20": 0.5,
+          "mean_strict_ndcg@5": 0.1644,
+          "mean_strict_ndcg@10": 0.1832,
+          "mean_strict_ndcg@20": 0.2454,
+          "mean_mrr": 0.1798,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.725,
+          "mean_head_popularity_bias@5": 0.15
+        },
+        "legacy": {
+          "n": 21,
+          "mean_strict_hit@1": 0.1905,
+          "mean_strict_hit@5": 0.4286,
+          "mean_strict_hit@10": 0.5238,
+          "mean_strict_hit@20": 0.5238,
+          "mean_strict_ndcg@5": 0.3249,
+          "mean_strict_ndcg@10": 0.3578,
+          "mean_strict_ndcg@20": 0.3578,
+          "mean_mrr": 0.3044,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6056,
+          "mean_head_popularity_bias@5": 0.2921
+        }
+      }
+    },
+    "cc4": {
+      "config": {
+        "name": "cc4",
+        "method": "cc",
+        "channels": [
+          "product",
+          "attribute",
+          "review",
+          "lexical"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0,
+          "lexical": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.25
+      },
+      "overall_tuning": {
+        "n": 105,
+        "mean_strict_hit@1": 0.0952,
+        "mean_strict_hit@5": 0.2095,
+        "mean_strict_hit@10": 0.2286,
+        "mean_strict_hit@20": 0.3333,
+        "mean_strict_ndcg@5": 0.1554,
+        "mean_strict_ndcg@10": 0.1614,
+        "mean_strict_ndcg@20": 0.1875,
+        "mean_mrr": 0.1466,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6363,
+        "mean_head_popularity_bias@5": 0.146
+      },
+      "s0_s4_tuning": {
+        "n": 84,
+        "mean_strict_hit@1": 0.0714,
+        "mean_strict_hit@5": 0.1548,
+        "mean_strict_hit@10": 0.1786,
+        "mean_strict_hit@20": 0.2976,
+        "mean_strict_ndcg@5": 0.1146,
+        "mean_strict_ndcg@10": 0.1221,
+        "mean_strict_ndcg@20": 0.1517,
+        "mean_mrr": 0.1121,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6369,
+        "mean_head_popularity_bias@5": 0.1143
+      },
+      "by_stratum": {
+        "S0": {
+          "n": 14,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.2143,
+          "mean_strict_hit@10": 0.2857,
+          "mean_strict_hit@20": 0.6429,
+          "mean_strict_ndcg@5": 0.1522,
+          "mean_strict_ndcg@10": 0.1747,
+          "mean_strict_ndcg@20": 0.2628,
+          "mean_mrr": 0.1629,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.5714,
+          "mean_head_popularity_bias@5": 0.1286
+        },
+        "S1": {
+          "n": 17,
+          "mean_strict_hit@1": 0.1176,
+          "mean_strict_hit@5": 0.1176,
+          "mean_strict_hit@10": 0.1176,
+          "mean_strict_hit@20": 0.1765,
+          "mean_strict_ndcg@5": 0.1176,
+          "mean_strict_ndcg@10": 0.1176,
+          "mean_strict_ndcg@20": 0.1327,
+          "mean_mrr": 0.1218,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.7176,
+          "mean_head_popularity_bias@5": 0.0824
+        },
+        "S2": {
+          "n": 18,
+          "mean_strict_hit@1": 0.0556,
+          "mean_strict_hit@5": 0.1667,
+          "mean_strict_hit@10": 0.2222,
+          "mean_strict_hit@20": 0.2222,
+          "mean_strict_ndcg@5": 0.1034,
+          "mean_strict_ndcg@10": 0.1209,
+          "mean_strict_ndcg@20": 0.1209,
+          "mean_mrr": 0.0903,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.55,
+          "mean_head_popularity_bias@5": 0.1222
+        },
+        "S3": {
+          "n": 19,
+          "mean_strict_hit@1": 0.0,
+          "mean_strict_hit@5": 0.0526,
+          "mean_strict_hit@10": 0.0526,
+          "mean_strict_hit@20": 0.1053,
+          "mean_strict_ndcg@5": 0.0332,
+          "mean_strict_ndcg@10": 0.0332,
+          "mean_strict_ndcg@20": 0.0464,
+          "mean_mrr": 0.0298,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6526,
+          "mean_head_popularity_bias@5": 0.1263
+        },
+        "S4": {
+          "n": 16,
+          "mean_strict_hit@1": 0.125,
+          "mean_strict_hit@5": 0.25,
+          "mean_strict_hit@10": 0.25,
+          "mean_strict_hit@20": 0.4375,
+          "mean_strict_ndcg@5": 0.1875,
+          "mean_strict_ndcg@10": 0.1875,
+          "mean_strict_ndcg@20": 0.2345,
+          "mean_mrr": 0.1794,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6875,
+          "mean_head_popularity_bias@5": 0.1125
+        },
+        "legacy": {
+          "n": 21,
+          "mean_strict_hit@1": 0.1905,
+          "mean_strict_hit@5": 0.4286,
+          "mean_strict_hit@10": 0.4286,
+          "mean_strict_hit@20": 0.4762,
+          "mean_strict_ndcg@5": 0.3187,
+          "mean_strict_ndcg@10": 0.3187,
+          "mean_strict_ndcg@20": 0.3306,
+          "mean_mrr": 0.2849,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6341,
+          "mean_head_popularity_bias@5": 0.273
+        }
+      }
+    },
+    "lexical_only": {
+      "config": {
+        "name": "lexical_only",
+        "method": "rrf",
+        "channels": [
+          "lexical"
+        ],
+        "weights": {
+          "lexical": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.004098360655737705
+      },
+      "overall_tuning": {
+        "n": 105,
+        "mean_strict_hit@1": 0.1143,
+        "mean_strict_hit@5": 0.2095,
+        "mean_strict_hit@10": 0.2381,
+        "mean_strict_hit@20": 0.3238,
+        "mean_strict_ndcg@5": 0.1641,
+        "mean_strict_ndcg@10": 0.1725,
+        "mean_strict_ndcg@20": 0.1942,
+        "mean_mrr": 0.158,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6211,
+        "mean_head_popularity_bias@5": 0.1422
+      },
+      "s0_s4_tuning": {
+        "n": 84,
+        "mean_strict_hit@1": 0.0833,
+        "mean_strict_hit@5": 0.1667,
+        "mean_strict_hit@10": 0.1905,
+        "mean_strict_hit@20": 0.2976,
+        "mean_strict_ndcg@5": 0.1262,
+        "mean_strict_ndcg@10": 0.1332,
+        "mean_strict_ndcg@20": 0.1604,
+        "mean_mrr": 0.1229,
+        "mean_popularity_bias@5": 1.0,
+        "mean_review_cap_bias@5": 0.6202,
+        "mean_head_popularity_bias@5": 0.1024
+      },
+      "by_stratum": {
+        "S0": {
+          "n": 14,
+          "mean_strict_hit@1": 0.0,
+          "mean_strict_hit@5": 0.2143,
+          "mean_strict_hit@10": 0.2857,
+          "mean_strict_hit@20": 0.4286,
+          "mean_strict_ndcg@5": 0.1258,
+          "mean_strict_ndcg@10": 0.1473,
+          "mean_strict_ndcg@20": 0.1839,
+          "mean_mrr": 0.1134,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6143,
+          "mean_head_popularity_bias@5": 0.1
+        },
+        "S1": {
+          "n": 17,
+          "mean_strict_hit@1": 0.1176,
+          "mean_strict_hit@5": 0.1176,
+          "mean_strict_hit@10": 0.1176,
+          "mean_strict_hit@20": 0.2941,
+          "mean_strict_ndcg@5": 0.1176,
+          "mean_strict_ndcg@10": 0.1176,
+          "mean_strict_ndcg@20": 0.1636,
+          "mean_mrr": 0.131,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.5529,
+          "mean_head_popularity_bias@5": 0.0706
+        },
+        "S2": {
+          "n": 18,
+          "mean_strict_hit@1": 0.1111,
+          "mean_strict_hit@5": 0.2222,
+          "mean_strict_hit@10": 0.2222,
+          "mean_strict_hit@20": 0.2222,
+          "mean_strict_ndcg@5": 0.1565,
+          "mean_strict_ndcg@10": 0.1565,
+          "mean_strict_ndcg@20": 0.1565,
+          "mean_mrr": 0.1361,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.65,
+          "mean_head_popularity_bias@5": 0.0889
+        },
+        "S3": {
+          "n": 19,
+          "mean_strict_hit@1": 0.0526,
+          "mean_strict_hit@5": 0.1053,
+          "mean_strict_hit@10": 0.1053,
+          "mean_strict_hit@20": 0.1053,
+          "mean_strict_ndcg@5": 0.0858,
+          "mean_strict_ndcg@10": 0.0858,
+          "mean_strict_ndcg@20": 0.0858,
+          "mean_mrr": 0.0789,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6842,
+          "mean_head_popularity_bias@5": 0.1263
+        },
+        "S4": {
+          "n": 16,
+          "mean_strict_hit@1": 0.125,
+          "mean_strict_hit@5": 0.1875,
+          "mean_strict_hit@10": 0.25,
+          "mean_strict_hit@20": 0.5,
+          "mean_strict_ndcg@5": 0.1492,
+          "mean_strict_ndcg@10": 0.1672,
+          "mean_strict_ndcg@20": 0.2293,
+          "mean_mrr": 0.1602,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.5875,
+          "mean_head_popularity_bias@5": 0.125
+        },
+        "legacy": {
+          "n": 21,
+          "mean_strict_hit@1": 0.2381,
+          "mean_strict_hit@5": 0.381,
+          "mean_strict_hit@10": 0.4286,
+          "mean_strict_hit@20": 0.4286,
+          "mean_strict_ndcg@5": 0.3158,
+          "mean_strict_ndcg@10": 0.3295,
+          "mean_strict_ndcg@20": 0.3295,
+          "mean_mrr": 0.2984,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6246,
+          "mean_head_popularity_bias@5": 0.3016
         }
       }
     }
   },
   "rs02_review_channel_attribution": {
-    "verdict": "REVIEW_CHANNEL_MARGINAL_CONTRIBUTION: delta HR@20 = +0.0476 (95% CI [+0.0000, +0.1048]), unique rescues=7, demotions=2.",
-    "review_channel_target_hits_top50": 25,
+    "verdict": "REVIEW_CHANNEL_MARGINAL_CONTRIBUTION: delta HR@20 = -0.0190 (95% CI [-0.0762, +0.0381]), unique rescues=4, demotions=6.",
+    "review_channel_target_hits_top50": 26,
     "review_channel_target_hit_qids": [
+      "r2b_s0_011",
+      "r2b_s0_025",
+      "r2b_s0_026",
+      "r2b_s0_037",
       "r2b_s0_040",
       "r2b_s2_020",
+      "r2b_s2_035",
       "r2b_s3_028",
-      "r2b_s3_036",
+      "r2b_s3_037",
       "r2b_s4_015",
+      "r2b_s4_016",
       "r2b_s4_022",
       "r2b_s4_028",
+      "r2b_s4_030",
       "r2b_s4_035",
+      "r2b_s4_039",
       "r2b_s4_040",
       "live_eval_camera_01",
       "live_eval_camera_03",
-      "live_eval_phone_01",
-      "live_eval_phone_02",
-      "live_eval_charger_01",
       "live_eval_charger_02",
       "live_eval_charger_03",
-      "live_eval_mouse_01",
-      "live_eval_mouse_03",
       "live_eval_headphone_02",
       "live_eval_laptop_01",
-      "live_eval_laptop_02",
-      "live_eval_laptop_03",
       "live_eval_keyboard_01",
       "live_eval_keyboard_02",
       "live_eval_keyboard_03"
     ],
     "unique_rescues_at_20_rrf3_over_rrf2": [
-      "r2b_s4_035",
+      "r2b_s4_015",
       "live_eval_camera_01",
-      "live_eval_phone_02",
-      "live_eval_mouse_03",
       "live_eval_headphone_02",
-      "live_eval_laptop_01",
-      "live_eval_laptop_03"
+      "live_eval_laptop_01"
     ],
     "demotions_at_20_rrf3_vs_rrf2": [
+      "r2b_s1_009",
+      "r2b_s2_016",
       "r2b_s3_024",
+      "r2b_s4_016",
+      "r2b_s4_034",
       "r2b_s4_036"
     ],
     "comparisons_rrf3_minus_rrf2": {
       "strict_hit@20": {
         "metric": "strict_hit@20",
         "n": 105,
-        "mean_a": 0.2571,
-        "mean_b": 0.2095,
-        "mean_diff_a_minus_b": 0.0476,
-        "ci95_low": 0.0,
-        "ci95_high": 0.1048,
-        "p_value": 0.1797,
+        "mean_a": 0.2286,
+        "mean_b": 0.2476,
+        "mean_diff_a_minus_b": -0.019,
+        "ci95_low": -0.0762,
+        "ci95_high": 0.0381,
+        "p_value": 0.7539,
         "ci_excludes_zero": false
       },
       "strict_hit@5": {
         "metric": "strict_hit@5",
         "n": 105,
-        "mean_a": 0.1429,
-        "mean_b": 0.1333,
-        "mean_diff_a_minus_b": 0.0095,
-        "ci95_low": -0.0286,
-        "ci95_high": 0.0571,
-        "p_value": 1.0,
-        "ci_excludes_zero": false
-      },
-      "strict_ndcg@10": {
-        "metric": "strict_ndcg@10",
-        "n": 105,
-        "mean_a": 0.1401,
-        "mean_b": 0.1222,
-        "mean_diff_a_minus_b": 0.0179,
-        "ci95_low": -0.0096,
-        "ci95_high": 0.0456,
-        "p_value": 0.2176,
-        "ci_excludes_zero": false
-      },
-      "mrr": {
-        "metric": "mrr",
-        "n": 105,
-        "mean_a": 0.1115,
-        "mean_b": 0.11,
-        "mean_diff_a_minus_b": 0.0015,
-        "ci95_low": -0.0236,
-        "ci95_high": 0.0249,
-        "p_value": 0.9032,
-        "ci_excludes_zero": false
-      },
-      "review_cap_bias@5": {
-        "metric": "review_cap_bias@5",
-        "n": 103,
-        "mean_a": 0.6892,
-        "mean_b": 0.6097,
-        "mean_diff_a_minus_b": 0.0794,
-        "ci95_low": 0.0408,
-        "ci95_high": 0.1184,
-        "p_value": 0.0004,
-        "ci_excludes_zero": true
-      },
-      "head_popularity_bias@5": {
-        "metric": "head_popularity_bias@5",
-        "n": 103,
-        "mean_a": 0.1926,
-        "mean_b": 0.1497,
-        "mean_diff_a_minus_b": 0.0429,
-        "ci95_low": 0.0146,
-        "ci95_high": 0.0731,
-        "p_value": 0.0038,
-        "ci_excludes_zero": true
-      }
-    }
-  },
-  "rs25_weighted_rrf_tuning": {
-    "wrrf3_minus_rrf3": {
-      "strict_hit@20": {
-        "metric": "strict_hit@20",
-        "n": 105,
-        "mean_a": 0.2476,
-        "mean_b": 0.2571,
-        "mean_diff_a_minus_b": -0.0095,
-        "ci95_low": -0.0476,
-        "ci95_high": 0.019,
-        "p_value": 1.0,
-        "ci_excludes_zero": false
-      },
-      "strict_hit@5": {
-        "metric": "strict_hit@5",
-        "n": 105,
-        "mean_a": 0.1714,
-        "mean_b": 0.1429,
+        "mean_a": 0.1524,
+        "mean_b": 0.1238,
         "mean_diff_a_minus_b": 0.0286,
         "ci95_low": 0.0,
         "ci95_high": 0.0667,
@@ -701,45 +1175,115 @@
       "strict_ndcg@10": {
         "metric": "strict_ndcg@10",
         "n": 105,
-        "mean_a": 0.1402,
-        "mean_b": 0.1401,
-        "mean_diff_a_minus_b": 0.0001,
-        "ci95_low": -0.0156,
-        "ci95_high": 0.0162,
-        "p_value": 0.9885,
+        "mean_a": 0.1477,
+        "mean_b": 0.1155,
+        "mean_diff_a_minus_b": 0.0322,
+        "ci95_low": 0.0064,
+        "ci95_high": 0.0634,
+        "p_value": 0.0219,
+        "ci_excludes_zero": true
+      },
+      "mrr": {
+        "metric": "mrr",
+        "n": 105,
+        "mean_a": 0.1269,
+        "mean_b": 0.1109,
+        "mean_diff_a_minus_b": 0.016,
+        "ci95_low": -0.0088,
+        "ci95_high": 0.0451,
+        "p_value": 0.2607,
+        "ci_excludes_zero": false
+      },
+      "review_cap_bias@5": {
+        "metric": "review_cap_bias@5",
+        "n": 101,
+        "mean_a": 0.6583,
+        "mean_b": 0.5982,
+        "mean_diff_a_minus_b": 0.0601,
+        "ci95_low": 0.0211,
+        "ci95_high": 0.097,
+        "p_value": 0.0018,
+        "ci_excludes_zero": true
+      },
+      "head_popularity_bias@5": {
+        "metric": "head_popularity_bias@5",
+        "n": 101,
+        "mean_a": 0.1663,
+        "mean_b": 0.138,
+        "mean_diff_a_minus_b": 0.0284,
+        "ci95_low": 0.002,
+        "ci95_high": 0.0554,
+        "p_value": 0.0462,
+        "ci_excludes_zero": true
+      }
+    }
+  },
+  "rs25_weighted_rrf_tuning": {
+    "wrrf3_minus_rrf3": {
+      "strict_hit@20": {
+        "metric": "strict_hit@20",
+        "n": 105,
+        "mean_a": 0.2381,
+        "mean_b": 0.2286,
+        "mean_diff_a_minus_b": 0.0095,
+        "ci95_low": -0.019,
+        "ci95_high": 0.0476,
+        "p_value": 1.0,
+        "ci_excludes_zero": false
+      },
+      "strict_hit@5": {
+        "metric": "strict_hit@5",
+        "n": 105,
+        "mean_a": 0.1429,
+        "mean_b": 0.1524,
+        "mean_diff_a_minus_b": -0.0095,
+        "ci95_low": -0.0286,
+        "ci95_high": 0.0,
+        "p_value": 1.0,
+        "ci_excludes_zero": false
+      },
+      "strict_ndcg@10": {
+        "metric": "strict_ndcg@10",
+        "n": 105,
+        "mean_a": 0.1421,
+        "mean_b": 0.1477,
+        "mean_diff_a_minus_b": -0.0056,
+        "ci95_low": -0.0215,
+        "ci95_high": 0.0068,
+        "p_value": 0.4727,
         "ci_excludes_zero": false
       },
       "mrr": {
         "metric": "mrr",
         "n": 105,
-        "mean_a": 0.1215,
-        "mean_b": 0.1115,
-        "mean_diff_a_minus_b": 0.01,
-        "ci95_low": -0.0031,
-        "ci95_high": 0.0273,
-        "p_value": 0.2359,
+        "mean_a": 0.1236,
+        "mean_b": 0.1269,
+        "mean_diff_a_minus_b": -0.0033,
+        "ci95_low": -0.0191,
+        "ci95_high": 0.0076,
+        "p_value": 0.8477,
         "ci_excludes_zero": false
       },
       "review_cap_bias@5": {
         "metric": "review_cap_bias@5",
-        "n": 104,
-        "mean_a": 0.6229,
-        "mean_b": 0.6921,
-        "mean_diff_a_minus_b": -0.0692,
-        "ci95_low": -0.1019,
-        "ci95_high": -0.0365,
-        "p_value": 0.0002,
+        "n": 102,
+        "mean_a": 0.6145,
+        "mean_b": 0.6616,
+        "mean_diff_a_minus_b": -0.0471,
+        "ci95_low": -0.0765,
+        "ci95_high": -0.0137,
+        "p_value": 0.0054,
         "ci_excludes_zero": true
       },
       "head_popularity_bias@5": {
         "metric": "head_popularity_bias@5",
-        "n": 104,
-        "mean_a": 0.158,
-        "mean_b": 0.1984,
-        "mean_diff_a_minus_b": -0.0404,
-        "ci95_low": -0.0654,
-        "ci95_high": -0.0135,
-        "p_value": 0.0038,
+        "n": 102,
+        "mean_a": 0.1461,
+        "mean_b": 0.1696,
+        "mean_diff_a_minus_b": -0.0235,
+        "ci95_low": -0.0451,
+        "ci95_high": -0.002,
+        "p_value": 0.0564,
         "ci_excludes_zero": true
       }
     },
@@ -747,535 +1291,108 @@
     "top_10_grid_configs": [
       {
         "config": {
-          "name": "grid_k20_p2.0_a0.5_r0.0",
-          "method": "rrf",
-          "channels": [
-            "product",
-            "attribute"
-          ],
-          "weights": {
-            "product": 2.0,
-            "attribute": 0.5
-          },
-          "rrf_k": 20,
-          "channel_depth": 100,
-          "ann_k_per_limit": 30,
-          "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.02976190476190476
-        },
-        "overall_tuning": {
-          "n": 105,
-          "mean_strict_hit@1": 0.1048,
-          "mean_strict_hit@5": 0.1524,
-          "mean_strict_hit@10": 0.181,
-          "mean_strict_hit@20": 0.2381,
-          "mean_strict_ndcg@5": 0.1281,
-          "mean_strict_ndcg@10": 0.1377,
-          "mean_strict_ndcg@20": 0.1512,
-          "mean_mrr": 0.1276,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5825,
-          "mean_head_popularity_bias@5": 0.1264
-        },
-        "s0_s4_tuning": {
-          "n": 84,
-          "mean_strict_hit@1": 0.0476,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.1071,
-          "mean_strict_ndcg@5": 0.0527,
-          "mean_strict_ndcg@10": 0.0567,
-          "mean_strict_ndcg@20": 0.0655,
-          "mean_mrr": 0.0545,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5396,
-          "mean_head_popularity_bias@5": 0.0839
-        },
-        "by_stratum": {
-          "S0": {
-            "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.0714,
-            "mean_mrr": 0.0179
-          },
-          "S1": {
-            "n": 17,
-            "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
-          },
-          "S2": {
-            "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
-          },
-          "S3": {
-            "n": 19,
-            "mean_strict_hit@5": 0.0,
-            "mean_strict_hit@20": 0.1053,
-            "mean_mrr": 0.0071
-          },
-          "S4": {
-            "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.1875,
-            "mean_mrr": 0.0747
-          },
-          "legacy": {
-            "n": 21,
-            "mean_strict_hit@5": 0.5238,
-            "mean_strict_hit@20": 0.7619,
-            "mean_mrr": 0.4197
-          }
-        }
-      },
-      {
-        "config": {
-          "name": "grid_k100_p2.0_a0.5_r0.5",
+          "name": "grid_k60_p1.0_a0.5_r1.0",
           "method": "rrf",
           "channels": [
             "product",
             "attribute",
-            "review"
+            "review",
+            "lexical"
           ],
           "weights": {
-            "product": 2.0,
+            "product": 1.0,
             "attribute": 0.5,
-            "review": 0.5
-          },
-          "rrf_k": 100,
-          "channel_depth": 100,
-          "ann_k_per_limit": 30,
-          "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.007425742574257425
-        },
-        "overall_tuning": {
-          "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.181,
-          "mean_strict_hit@10": 0.219,
-          "mean_strict_hit@20": 0.2381,
-          "mean_strict_ndcg@5": 0.1328,
-          "mean_strict_ndcg@10": 0.1453,
-          "mean_strict_ndcg@20": 0.1505,
-          "mean_mrr": 0.1237,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6325,
-          "mean_head_popularity_bias@5": 0.158
-        },
-        "s0_s4_tuning": {
-          "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0595,
-          "mean_strict_hit@20": 0.0833,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0478,
-          "mean_strict_ndcg@20": 0.0543,
-          "mean_mrr": 0.046,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5805,
-          "mean_head_popularity_bias@5": 0.1008
-        },
-        "by_stratum": {
-          "S0": {
-            "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0208
-          },
-          "S1": {
-            "n": 17,
-            "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
-          },
-          "S2": {
-            "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
-          },
-          "S3": {
-            "n": 19,
-            "mean_strict_hit@5": 0.0,
-            "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
-          },
-          "S4": {
-            "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.0625,
-            "mean_mrr": 0.0312
-          },
-          "legacy": {
-            "n": 21,
-            "mean_strict_hit@5": 0.6667,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4342
-          }
-        }
-      },
-      {
-        "config": {
-          "name": "grid_k60_p2.0_a0.5_r0.5",
-          "method": "rrf",
-          "channels": [
-            "product",
-            "attribute",
-            "review"
-          ],
-          "weights": {
-            "product": 2.0,
-            "attribute": 0.5,
-            "review": 0.5
+            "review": 1.0,
+            "lexical": 1.0
           },
           "rrf_k": 60,
           "channel_depth": 100,
           "ann_k_per_limit": 30,
           "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.012295081967213115
+          "soft_bonus_unit": 0.014344262295081968
         },
         "overall_tuning": {
           "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.181,
-          "mean_strict_hit@10": 0.2095,
-          "mean_strict_hit@20": 0.2476,
-          "mean_strict_ndcg@5": 0.1328,
-          "mean_strict_ndcg@10": 0.1421,
-          "mean_strict_ndcg@20": 0.1519,
-          "mean_mrr": 0.1234,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2095,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3333,
+          "mean_strict_ndcg@5": 0.161,
+          "mean_strict_ndcg@10": 0.1737,
+          "mean_strict_ndcg@20": 0.1953,
+          "mean_mrr": 0.1561,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6133,
-          "mean_head_popularity_bias@5": 0.1522
+          "mean_review_cap_bias@5": 0.6573,
+          "mean_head_popularity_bias@5": 0.1422
         },
         "s0_s4_tuning": {
           "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0595,
-          "mean_strict_hit@20": 0.0952,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0478,
-          "mean_strict_ndcg@20": 0.057,
-          "mean_mrr": 0.0466,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1548,
+          "mean_strict_hit@10": 0.1786,
+          "mean_strict_hit@20": 0.2857,
+          "mean_strict_ndcg@5": 0.1176,
+          "mean_strict_ndcg@10": 0.1253,
+          "mean_strict_ndcg@20": 0.1522,
+          "mean_mrr": 0.116,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5588,
-          "mean_head_popularity_bias@5": 0.096
+          "mean_review_cap_bias@5": 0.6607,
+          "mean_head_popularity_bias@5": 0.1048
         },
         "by_stratum": {
           "S0": {
             "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0187
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1589
           },
           "S1": {
             "n": 17,
             "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
           },
           "S2": {
             "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0884
           },
           "S3": {
             "n": 19,
-            "mean_strict_hit@5": 0.0,
+            "mean_strict_hit@5": 0.0526,
             "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
+            "mean_mrr": 0.0175
           },
           "S4": {
             "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.125,
-            "mean_mrr": 0.0361
+            "mean_strict_hit@5": 0.25,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2208
           },
           "legacy": {
             "n": 21,
-            "mean_strict_hit@5": 0.6667,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4305
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3163
           }
         }
       },
       {
         "config": {
-          "name": "grid_k40_p2.0_a0.5_r0.5",
+          "name": "grid_k100_p1.0_a0.5_r1.0",
           "method": "rrf",
           "channels": [
             "product",
             "attribute",
-            "review"
-          ],
-          "weights": {
-            "product": 2.0,
-            "attribute": 0.5,
-            "review": 0.5
-          },
-          "rrf_k": 40,
-          "channel_depth": 100,
-          "ann_k_per_limit": 30,
-          "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.018292682926829267
-        },
-        "overall_tuning": {
-          "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.1714,
-          "mean_strict_hit@10": 0.2095,
-          "mean_strict_hit@20": 0.2476,
-          "mean_strict_ndcg@5": 0.1281,
-          "mean_strict_ndcg@10": 0.1407,
-          "mean_strict_ndcg@20": 0.1503,
-          "mean_mrr": 0.1217,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5921,
-          "mean_head_popularity_bias@5": 0.1407
-        },
-        "s0_s4_tuning": {
-          "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.0952,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0514,
-          "mean_strict_ndcg@20": 0.0573,
-          "mean_mrr": 0.0469,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.542,
-          "mean_head_popularity_bias@5": 0.0912
-        },
-        "by_stratum": {
-          "S0": {
-            "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0179
-          },
-          "S1": {
-            "n": 17,
-            "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
-          },
-          "S2": {
-            "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
-          },
-          "S3": {
-            "n": 19,
-            "mean_strict_hit@5": 0.0,
-            "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
-          },
-          "S4": {
-            "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.125,
-            "mean_mrr": 0.0382
-          },
-          "legacy": {
-            "n": 21,
-            "mean_strict_hit@5": 0.619,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.421
-          }
-        }
-      },
-      {
-        "config": {
-          "name": "grid_k40_p2.0_a0.5_r0.0",
-          "method": "rrf",
-          "channels": [
-            "product",
-            "attribute"
-          ],
-          "weights": {
-            "product": 2.0,
-            "attribute": 0.5
-          },
-          "rrf_k": 40,
-          "channel_depth": 100,
-          "ann_k_per_limit": 30,
-          "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.01524390243902439
-        },
-        "overall_tuning": {
-          "n": 105,
-          "mean_strict_hit@1": 0.0952,
-          "mean_strict_hit@5": 0.1524,
-          "mean_strict_hit@10": 0.181,
-          "mean_strict_hit@20": 0.2381,
-          "mean_strict_ndcg@5": 0.1239,
-          "mean_strict_ndcg@10": 0.133,
-          "mean_strict_ndcg@20": 0.1465,
-          "mean_mrr": 0.1215,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5806,
-          "mean_head_popularity_bias@5": 0.1225
-        },
-        "s0_s4_tuning": {
-          "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.1071,
-          "mean_strict_ndcg@5": 0.0484,
-          "mean_strict_ndcg@10": 0.0523,
-          "mean_strict_ndcg@20": 0.0611,
-          "mean_mrr": 0.0486,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5371,
-          "mean_head_popularity_bias@5": 0.0791
-        },
-        "by_stratum": {
-          "S0": {
-            "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.0714,
-            "mean_mrr": 0.0179
-          },
-          "S1": {
-            "n": 17,
-            "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
-          },
-          "S2": {
-            "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
-          },
-          "S3": {
-            "n": 19,
-            "mean_strict_hit@5": 0.0,
-            "mean_strict_hit@20": 0.1053,
-            "mean_mrr": 0.0071
-          },
-          "S4": {
-            "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.1875,
-            "mean_mrr": 0.0435
-          },
-          "legacy": {
-            "n": 21,
-            "mean_strict_hit@5": 0.5238,
-            "mean_strict_hit@20": 0.7619,
-            "mean_mrr": 0.4131
-          }
-        }
-      },
-      {
-        "config": {
-          "name": "grid_k100_p1.0_a0.5_r0.25",
-          "method": "rrf",
-          "channels": [
-            "product",
-            "attribute",
-            "review"
+            "review",
+            "lexical"
           ],
           "weights": {
             "product": 1.0,
             "attribute": 0.5,
-            "review": 0.25
-          },
-          "rrf_k": 100,
-          "channel_depth": 100,
-          "ann_k_per_limit": 30,
-          "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.004331683168316832
-        },
-        "overall_tuning": {
-          "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.1619,
-          "mean_strict_hit@10": 0.2286,
-          "mean_strict_hit@20": 0.2381,
-          "mean_strict_ndcg@5": 0.1244,
-          "mean_strict_ndcg@10": 0.1459,
-          "mean_strict_ndcg@20": 0.1484,
-          "mean_mrr": 0.1213,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6421,
-          "mean_head_popularity_bias@5": 0.1696
-        },
-        "s0_s4_tuning": {
-          "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.0833,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0513,
-          "mean_strict_ndcg@20": 0.0544,
-          "mean_mrr": 0.0462,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.595,
-          "mean_head_popularity_bias@5": 0.1153
-        },
-        "by_stratum": {
-          "S0": {
-            "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0214
-          },
-          "S1": {
-            "n": 17,
-            "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
-          },
-          "S2": {
-            "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
-          },
-          "S3": {
-            "n": 19,
-            "mean_strict_hit@5": 0.0,
-            "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
-          },
-          "S4": {
-            "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.0625,
-            "mean_mrr": 0.0312
-          },
-          "legacy": {
-            "n": 21,
-            "mean_strict_hit@5": 0.5714,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4221
-          }
-        }
-      },
-      {
-        "config": {
-          "name": "grid_k100_p2.0_a1.0_r0.5",
-          "method": "rrf",
-          "channels": [
-            "product",
-            "attribute",
-            "review"
-          ],
-          "weights": {
-            "product": 2.0,
-            "attribute": 1.0,
-            "review": 0.5
+            "review": 1.0,
+            "lexical": 1.0
           },
           "rrf_k": 100,
           "channel_depth": 100,
@@ -1285,438 +1402,895 @@
         },
         "overall_tuning": {
           "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.1619,
-          "mean_strict_hit@10": 0.2286,
-          "mean_strict_hit@20": 0.2381,
-          "mean_strict_ndcg@5": 0.1244,
-          "mean_strict_ndcg@10": 0.1459,
-          "mean_strict_ndcg@20": 0.1484,
-          "mean_mrr": 0.1213,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3333,
+          "mean_strict_ndcg@5": 0.1573,
+          "mean_strict_ndcg@10": 0.1736,
+          "mean_strict_ndcg@20": 0.1952,
+          "mean_mrr": 0.156,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6421,
-          "mean_head_popularity_bias@5": 0.1696
+          "mean_review_cap_bias@5": 0.6649,
+          "mean_head_popularity_bias@5": 0.146
         },
         "s0_s4_tuning": {
           "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.0833,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0513,
-          "mean_strict_ndcg@20": 0.0544,
-          "mean_mrr": 0.0462,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.1786,
+          "mean_strict_hit@20": 0.2857,
+          "mean_strict_ndcg@5": 0.113,
+          "mean_strict_ndcg@10": 0.1252,
+          "mean_strict_ndcg@20": 0.1522,
+          "mean_mrr": 0.1159,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.595,
-          "mean_head_popularity_bias@5": 0.1153
+          "mean_review_cap_bias@5": 0.6702,
+          "mean_head_popularity_bias@5": 0.1095
         },
         "by_stratum": {
           "S0": {
             "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0214
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1591
           },
           "S1": {
             "n": 17,
             "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
           },
           "S2": {
             "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0884
           },
           "S3": {
             "n": 19,
-            "mean_strict_hit@5": 0.0,
+            "mean_strict_hit@5": 0.0526,
             "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
+            "mean_mrr": 0.0175
           },
           "S4": {
             "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.0625,
-            "mean_mrr": 0.0312
+            "mean_strict_hit@5": 0.1875,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2198
           },
           "legacy": {
             "n": 21,
-            "mean_strict_hit@5": 0.5714,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4221
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3163
           }
         }
       },
       {
         "config": {
-          "name": "grid_k20_p2.0_a0.5_r0.5",
+          "name": "grid_k100_p1.0_a1.0_r1.0",
           "method": "rrf",
           "channels": [
             "product",
             "attribute",
-            "review"
+            "review",
+            "lexical"
           ],
           "weights": {
-            "product": 2.0,
-            "attribute": 0.5,
-            "review": 0.5
-          },
-          "rrf_k": 20,
-          "channel_depth": 100,
-          "ann_k_per_limit": 30,
-          "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.03571428571428571
-        },
-        "overall_tuning": {
-          "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.181,
-          "mean_strict_hit@10": 0.2095,
-          "mean_strict_hit@20": 0.2476,
-          "mean_strict_ndcg@5": 0.1315,
-          "mean_strict_ndcg@10": 0.1406,
-          "mean_strict_ndcg@20": 0.1499,
-          "mean_mrr": 0.1213,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5921,
-          "mean_head_popularity_bias@5": 0.1311
-        },
-        "s0_s4_tuning": {
-          "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0714,
-          "mean_strict_hit@10": 0.0714,
-          "mean_strict_hit@20": 0.0952,
-          "mean_strict_ndcg@5": 0.0524,
-          "mean_strict_ndcg@10": 0.0524,
-          "mean_strict_ndcg@20": 0.0583,
-          "mean_mrr": 0.0479,
-          "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5396,
-          "mean_head_popularity_bias@5": 0.0839
-        },
-        "by_stratum": {
-          "S0": {
-            "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0179
-          },
-          "S1": {
-            "n": 17,
-            "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
-          },
-          "S2": {
-            "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
-          },
-          "S3": {
-            "n": 19,
-            "mean_strict_hit@5": 0.0,
-            "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
-          },
-          "S4": {
-            "n": 16,
-            "mean_strict_hit@5": 0.125,
-            "mean_strict_hit@20": 0.125,
-            "mean_mrr": 0.0437
-          },
-          "legacy": {
-            "n": 21,
-            "mean_strict_hit@5": 0.619,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4148
-          }
-        }
-      },
-      {
-        "config": {
-          "name": "grid_k100_p1.5_a0.5_r0.25",
-          "method": "rrf",
-          "channels": [
-            "product",
-            "attribute",
-            "review"
-          ],
-          "weights": {
-            "product": 1.5,
-            "attribute": 0.5,
-            "review": 0.25
+            "product": 1.0,
+            "attribute": 1.0,
+            "review": 1.0,
+            "lexical": 1.0
           },
           "rrf_k": 100,
           "channel_depth": 100,
           "ann_k_per_limit": 30,
           "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.005569306930693069
+          "soft_bonus_unit": 0.009900990099009901
         },
         "overall_tuning": {
           "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.1619,
-          "mean_strict_hit@10": 0.2095,
-          "mean_strict_hit@20": 0.2476,
-          "mean_strict_ndcg@5": 0.1244,
-          "mean_strict_ndcg@10": 0.14,
-          "mean_strict_ndcg@20": 0.1501,
-          "mean_mrr": 0.1213,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3333,
+          "mean_strict_ndcg@5": 0.1569,
+          "mean_strict_ndcg@10": 0.1732,
+          "mean_strict_ndcg@20": 0.1948,
+          "mean_mrr": 0.1556,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6248,
-          "mean_head_popularity_bias@5": 0.1561
+          "mean_review_cap_bias@5": 0.6535,
+          "mean_head_popularity_bias@5": 0.1537
         },
         "s0_s4_tuning": {
           "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0595,
-          "mean_strict_hit@20": 0.0952,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0478,
-          "mean_strict_ndcg@20": 0.0572,
-          "mean_mrr": 0.0467,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.1786,
+          "mean_strict_hit@20": 0.2857,
+          "mean_strict_ndcg@5": 0.1125,
+          "mean_strict_ndcg@10": 0.1249,
+          "mean_strict_ndcg@20": 0.1519,
+          "mean_mrr": 0.1156,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5757,
-          "mean_head_popularity_bias@5": 0.0984
+          "mean_review_cap_bias@5": 0.6583,
+          "mean_head_popularity_bias@5": 0.1167
         },
         "by_stratum": {
           "S0": {
             "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0202
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.159
           },
           "S1": {
             "n": 17,
             "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
           },
           "S2": {
             "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
+            "mean_strict_hit@5": 0.1111,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0838
           },
           "S3": {
             "n": 19,
-            "mean_strict_hit@5": 0.0,
+            "mean_strict_hit@5": 0.0526,
             "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
+            "mean_mrr": 0.0175
           },
           "S4": {
             "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.125,
-            "mean_mrr": 0.0354
+            "mean_strict_hit@5": 0.25,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2234
           },
           "legacy": {
             "n": 21,
-            "mean_strict_hit@5": 0.5714,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4196
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3155
           }
         }
       },
       {
         "config": {
-          "name": "grid_k60_p1.0_a0.5_r0.25",
+          "name": "grid_k60_p0.5_a0.5_r1.0",
           "method": "rrf",
           "channels": [
             "product",
             "attribute",
-            "review"
+            "review",
+            "lexical"
           ],
           "weights": {
-            "product": 1.0,
+            "product": 0.5,
             "attribute": 0.5,
-            "review": 0.25
+            "review": 1.0,
+            "lexical": 1.0
           },
           "rrf_k": 60,
           "channel_depth": 100,
           "ann_k_per_limit": 30,
           "soft_bonus_beta": 0.25,
-          "soft_bonus_unit": 0.007172131147540984
+          "soft_bonus_unit": 0.012295081967213115
         },
         "overall_tuning": {
           "n": 105,
-          "mean_strict_hit@1": 0.0762,
-          "mean_strict_hit@5": 0.1619,
-          "mean_strict_hit@10": 0.2095,
-          "mean_strict_hit@20": 0.2476,
-          "mean_strict_ndcg@5": 0.1244,
-          "mean_strict_ndcg@10": 0.1399,
-          "mean_strict_ndcg@20": 0.15,
-          "mean_mrr": 0.1212,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.219,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3333,
+          "mean_strict_ndcg@5": 0.1642,
+          "mean_strict_ndcg@10": 0.1733,
+          "mean_strict_ndcg@20": 0.1946,
+          "mean_mrr": 0.1554,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.6268,
-          "mean_head_popularity_bias@5": 0.158
+          "mean_review_cap_bias@5": 0.6763,
+          "mean_head_popularity_bias@5": 0.1689
         },
         "s0_s4_tuning": {
           "n": 84,
-          "mean_strict_hit@1": 0.0357,
-          "mean_strict_hit@5": 0.0595,
-          "mean_strict_hit@10": 0.0595,
-          "mean_strict_hit@20": 0.0952,
-          "mean_strict_ndcg@5": 0.0478,
-          "mean_strict_ndcg@10": 0.0478,
-          "mean_strict_ndcg@20": 0.0574,
-          "mean_mrr": 0.047,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1667,
+          "mean_strict_hit@10": 0.1905,
+          "mean_strict_hit@20": 0.2857,
+          "mean_strict_ndcg@5": 0.1246,
+          "mean_strict_ndcg@10": 0.1321,
+          "mean_strict_ndcg@20": 0.1557,
+          "mean_mrr": 0.1201,
           "mean_popularity_bias@5": 1.0,
-          "mean_review_cap_bias@5": 0.5781,
-          "mean_head_popularity_bias@5": 0.1032
+          "mean_review_cap_bias@5": 0.675,
+          "mean_head_popularity_bias@5": 0.1262
         },
         "by_stratum": {
           "S0": {
             "n": 14,
-            "mean_strict_hit@5": 0.0714,
-            "mean_strict_hit@20": 0.1429,
-            "mean_mrr": 0.0208
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1607
           },
           "S1": {
             "n": 17,
             "mean_strict_hit@5": 0.1176,
-            "mean_strict_hit@20": 0.1176,
-            "mean_mrr": 0.1176
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
           },
           "S2": {
             "n": 18,
-            "mean_strict_hit@5": 0.0556,
-            "mean_strict_hit@20": 0.0556,
-            "mean_mrr": 0.0556
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0856
           },
           "S3": {
             "n": 19,
-            "mean_strict_hit@5": 0.0,
+            "mean_strict_hit@5": 0.0526,
             "mean_strict_hit@20": 0.0526,
-            "mean_mrr": 0.004
+            "mean_mrr": 0.0175
           },
           "S4": {
             "n": 16,
-            "mean_strict_hit@5": 0.0625,
-            "mean_strict_hit@20": 0.125,
-            "mean_mrr": 0.0361
+            "mean_strict_hit@5": 0.3125,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2437
           },
           "legacy": {
             "n": 21,
-            "mean_strict_hit@5": 0.5714,
-            "mean_strict_hit@20": 0.8571,
-            "mean_mrr": 0.4183
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.2967
+          }
+        }
+      },
+      {
+        "config": {
+          "name": "grid_k40_p1.0_a0.5_r1.0",
+          "method": "rrf",
+          "channels": [
+            "product",
+            "attribute",
+            "review",
+            "lexical"
+          ],
+          "weights": {
+            "product": 1.0,
+            "attribute": 0.5,
+            "review": 1.0,
+            "lexical": 1.0
+          },
+          "rrf_k": 40,
+          "channel_depth": 100,
+          "ann_k_per_limit": 30,
+          "soft_bonus_beta": 0.25,
+          "soft_bonus_unit": 0.021341463414634148
+        },
+        "overall_tuning": {
+          "n": 105,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2095,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3333,
+          "mean_strict_ndcg@5": 0.161,
+          "mean_strict_ndcg@10": 0.173,
+          "mean_strict_ndcg@20": 0.1944,
+          "mean_mrr": 0.1553,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6535,
+          "mean_head_popularity_bias@5": 0.1422
+        },
+        "s0_s4_tuning": {
+          "n": 84,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1548,
+          "mean_strict_hit@10": 0.1786,
+          "mean_strict_hit@20": 0.2857,
+          "mean_strict_ndcg@5": 0.1176,
+          "mean_strict_ndcg@10": 0.1251,
+          "mean_strict_ndcg@20": 0.1519,
+          "mean_mrr": 0.1157,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6583,
+          "mean_head_popularity_bias@5": 0.1048
+        },
+        "by_stratum": {
+          "S0": {
+            "n": 14,
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1568
+          },
+          "S1": {
+            "n": 17,
+            "mean_strict_hit@5": 0.1176,
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
+          },
+          "S2": {
+            "n": 18,
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0884
+          },
+          "S3": {
+            "n": 19,
+            "mean_strict_hit@5": 0.0526,
+            "mean_strict_hit@20": 0.0526,
+            "mean_mrr": 0.0175
+          },
+          "S4": {
+            "n": 16,
+            "mean_strict_hit@5": 0.25,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2208
+          },
+          "legacy": {
+            "n": 21,
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3137
+          }
+        }
+      },
+      {
+        "config": {
+          "name": "grid_k60_p1.0_a1.0_r1.0",
+          "method": "rrf",
+          "channels": [
+            "product",
+            "attribute",
+            "review",
+            "lexical"
+          ],
+          "weights": {
+            "product": 1.0,
+            "attribute": 1.0,
+            "review": 1.0,
+            "lexical": 1.0
+          },
+          "rrf_k": 60,
+          "channel_depth": 100,
+          "ann_k_per_limit": 30,
+          "soft_bonus_beta": 0.25,
+          "soft_bonus_unit": 0.01639344262295082
+        },
+        "overall_tuning": {
+          "n": 105,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2,
+          "mean_strict_hit@10": 0.2571,
+          "mean_strict_hit@20": 0.3238,
+          "mean_strict_ndcg@5": 0.1569,
+          "mean_strict_ndcg@10": 0.176,
+          "mean_strict_ndcg@20": 0.1928,
+          "mean_mrr": 0.1552,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6459,
+          "mean_head_popularity_bias@5": 0.1517
+        },
+        "s0_s4_tuning": {
+          "n": 84,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.1905,
+          "mean_strict_hit@20": 0.2738,
+          "mean_strict_ndcg@5": 0.1125,
+          "mean_strict_ndcg@10": 0.1284,
+          "mean_strict_ndcg@20": 0.1493,
+          "mean_mrr": 0.1151,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6488,
+          "mean_head_popularity_bias@5": 0.1143
+        },
+        "by_stratum": {
+          "S0": {
+            "n": 14,
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.1565
+          },
+          "S1": {
+            "n": 17,
+            "mean_strict_hit@5": 0.1176,
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
+          },
+          "S2": {
+            "n": 18,
+            "mean_strict_hit@5": 0.1111,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0838
+          },
+          "S3": {
+            "n": 19,
+            "mean_strict_hit@5": 0.0526,
+            "mean_strict_hit@20": 0.0526,
+            "mean_mrr": 0.0175
+          },
+          "S4": {
+            "n": 16,
+            "mean_strict_hit@5": 0.25,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2234
+          },
+          "legacy": {
+            "n": 21,
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3155
+          }
+        }
+      },
+      {
+        "config": {
+          "name": "grid_k100_p0.5_a0.5_r1.0",
+          "method": "rrf",
+          "channels": [
+            "product",
+            "attribute",
+            "review",
+            "lexical"
+          ],
+          "weights": {
+            "product": 0.5,
+            "attribute": 0.5,
+            "review": 1.0,
+            "lexical": 1.0
+          },
+          "rrf_k": 100,
+          "channel_depth": 100,
+          "ann_k_per_limit": 30,
+          "soft_bonus_beta": 0.25,
+          "soft_bonus_unit": 0.007425742574257425
+        },
+        "overall_tuning": {
+          "n": 105,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2095,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3333,
+          "mean_strict_ndcg@5": 0.1606,
+          "mean_strict_ndcg@10": 0.1727,
+          "mean_strict_ndcg@20": 0.194,
+          "mean_mrr": 0.1549,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6821,
+          "mean_head_popularity_bias@5": 0.1746
+        },
+        "s0_s4_tuning": {
+          "n": 84,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1548,
+          "mean_strict_hit@10": 0.1905,
+          "mean_strict_hit@20": 0.2857,
+          "mean_strict_ndcg@5": 0.12,
+          "mean_strict_ndcg@10": 0.1314,
+          "mean_strict_ndcg@20": 0.1551,
+          "mean_mrr": 0.1195,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6821,
+          "mean_head_popularity_bias@5": 0.1333
+        },
+        "by_stratum": {
+          "S0": {
+            "n": 14,
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1594
+          },
+          "S1": {
+            "n": 17,
+            "mean_strict_hit@5": 0.1176,
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
+          },
+          "S2": {
+            "n": 18,
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0856
+          },
+          "S3": {
+            "n": 19,
+            "mean_strict_hit@5": 0.0526,
+            "mean_strict_hit@20": 0.0526,
+            "mean_mrr": 0.0175
+          },
+          "S4": {
+            "n": 16,
+            "mean_strict_hit@5": 0.25,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2416
+          },
+          "legacy": {
+            "n": 21,
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.2962
+          }
+        }
+      },
+      {
+        "config": {
+          "name": "grid_k40_p1.0_a1.0_r1.0",
+          "method": "rrf",
+          "channels": [
+            "product",
+            "attribute",
+            "review",
+            "lexical"
+          ],
+          "weights": {
+            "product": 1.0,
+            "attribute": 1.0,
+            "review": 1.0,
+            "lexical": 1.0
+          },
+          "rrf_k": 40,
+          "channel_depth": 100,
+          "ann_k_per_limit": 30,
+          "soft_bonus_beta": 0.25,
+          "soft_bonus_unit": 0.024390243902439025
+        },
+        "overall_tuning": {
+          "n": 105,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2,
+          "mean_strict_hit@10": 0.2571,
+          "mean_strict_hit@20": 0.3238,
+          "mean_strict_ndcg@5": 0.1569,
+          "mean_strict_ndcg@10": 0.175,
+          "mean_strict_ndcg@20": 0.1918,
+          "mean_mrr": 0.1542,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6402,
+          "mean_head_popularity_bias@5": 0.1556
+        },
+        "s0_s4_tuning": {
+          "n": 84,
+          "mean_strict_hit@1": 0.0833,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.1905,
+          "mean_strict_hit@20": 0.2738,
+          "mean_strict_ndcg@5": 0.1125,
+          "mean_strict_ndcg@10": 0.1278,
+          "mean_strict_ndcg@20": 0.1488,
+          "mean_mrr": 0.1146,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.644,
+          "mean_head_popularity_bias@5": 0.119
+        },
+        "by_stratum": {
+          "S0": {
+            "n": 14,
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.156
+          },
+          "S1": {
+            "n": 17,
+            "mean_strict_hit@5": 0.1176,
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
+          },
+          "S2": {
+            "n": 18,
+            "mean_strict_hit@5": 0.1111,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0838
+          },
+          "S3": {
+            "n": 19,
+            "mean_strict_hit@5": 0.0526,
+            "mean_strict_hit@20": 0.0526,
+            "mean_mrr": 0.0175
+          },
+          "S4": {
+            "n": 16,
+            "mean_strict_hit@5": 0.25,
+            "mean_strict_hit@20": 0.5,
+            "mean_mrr": 0.2208
+          },
+          "legacy": {
+            "n": 21,
+            "mean_strict_hit@5": 0.4286,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3128
+          }
+        }
+      },
+      {
+        "config": {
+          "name": "grid_k100_p1.5_a1.0_r1.0",
+          "method": "rrf",
+          "channels": [
+            "product",
+            "attribute",
+            "review",
+            "lexical"
+          ],
+          "weights": {
+            "product": 1.5,
+            "attribute": 1.0,
+            "review": 1.0,
+            "lexical": 1.0
+          },
+          "rrf_k": 100,
+          "channel_depth": 100,
+          "ann_k_per_limit": 30,
+          "soft_bonus_beta": 0.25,
+          "soft_bonus_unit": 0.011138613861386138
+        },
+        "overall_tuning": {
+          "n": 105,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2095,
+          "mean_strict_hit@10": 0.2476,
+          "mean_strict_hit@20": 0.3429,
+          "mean_strict_ndcg@5": 0.1591,
+          "mean_strict_ndcg@10": 0.1717,
+          "mean_strict_ndcg@20": 0.1954,
+          "mean_mrr": 0.1541,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6363,
+          "mean_head_popularity_bias@5": 0.1498
+        },
+        "s0_s4_tuning": {
+          "n": 84,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.1786,
+          "mean_strict_hit@20": 0.2976,
+          "mean_strict_ndcg@5": 0.1081,
+          "mean_strict_ndcg@10": 0.1199,
+          "mean_strict_ndcg@20": 0.1496,
+          "mean_mrr": 0.1096,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6393,
+          "mean_head_popularity_bias@5": 0.1119
+        },
+        "by_stratum": {
+          "S0": {
+            "n": 14,
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1605
+          },
+          "S1": {
+            "n": 17,
+            "mean_strict_hit@5": 0.1176,
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
+          },
+          "S2": {
+            "n": 18,
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0856
+          },
+          "S3": {
+            "n": 19,
+            "mean_strict_hit@5": 0.0526,
+            "mean_strict_hit@20": 0.0526,
+            "mean_mrr": 0.0175
+          },
+          "S4": {
+            "n": 16,
+            "mean_strict_hit@5": 0.1875,
+            "mean_strict_hit@20": 0.5625,
+            "mean_mrr": 0.1885
+          },
+          "legacy": {
+            "n": 21,
+            "mean_strict_hit@5": 0.4762,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3322
+          }
+        }
+      },
+      {
+        "config": {
+          "name": "grid_k100_p1.5_a0.5_r1.0",
+          "method": "rrf",
+          "channels": [
+            "product",
+            "attribute",
+            "review",
+            "lexical"
+          ],
+          "weights": {
+            "product": 1.5,
+            "attribute": 0.5,
+            "review": 1.0,
+            "lexical": 1.0
+          },
+          "rrf_k": 100,
+          "channel_depth": 100,
+          "ann_k_per_limit": 30,
+          "soft_bonus_beta": 0.25,
+          "soft_bonus_unit": 0.009900990099009901
+        },
+        "overall_tuning": {
+          "n": 105,
+          "mean_strict_hit@1": 0.1048,
+          "mean_strict_hit@5": 0.2095,
+          "mean_strict_hit@10": 0.2381,
+          "mean_strict_hit@20": 0.3524,
+          "mean_strict_ndcg@5": 0.1591,
+          "mean_strict_ndcg@10": 0.1688,
+          "mean_strict_ndcg@20": 0.197,
+          "mean_mrr": 0.1541,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6383,
+          "mean_head_popularity_bias@5": 0.146
+        },
+        "s0_s4_tuning": {
+          "n": 84,
+          "mean_strict_hit@1": 0.0714,
+          "mean_strict_hit@5": 0.1429,
+          "mean_strict_hit@10": 0.1667,
+          "mean_strict_hit@20": 0.3095,
+          "mean_strict_ndcg@5": 0.1081,
+          "mean_strict_ndcg@10": 0.1163,
+          "mean_strict_ndcg@20": 0.1516,
+          "mean_mrr": 0.1096,
+          "mean_popularity_bias@5": 1.0,
+          "mean_review_cap_bias@5": 0.6417,
+          "mean_head_popularity_bias@5": 0.1071
+        },
+        "by_stratum": {
+          "S0": {
+            "n": 14,
+            "mean_strict_hit@5": 0.2143,
+            "mean_strict_hit@20": 0.5714,
+            "mean_mrr": 0.1605
+          },
+          "S1": {
+            "n": 17,
+            "mean_strict_hit@5": 0.1176,
+            "mean_strict_hit@20": 0.1765,
+            "mean_mrr": 0.1216
+          },
+          "S2": {
+            "n": 18,
+            "mean_strict_hit@5": 0.1667,
+            "mean_strict_hit@20": 0.2222,
+            "mean_mrr": 0.0856
+          },
+          "S3": {
+            "n": 19,
+            "mean_strict_hit@5": 0.0526,
+            "mean_strict_hit@20": 0.1053,
+            "mean_mrr": 0.0205
+          },
+          "S4": {
+            "n": 16,
+            "mean_strict_hit@5": 0.1875,
+            "mean_strict_hit@20": 0.5625,
+            "mean_mrr": 0.185
+          },
+          "legacy": {
+            "n": 21,
+            "mean_strict_hit@5": 0.4762,
+            "mean_strict_hit@20": 0.5238,
+            "mean_mrr": 0.3322
           }
         }
       }
     ],
     "best_grid_config": {
-      "name": "grid_k20_p2.0_a0.5_r0.0",
-      "method": "rrf",
-      "channels": [
-        "product",
-        "attribute"
-      ],
-      "weights": {
-        "product": 2.0,
-        "attribute": 0.5
-      },
-      "rrf_k": 20,
-      "channel_depth": 100,
-      "ann_k_per_limit": 30,
-      "soft_bonus_beta": 0.25,
-      "soft_bonus_unit": 0.02976190476190476
-    },
-    "best_grid_minus_rrf3": {
-      "strict_hit@20": {
-        "metric": "strict_hit@20",
-        "n": 105,
-        "mean_a": 0.2381,
-        "mean_b": 0.2571,
-        "mean_diff_a_minus_b": -0.019,
-        "ci95_low": -0.0762,
-        "ci95_high": 0.0286,
-        "p_value": 0.7266,
-        "ci_excludes_zero": false
-      },
-      "strict_hit@5": {
-        "metric": "strict_hit@5",
-        "n": 105,
-        "mean_a": 0.1524,
-        "mean_b": 0.1429,
-        "mean_diff_a_minus_b": 0.0095,
-        "ci95_low": -0.0381,
-        "ci95_high": 0.0571,
-        "p_value": 1.0,
-        "ci_excludes_zero": false
-      },
-      "strict_ndcg@10": {
-        "metric": "strict_ndcg@10",
-        "n": 105,
-        "mean_a": 0.1377,
-        "mean_b": 0.1401,
-        "mean_diff_a_minus_b": -0.0024,
-        "ci95_low": -0.0333,
-        "ci95_high": 0.0303,
-        "p_value": 0.8931,
-        "ci_excludes_zero": false
-      },
-      "mrr": {
-        "metric": "mrr",
-        "n": 105,
-        "mean_a": 0.1276,
-        "mean_b": 0.1115,
-        "mean_diff_a_minus_b": 0.0161,
-        "ci95_low": -0.0122,
-        "ci95_high": 0.0485,
-        "p_value": 0.3133,
-        "ci_excludes_zero": false
-      },
-      "review_cap_bias@5": {
-        "metric": "review_cap_bias@5",
-        "n": 103,
-        "mean_a": 0.5825,
-        "mean_b": 0.6892,
-        "mean_diff_a_minus_b": -0.1066,
-        "ci95_low": -0.1494,
-        "ci95_high": -0.065,
-        "p_value": 0.0002,
-        "ci_excludes_zero": true
-      },
-      "head_popularity_bias@5": {
-        "metric": "head_popularity_bias@5",
-        "n": 103,
-        "mean_a": 0.1264,
-        "mean_b": 0.1926,
-        "mean_diff_a_minus_b": -0.0662,
-        "ci95_low": -0.0989,
-        "ci95_high": -0.0348,
-        "p_value": 0.0004,
-        "ci_excludes_zero": true
-      }
-    },
-    "promote_new_default": false,
-    "recommended_default_config": {
-      "name": "rrf3",
+      "name": "grid_k60_p1.0_a0.5_r1.0",
       "method": "rrf",
       "channels": [
         "product",
         "attribute",
-        "review"
+        "review",
+        "lexical"
       ],
       "weights": {
         "product": 1.0,
-        "attribute": 1.0,
-        "review": 1.0
+        "attribute": 0.5,
+        "review": 1.0,
+        "lexical": 1.0
       },
       "rrf_k": 60,
       "channel_depth": 100,
       "ann_k_per_limit": 30,
       "soft_bonus_beta": 0.25,
-      "soft_bonus_unit": 0.012295081967213115
+      "soft_bonus_unit": 0.014344262295081968
     },
-    "decision_rationale": "Retain unweighted rrf3 (k=60, weights=(1,1,1)) as default by parsimony: no weighted RRF configuration achieved a 95% bootstrap CI excluding zero over rrf3 on the tuning split."
+    "best_grid_minus_rrf3": {
+      "strict_hit@20": {
+        "metric": "strict_hit@20",
+        "n": 105,
+        "mean_a": 0.3333,
+        "mean_b": 0.2286,
+        "mean_diff_a_minus_b": 0.1048,
+        "ci95_low": 0.0476,
+        "ci95_high": 0.1619,
+        "p_value": 0.001,
+        "ci_excludes_zero": true
+      },
+      "strict_hit@5": {
+        "metric": "strict_hit@5",
+        "n": 105,
+        "mean_a": 0.2095,
+        "mean_b": 0.1524,
+        "mean_diff_a_minus_b": 0.0571,
+        "ci95_low": 0.019,
+        "ci95_high": 0.1048,
+        "p_value": 0.0312,
+        "ci_excludes_zero": true
+      },
+      "strict_ndcg@10": {
+        "metric": "strict_ndcg@10",
+        "n": 105,
+        "mean_a": 0.1737,
+        "mean_b": 0.1477,
+        "mean_diff_a_minus_b": 0.026,
+        "ci95_low": 0.0055,
+        "ci95_high": 0.0493,
+        "p_value": 0.0213,
+        "ci_excludes_zero": true
+      },
+      "mrr": {
+        "metric": "mrr",
+        "n": 105,
+        "mean_a": 0.1561,
+        "mean_b": 0.1269,
+        "mean_diff_a_minus_b": 0.0292,
+        "ci95_low": 0.0143,
+        "ci95_high": 0.0471,
+        "p_value": 0.0002,
+        "ci_excludes_zero": true
+      },
+      "review_cap_bias@5": {
+        "metric": "review_cap_bias@5",
+        "n": 102,
+        "mean_a": 0.658,
+        "mean_b": 0.6616,
+        "mean_diff_a_minus_b": -0.0036,
+        "ci95_low": -0.0453,
+        "ci95_high": 0.0373,
+        "p_value": 0.8734,
+        "ci_excludes_zero": false
+      },
+      "head_popularity_bias@5": {
+        "metric": "head_popularity_bias@5",
+        "n": 102,
+        "mean_a": 0.1405,
+        "mean_b": 0.1696,
+        "mean_diff_a_minus_b": -0.0291,
+        "ci95_low": -0.0578,
+        "ci95_high": -0.002,
+        "p_value": 0.0546,
+        "ci_excludes_zero": true
+      }
+    },
+    "promote_new_default": true,
+    "recommended_default_config": {
+      "name": "grid_k60_p1.0_a0.5_r1.0",
+      "method": "rrf",
+      "channels": [
+        "product",
+        "attribute",
+        "review",
+        "lexical"
+      ],
+      "weights": {
+        "product": 1.0,
+        "attribute": 0.5,
+        "review": 1.0,
+        "lexical": 1.0
+      },
+      "rrf_k": 60,
+      "channel_depth": 100,
+      "ann_k_per_limit": 30,
+      "soft_bonus_beta": 0.25,
+      "soft_bonus_unit": 0.014344262295081968
+    },
+    "decision_rationale": "Best grid config achieved statistically significant gain over rrf3 on tuning split."
   }
 }

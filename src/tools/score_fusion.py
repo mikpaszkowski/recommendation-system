@@ -19,7 +19,8 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
-CHANNELS: Tuple[str, ...] = ("product", "attribute", "review")
+CHANNELS: Tuple[str, ...] = ("product", "attribute", "review", "lexical")
+DEFAULT_CHANNELS_3: Tuple[str, ...] = ("product", "attribute", "review")
 DEFAULT_ARM = "rrf3"
 FUSION_ARM_ENV = "RETRIEVAL_FUSION_ARM"
 LEGACY_SOFT_BONUS_UNIT = 0.2
@@ -54,8 +55,8 @@ class FusionConfig:
     """Fusion method, enabled channels and their parameters."""
     name: str = DEFAULT_ARM
     method: str = "rrf"
-    channels: Tuple[str, ...] = CHANNELS
-    weights: Dict[str, float] = field(default_factory=lambda: {c: 1.0 for c in CHANNELS})
+    channels: Tuple[str, ...] = DEFAULT_CHANNELS_3
+    weights: Dict[str, float] = field(default_factory=lambda: {c: 1.0 for c in DEFAULT_CHANNELS_3})
     rrf_k: int = 60
     channel_depth: int = 100
     ann_k_per_limit: int = 30
@@ -111,6 +112,14 @@ FUSION_ARMS: Dict[str, FusionConfig] = {
     "wrrf3": FusionConfig(name="wrrf3", weights={"product": 0.60, "attribute": 0.25, "review": 0.15}),
     "cc3": FusionConfig(name="cc3", method="cc"),
     "sum_legacy": FusionConfig(name="sum_legacy", method="sum"),
+    "rrf4": FusionConfig(name="rrf4", channels=CHANNELS, weights={c: 1.0 for c in CHANNELS}),
+    "wrrf4": FusionConfig(
+        name="wrrf4",
+        channels=CHANNELS,
+        weights={"product": 0.35, "attribute": 0.20, "review": 0.15, "lexical": 0.30},
+    ),
+    "cc4": FusionConfig(name="cc4", method="cc", channels=CHANNELS, weights={c: 1.0 for c in CHANNELS}),
+    "lexical_only": FusionConfig(name="lexical_only", channels=("lexical",), weights={"lexical": 1.0}),
 }
 
 

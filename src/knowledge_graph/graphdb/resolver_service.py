@@ -47,10 +47,13 @@ class ResolverService:
         
         with self.connector.session() as session:
             # Tier 1: Exact Match
+            order_clause = "ORDER BY COALESCE(node.product_count, 0) DESC" if node_label == "Taxon" else ""
             t1_query = f"""
             MATCH (node:{node_label})
             WHERE toLower(node.{property_name}) = toLower($text)
-            RETURN {ret_clause}, 1.0 AS score LIMIT {k}
+            RETURN {ret_clause}, 1.0 AS score
+            {order_clause}
+            LIMIT {k}
             """
             result = session.run(t1_query, {"text": text})
             matches = [dict(record) for record in result]
@@ -59,7 +62,7 @@ class ResolverService:
                 return matches
             
             # Tier 2: Substring / Word-Boundary Regex Match
-            if node_label == "Category":
+            if node_label in ("Category", "Taxon"):
                 # Whole-token / word-boundary regex matching to prevent cross-domain contamination
                 # (e.g. 'phone' matching 'Headphones')
                 text_clean = text.lower().strip()
@@ -70,14 +73,18 @@ class ResolverService:
                 t2_query = f"""
                 MATCH (node:{node_label})
                 WHERE node.{property_name} =~ $pattern
-                RETURN {ret_clause}, 0.85 AS score LIMIT {k}
+                RETURN {ret_clause}, 0.85 AS score
+                {order_clause}
+                LIMIT {k}
                 """
                 result = session.run(t2_query, {"pattern": pattern})
             else:
                 t2_query = f"""
                 MATCH (node:{node_label})
                 WHERE toLower(node.{property_name}) CONTAINS toLower($text)
-                RETURN {ret_clause}, 0.85 AS score LIMIT {k}
+                RETURN {ret_clause}, 0.85 AS score
+                {order_clause}
+                LIMIT {k}
                 """
                 result = session.run(t2_query, {"text": text})
             matches = [dict(record) for record in result]
@@ -87,6 +94,12 @@ class ResolverService:
 
         # Tier 3: Vector Search (Fallback)
         logger.info(f"[Resolver] Tiers 1 & 2 failed for '{text}'. Falling back to Tier 3 (Vector Semantic Search).")
+        if node_label == "Taxon":
+            matches = self._resolve_taxon_vector(text, k=k)
+            if matches:
+                logger.info(f"[Resolver] Tier 3 (Taxon Vector) match found for '{text}' with score {matches[0].get('score', 0):.3f}")
+            return matches
+
         try:
             embedding = self.embed_svc.embed_query(text)
         except Exception as e:
@@ -111,6 +124,62 @@ class ResolverService:
                 logger.info(f"[Resolver] Tier 3 (Vector) match found for '{text}' as {node_label} with score {matches[0].get('score', 0):.3f}")
             return matches
 
+    def _ensure_taxon_cache(self):
+        """Loads and embeds all Taxon nodes into memory for fast Tier 3 fallback."""
+        if getattr(self, "_taxon_cache", None) is not None:
+            return
+        self._taxon_cache = []
+        self._taxon_embeddings = None
+        try:
+            with self.connector.session() as session:
+                records = session.run(
+                    "MATCH (t:Taxon) "
+                    "RETURN t.name AS name, t.path AS path, t.product_count AS product_count, "
+                    "t.depth AS depth, t.taxon_id AS taxon_id "
+                    "ORDER BY COALESCE(t.product_count, 0) DESC"
+                ).data()
+            if not records:
+                return
+            self._taxon_cache = records
+            names = [r.get("name") or "" for r in records]
+            if hasattr(self.embed_svc, "embed_documents"):
+                import numpy as np
+                raw_embs = self.embed_svc.embed_documents(names)
+                embs = np.array(raw_embs, dtype=np.float32)
+                norms = np.linalg.norm(embs, axis=1, keepdims=True)
+                norms[norms == 0] = 1.0
+                self._taxon_embeddings = embs / norms
+        except Exception as e:
+            logger.warning(f"[Resolver] Could not initialize Taxon vector cache: {e}")
+
+    def _resolve_taxon_vector(self, text: str, k: int = 3) -> List[Dict]:
+        """In-memory cosine similarity search over cached Taxon embeddings."""
+        self._ensure_taxon_cache()
+        if not self._taxon_cache or self._taxon_embeddings is None:
+            return []
+        try:
+            import numpy as np
+            q_emb = self.embed_svc.embed_query(text)
+            if not q_emb:
+                return []
+            q_vec = np.array(q_emb, dtype=np.float32)
+            q_norm = np.linalg.norm(q_vec)
+            if q_norm > 0:
+                q_vec /= q_norm
+            sims = np.dot(self._taxon_embeddings, q_vec)
+            top_indices = np.argsort(-sims)[:k]
+            matches = []
+            for idx in top_indices:
+                score = float(sims[idx])
+                if score >= self.min_score:
+                    item = dict(self._taxon_cache[idx])
+                    item["score"] = score
+                    matches.append(item)
+            return matches
+        except Exception as e:
+            logger.error(f"[Resolver] Taxon vector search failed for '{text}': {e}")
+            return []
+
     def resolve_brand(self, text: str, k: int = 1) -> List[Dict]:
         return self._execute_waterfall(text, "Brand", "name", "brand_embedding_index", k, ["name"])
 
@@ -119,8 +188,13 @@ class ResolverService:
         # Since waterfall expects a primary property to match against, we use attribute_name.
         return self._execute_waterfall(text, "Attribute", "attribute_name", "attribute_embedding_index", k, ["attribute_name AS name", "attribute_value AS value", "normalized_value AS norm"])
 
+    def resolve_taxon(self, text: str, k: int = 3) -> List[Dict]:
+        return self._execute_waterfall(
+            text, "Taxon", "name", "", k, ["name", "path", "product_count", "depth", "taxon_id"]
+        )
+
     def resolve_category(self, text: str, k: int = 3) -> List[Dict]:
-        return self._execute_waterfall(text, "Category", "name", "category_embedding_index", k, ["name", "path"])
+        return self.resolve_taxon(text, k=k)
 
     def validate_category_candidates(
         self,

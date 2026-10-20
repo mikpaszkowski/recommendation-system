@@ -5,6 +5,85 @@
 
 ---
 
+## 📅 2026-10-20 (Stage 1: Konsumpcja strukturalna i leksykalna Graph v2 — filtracja poddrzew Taxon, relaksacja MACS BROADER, 4-kanałowy RRF z pełnotekstowym BM25 [GV2-07..GV2-09])
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. Release R2b)
+
+> **Kontekst**: Po wdrożeniu stratyfikowanego benchmarku v2 w Release R2b ujawniono krytyczny spadek recallu na zapytaniach $S_0$–$S_4$ ($HR@20$ na poziomie $9.52\%$ vs $90.5\%$ na zapytaniach legacy). Śledztwo w logach Cypher wykazało, że silnik `GraphSearchTool` odpytywał nieistniejące w grafie v2 relacje `BELONGS_TO_CATEGORY` oraz `Category.SUBCATEGORY_OF` (`GQLSTATUS 01N42`), przez co 100% zapytań z filtrem kategorii trafiało do awaryjnego dopasowania słów kluczowych w tytule, odrzucając ślepe na tytuł produkty ze zbioru ewaluacyjnego. Zrealizowano pakiet **Stage 1 (`GV2-07` .. `GV2-09`)** zgodnie z zatwierdzoną specyfikacją techniczną `production_artifacts/Technical_Specification_Stage1.md` oraz raportem badawczym `production_artifacts/Research_Report.md` (§8).
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-20-024**. Potwierdzone pełnym sukcesem testów regresyjnych (`83 passed` w `tests/`) oraz statystycznie istotną poprawą recallu na zbiorze `tuning` ($n = 105$).
+
+#### 🔴 Nowe komponenty
+
+1. **Zestaw testów jednostkowych Stage 1 (`tests/test_stage1_taxon_and_lexical.py` — Critical):**
+   * 9 kompleksowych testów weryfikujących:
+     * `test_gv2_07_resolver_service_resolves_taxon_tier1_exact`: weryfikuje dopasowanie dokładne do węzłów `:Taxon` z sortowaniem po `product_count DESC`.
+     * `test_gv2_07_resolver_service_resolves_taxon_tier3_in_memory_vector`: testuje semantyczne dopasowanie wektorowe w pamięci podręcznej taksonów.
+     * `test_gv2_07_build_filters_generates_taxon_subtree_cypher`: weryfikuje generowanie zapytania Cypher z tranzytywnym przejściem `[:IN_TAXON]->(:Taxon)-[:BROADER*0..7]->(:Taxon)` dla pojedynczej kategorii oraz kwarantannę reguły tytułowej wyłącznie dla produktów bez przypisanego taksonu.
+     * `test_gv2_07_build_filters_categories_list_generates_taxon_subtree_cypher`: weryfikuje wielowartościowe filtry `categories`.
+     * `test_gv2_07_macs_relaxation_steps_up_broader_hierarchy`: sprawdza uogólnianie taksonomiczne w relaksacji MACS (przejście do węzła nadrzędnego przez krawędź `[:BROADER]` przed całkowitym porzuceniem filtru).
+     * `test_gv2_08_sanitize_lucene_query`: sanityzacja zapytań Lucene (obsługa znaków specjalnych, walut, myślników).
+     * `test_gv2_08_build_channel_query_lexical`: generowanie zapytania kanału leksykalnego przez indeks pełnotekstowy `product_fulltext_index`.
+     * `test_gv2_08_score_fusion_rrf4_and_wrrf4_presets`: integracja 4 kanałów w `score_fusion.py` i ramię `rrf4`/`wrrf4`.
+     * `test_gv2_09_dynamic_ann_oversampling_for_small_subtrees`: skalowanie `ann_k_per_limit` dla wybiórczych poddrzew taksonomicznych ($< 5000$ produktów).
+
+2. **Rozdział 15 pracy magisterskiej (`thesis/15-doc-taxonomic-lexical-fusion.md` — High):**
+   * Sformalizowano wkład naukowy: *Taxonomic Hierarchy Traversal and Multi-Channel Lexical-Structural Fusion*.
+   * Udokumentowano matematyczny model domknięcia tranzytywnego $\mathcal{S}(T)$, relaksację topologiczną MACS, 4-kanałową fuzję $RRF_4$ oraz dowody statystyczne z testów randomizacyjnych i bootstrapowych na $n = 105$ zapytaniach. Zarejestrowano w `thesis/README.md`.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Przejście na taksonomię `Taxon` w `ResolverService` (`src/knowledge_graph/graphdb/resolver_service.py` — Critical):**
+   * Przekierowano `resolve_category` oraz dodano `resolve_taxon` do odpytywania węzłów `:Taxon` zamiast dawnych 38 węzłów `:Category`.
+   * **Poziom 1 (Exact)**: `MATCH (node:Taxon) WHERE toLower(node.name) = toLower($text)` z sortowaniem po `product_count DESC`.
+   * **Poziom 2 (Regex / Word-Boundary)**: `node.name =~ $pattern` dopasowujący całe tokeny z tolerancją na liczbę mnogą i odmiany, z priorytetyzacją węzłów o wyższej liczbie produktów.
+   * **Poziom 3 (Wektorowy Fallback w pamięci)**: `_ensure_taxon_cache()` i `_resolve_taxon_vector()` ładują 1,183 nazwy taksonów i ich wektory osadzeń do znormalizowanej macierzy `(1183, 384)`, wykonując iloczyn skalarny w czasie $< 8\text{ ms}$ na CPU, eliminując konieczność kosztownych skanów grafu czy zapisu do bazy.
+
+2. **Cypher Subtree Filtering & MACS `BROADER` Relaxation w `GraphSearchTool` (`src/tools/graph_search_tool.py` — Critical):**
+   * Zastąpiono niespójny filtr `BELONGS_TO_CATEGORY` / `SUBCATEGORY_OF` klauzulą tranzytywnego dopasowania poddrzewa taksonomicznego:
+     `MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon) WHERE toLower(ancestor.name) = toLower($category_filter) OR toLower(leaf.name) = toLower($category_filter) ...`
+   * Dopasowanie po tytule zostało ograniczone wyłącznie do produktów niemających relacji `IN_TAXON` (`NOT EXISTS { MATCH (node)-[:IN_TAXON]->(:Taxon) }`), całkowicie eliminując zjawisko zanieczyszczenia i odrzucania poprawnych produktów.
+   * W relaksacji MACS wprowadzono uogólnianie taksonomiczne: w przypadku gdy liczba kandydatów $< 3$, system wykonuje zapytanie `MATCH (child:Taxon)-[:BROADER]->(parent:Taxon)` i rozszerza filtr kategorii o 1 poziom wyżej w hierarchii przed ewentualnym usunięciem filtru.
+   * Dodano sanityzator zapytań pełnotekstowych Lucene `_sanitize_lucene_query` czyszczący operatory `+ - && || ! ( ) { } [ ] ^ " ~ * ? : \ / $`.
+   * Podłączono 4. kanał wyszukiwania `lexical` oparty o `CALL db.index.fulltext.queryNodes('product_fulltext_index', $query_text)`.
+   * Wdrożono dynamiczne skalowanie nadsamplingu ANN (`ann_k_per_limit` skalowane z 30 do nawet 60 w zależności od wielkości poddrzewa `Taxon.product_count < 5000`), zapobiegając ucinaniu niszowych kategorii przez globalny ANN przed filtracją Cypher.
+   * Zaktualizowano `DETAIL_QUERY`, `_execute_legacy_sum_search` oraz `_execute_cypher_search`, aby zwracały listę taksonów `taxa` w polu `category`.
+
+3. **Rozszerzenie fuzji rangowej o kanał leksykalny (`src/tools/score_fusion.py` — High):**
+   * Rozszerzono krotkę kanałów: `CHANNELS: Tuple[str, ...] = ("product", "attribute", "review", "lexical")`.
+   * Zachowano pełną zgodność wsteczną dla domyślnego ramienia `DEFAULT_ARM = "rrf3"` oraz `rrf2`, `wrrf3`, `cc3`, `sum_legacy`.
+   * Wprowadzono nowe predefiniowane ramiona: `rrf4` (równe wagi 1.0 dla 4 kanałów), `wrrf4` (`0.35 product, 0.20 attribute, 0.15 review, 0.30 lexical`), `cc4` (kombinacja wypukła 4 kanałów) oraz `lexical_only`.
+
+4. **Aktualizacja skryptu strojenia `tune_fusion_r2b.py` (`scripts/tune_fusion_r2b.py` — Medium):**
+   * Zaktualizowano rejestrację trafień kanałowych, aby obejmowała kanał `lexical` zwracany przez `GraphSearchTool` przy konfiguracji `rrf4`.
+
+---
+
+### Wyniki empiryczne i weryfikacja na zbiorze `tuning` ($n = 105$ zapytań)
+
+Wykonano pełne strojenie i porównanie ramion na zamrożonym zbiorze `tuning` (`evaluations/benchmarks/r2b_tuning_report.json`):
+
+| Ramię fuzji | Kanały | Ogólny $HR@20$ ($n=105$) | $S_0$–$S_4$ $HR@20$ ($n=84$) | $NDCG@10$ | $MRR$ | $\text{RevCapBias}@5$ | $\text{HeadPopBias}@5$ |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `rrf3` (Stage 0 bazowy) | `prod`, `attr`, `rev` | `0.2286` | `0.1548` | `0.1477` | `0.1269` | `0.6616` | `0.1696` |
+| `rrf2` | `prod`, `attr` | `0.2476` | `0.2143` | `0.1155` | `0.1109` | `0.5982` | `0.1380` |
+| `wrrf3` | `0.60 / 0.25 / 0.15` | `0.2381` | `0.1667` | `0.1421` | `0.1236` | `0.6145` | `0.1461` |
+| `cc3` | Wypukła $(3\text{ ch})$ | `0.2381` | `0.1667` | `0.1290` | `0.1157` | `0.6557` | `0.1696` |
+| **`rrf4` (Stage 1)** | `prod`, `attr`, `rev`, `lex` | **`0.3238`** | **`0.2738`** | **`0.1760`** | **`0.1552`** | `0.6459` | `0.1517` |
+| **`wrrf4` (Stage 1)** | `0.35 / 0.20 / 0.15 / 0.30` | **`0.3238`** | **`0.2738`** | **`0.1647`** | **`0.1470`** | `0.6135` | `0.1422` |
+| **`cc4` (Stage 1)** | Wypukła $(4\text{ ch})$ | **`0.3333`** | **`0.2976`** | **`0.1614`** | **`0.1466`** | `0.6363` | `0.1460` |
+| `lexical_only` | Czysty BM25 | `0.3238` | `0.2976` | `0.1725` | `0.1580` | `0.6211` | `0.1422` |
+| **Optymalna siatka (`1:0.5:1:1`, $k=60$)** | Wagi optymalne | **`0.3333`** | **`0.2857`** | **`0.1737`** | **`0.1561`** | `0.6580` | `0.1405` |
+
+**Istotność statystyczna (Najlepsza konfiguracja 4-kanałowa vs `rrf3`, $n=105$):**
+- $\Delta\text{Strict-Hit@20}$: **`+0.1048`** (+10.48 pp, **+45.8% relatywnie**), **95% CI `[+0.0476, +0.1619]`**, **$p = 0.0010$** (bardzo silna istotność statystyczna, przedział całkowicie wyklucza zero).
+- $\Delta\text{Strict-Hit@5}$: **`+0.0571`** (+5.71 pp), **95% CI `[+0.0190, +0.1048]`**, **$p = 0.0312$**.
+- $\Delta\text{NDCG@10}$: **`+0.0260`** (+2.60 pp), **95% CI `[+0.0055, +0.0493]`**, **$p = 0.0213$**.
+- $\Delta\text{MRR}$: **`+0.0292`** (+2.92 pp), **95% CI `[+0.0143, +0.0471]`**, **$p = 0.0002$**.
+- **Odzyskanie recallu w warstwach $S_0$–$S_4$**: $HR@20$ wzrosło z **`9.52%`** (przed usunięciem błędu rozłączenia kategorii) do **`27.38%`** w `rrf4` i **`29.76%`** w `cc4` (prawie **trzykrotny wzrost** skuteczności wyszukiwania na zapytaniach bez wycieku słów kluczowych z tytułów).
+
+---
+
 ## 📅 2026-10-20 (Release R2b: Stratyfikowany Benchmark v2 [RS-21], maskowanie recenzji S1 [G-9], redefinicja metryk obciążenia oraz strojenie fuzji RS-02 / RS-25; czyszczenie martwych benchmarków)
 
 ### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. ukończenia Graph v2 oraz Stage 0 `GV2-01`..`GV2-06`)

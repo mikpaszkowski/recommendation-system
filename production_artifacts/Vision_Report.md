@@ -47,6 +47,22 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-10-20-024: Stage 1 Graph v2 Structural & Lexical Consumption — Taxon Subtree Filtering, BROADER MACS Relaxation, and Lexical RRF Channel (GV2-07 .. GV2-09)
+**Context**: Release R2b tuning on live Graph v2 exposed a critical recall cliff ($HR@20$ collapsing from $90.5\%$ on legacy queries to $9.52\%$ on $S_0$–$S_4$). Empirical investigation confirmed that GraphSearchTool was querying legacy Graph v1 `BELONGS_TO_CATEGORY` and `Category.SUBCATEGORY_OF` relationships which do not exist in Graph v2. This caused 100% of category-filtered products to fail the graph condition and fall back to title matching, which failed on title-blind benchmark queries. Furthermore, Graph v2's prebuilt online `product_fulltext_index` and 1,183-node `Taxon` tree were unconsumed by the retrieval engine.
+**Decision**:
+1. **Taxon Hierarchy Consumption (`GV2-07`, `RS-24`, `RS-10`)**:
+   - Re-route `ResolverService.resolve_category` to match against the 1,183 `:Taxon` nodes (Tier 1 exact, Tier 2 word-boundary regex, Tier 3 in-memory vector projection).
+   - Update `GraphSearchTool._build_filters` to match `(:ParentProduct)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)` matching leaf or ancestor, with title fallback restricted to products without `IN_TAXON`.
+   - Upgrade MACS category relaxation: when candidates $< 3$, query `(child:Taxon)-[:BROADER]->(parent:Taxon)` to generalize one taxonomic level before dropping the category filter.
+2. **Online Lexical Channel in RRF (`GV2-08`, `RS-03`)**:
+   - Add `product_fulltext_index` as the 4th MaxP retrieval channel (`lexical`) in `score_fusion.py` and `GraphSearchTool`, with Lucene query sanitization.
+   - Define fusion presets `rrf4` (equal weights), `wrrf4` (`0.35 product, 0.20 attribute, 0.15 review, 0.30 lexical`), and `cc4`.
+3. **Subtree Selectivity-Based ANN Sizing (`GV2-09`, `RS-07`)**:
+   - Leverage `Taxon.product_count` to detect selective categories ($< 5,000$ products) and dynamically scale ANN oversampling factor `ann_k_per_limit` to prevent candidate starvation before Cypher post-filtering.
+**Rationale**: Restores end-to-end structural alignment with live Graph v2, eliminates the title-blind recall cliff, introduces high-precision lexical retrieval for technical queries, and enables principled taxonomic constraint relaxation.
+**Status**: ✅ Accepted
+
+
 ### 📅 2026-10-20-023: Removal of Blanket Training Ban — Targeted Model Training Permitted When Beneficial
 **Context**: Previously, Vision Report §1 and §4 contained a strict constraint ("Abandoning Custom Model Training") that ruled out training custom RL policies, GCN/GNN representations, or learned adapters. Following analysis of multi-turn conversational recommender paradigms (**CRM** — Sun & Zhang, SIGIR 2018; **CRIF** — Hu et al., SIGIR 2022) and multi-turn preference elicitation needs, the user explicitly directed removing the blanket prohibition on training.
 **Decision**:

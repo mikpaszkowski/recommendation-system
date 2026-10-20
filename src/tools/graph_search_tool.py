@@ -25,14 +25,17 @@ CHANNEL_INDEXES = {
     "product": "product_embedding_index",
     "attribute": "attribute_embedding_index",
     "review": "review_embedding_index",
+    "lexical": "product_fulltext_index",
 }
 
 DETAIL_QUERY = """
 MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins
 OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
 OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
+WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT c.name) AS cats
 RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
-       collect(DISTINCT c.name) AS category, elementId(node) AS id,
+       CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END AS category, elementId(node) AS id,
        node.features AS features, node.details_text AS details_text,
        node.description AS description, node.avg_rating AS avg_rating
 """
@@ -86,6 +89,16 @@ class GraphSearchTool:
         except Exception as e:
             logger.warning(f"Failed to initialize ResolverService: {e}. Filter normalization disabled.")
             self.resolver = None
+
+    @staticmethod
+    def _sanitize_lucene_query(text: Optional[str]) -> str:
+        """Sanitizes raw text for Neo4j fulltext index Lucene query syntax."""
+        if not text or not str(text).strip():
+            return "*"
+        tokens = re.findall(r"[a-zA-Z0-9]+", str(text))
+        if not tokens:
+            return "*"
+        return " ".join(tokens)
 
     @staticmethod
     def _clean_params_for_metadata(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -236,9 +249,37 @@ class GraphSearchTool:
                     if relaxed:
                         result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
                     
-                    # Pass 2: Drop Category constraint if still failing
+                    # Pass 2: Taxonomic step-up via BROADER before dropping category
                     if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
-                        logger.warning(f"[GST] MACS Triggered: Yield still < 3. Dropping category constraint.")
+                        current_cat = filters.get("category")
+                        if isinstance(current_cat, (list, tuple)) and current_cat:
+                            current_cat = current_cat[0]
+                        parent_cat = None
+                        if current_cat:
+                            try:
+                                with self.db.session() as s:
+                                    p_rec = s.run(
+                                        "MATCH (child:Taxon)-[:BROADER]->(parent:Taxon) "
+                                        "WHERE toLower(child.name) = toLower($cat) "
+                                        "RETURN parent.name AS parent_name LIMIT 1",
+                                        {"cat": str(current_cat)}
+                                    ).single()
+                                    if p_rec and p_rec.get("parent_name"):
+                                        parent_cat = p_rec["parent_name"]
+                            except Exception as e:
+                                logger.warning(f"[GST] MACS Taxon step-up query failed: {e}")
+
+                        if parent_cat and parent_cat.lower() != str(current_cat).lower():
+                            logger.warning(f"[GST] MACS Triggered: Broadening category '{current_cat}' -> '{parent_cat}'")
+                            filters["category"] = parent_cat
+                            if "categories" in filters:
+                                filters.pop("categories", None)
+                            relaxed_constraints.append(f"Broadened category constraint from '{current_cat}' to parent category '{parent_cat}'")
+                            result = self._execute_hybrid_search(text, filters, raw_filters, limit, config, mask_review_asins=masked_reviews)
+
+                    # Pass 3: Drop Category constraint if still failing
+                    if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
+                        logger.warning(f"[GST] MACS Triggered: Yield still < 3 after category broadening. Dropping category constraint.")
                         filters.pop("category", None)
                         filters.pop("categories", None)
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
@@ -337,7 +378,7 @@ class GraphSearchTool:
             )
         return self._execute_fused_search(
             query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
-            mask_review_asins=mask_review_asins,
+            mask_review_asins=mask_review_asins, text=text,
         )
 
     def _execute_vector_search(self, text: str, limit: int, config: Optional[FusionConfig] = None,
@@ -354,7 +395,7 @@ class GraphSearchTool:
             )
         return self._execute_fused_search(
             query_vector, None, {}, limit, config, strategy="vector_only",
-            mask_review_asins=mask_review_asins,
+            mask_review_asins=mask_review_asins, text=text,
         )
 
     @staticmethod
@@ -379,10 +420,20 @@ LIMIT $depth""",
             return "\n".join(line for line in query.splitlines() if line.strip())
         if channel == "attribute":
             match_clause = "MATCH (node:ParentProduct)-[:HAS_ATTRIBUTE]->(hit)"
-            reason_expr = "'Attribute Match: ' + coalesce(hit.attribute_name, '') + '=' + coalesce(hit.attribute_value, hit.normalized_value, '')"
+            reason_expr = "'Attribute Match: ' + coalesce(hit.attribute_name, '') + '=' + coalesce(hit.attribute_value, '')"
         elif channel == "review":
             match_clause = "MATCH (hit)-[:ABOUT_PRODUCT]->(node:ParentProduct)"
             reason_expr = "'Review Match: ' + coalesce(hit.review_title, '')"
+        elif channel == "lexical":
+            query = f"""CALL db.index.fulltext.queryNodes('{CHANNEL_INDEXES["lexical"]}', $query_text) YIELD node, score
+{where_line}
+WITH node, score, 'Fulltext Lexical Match' AS reason
+ORDER BY score DESC, reason ASC
+WITH node, max(score) AS similarity, head(collect(reason)) AS reason
+RETURN node.parent_asin AS asin, similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth"""
+            return "\n".join(line for line in query.splitlines() if line.strip())
         else:
             raise ValueError(f"Unknown retrieval channel '{channel}'. Valid channels: {list(CHANNELS)}")
 
@@ -404,7 +455,8 @@ LIMIT $depth""",
 
     def _execute_fused_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
                               limit: int, config: FusionConfig, strategy: str,
-                              mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+                              mask_review_asins: Optional[Sequence[str]] = None,
+                              text: Optional[str] = None) -> Dict[str, Any]:
         """
         Runs one MaxP query per enabled channel, fuses the ranked lists (RRF or CC) and
         fetches display details for the fused top `limit`. Every item carries its
@@ -413,7 +465,23 @@ LIMIT $depth""",
         tag = "Hybrid" if where_str else "Vector"
         params: Dict[str, Any] = dict(filter_params)
         params["vector"] = query_vector
-        params["k"] = limit * config.ann_k_per_limit
+        params["query_text"] = self._sanitize_lucene_query(text) if text else "*"
+
+        # GV2-09: Selectivity-based dynamic ANN oversampling for selective Taxon subtrees
+        ann_factor = config.ann_k_per_limit
+        cat_filter = filter_params.get("category_filter")
+        if cat_filter and hasattr(self, "resolver") and self.resolver:
+            try:
+                cat_matches = self.resolver.resolve_category(str(cat_filter), k=1)
+                if cat_matches and "product_count" in cat_matches[0]:
+                    pc = cat_matches[0].get("product_count")
+                    if pc and pc < 5000:
+                        ann_factor = min(60, max(30, int(30 * (5000 / max(pc, 500)))))
+                        logger.info(f"[GST:{tag}] Selective Taxon '{cat_filter}' (count={pc}): scaling ann_k_per_limit {config.ann_k_per_limit} -> {ann_factor}")
+            except Exception as e:
+                logger.debug(f"[GST:{tag}] Could not evaluate Taxon subtree size: {e}")
+
+        params["k"] = limit * ann_factor
         params["depth"] = config.channel_depth
         masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
         if masked_set:
@@ -531,7 +599,7 @@ LIMIT $depth""",
             "$k", 
             yield_alias="node", 
             score_alias="score", 
-            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
+            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, '') AS match_reason"
         )
         
         rev_where = "\nWHERE NOT p.parent_asin IN $mask_review_asins" if masked_set else ""
@@ -562,9 +630,11 @@ LIMIT $depth""",
         WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
         {where_line}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+        OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
+        WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT c.name) AS cats, total_score, match_reasons
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
+               CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
                match_reasons, node.features as features, node.details_text as details_text,
                node.description as description, node.avg_rating as avg_rating
         ORDER BY score DESC
@@ -596,18 +666,21 @@ LIMIT $depth""",
         MATCH (node:ParentProduct)
         WHERE {where_str}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+        OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
-        WITH node, b, c,
+        WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT c.name) AS cats,
              coalesce(node.rating, node.avg_rating, 0.0) AS raw_rating,
              coalesce(node.rating_count, node.review_count, 0) AS raw_count,
              coalesce(node.price, 999999.0) AS sort_price
-        WITH node, b, c, sort_price,
+        WITH node, b,
+             (CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END) AS category,
+             sort_price,
              ((10.0 * 4.0 + (toFloat(raw_count) * raw_rating)) / (10.0 + toFloat(raw_count))) AS bayes_rating,
              log(1.0 + CASE WHEN toFloat(raw_count) > 500.0 THEN 500.0 ELSE toFloat(raw_count) END) AS volume_factor
-        WITH node, b, c, sort_price,
+        WITH node, b, category, sort_price,
              (bayes_rating * volume_factor) AS relevance_score
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, relevance_score as score, elementId(node) as id, node.parent_asin as asin,
+               category, relevance_score as score, elementId(node) as id, node.parent_asin as asin,
                node.features as features, node.details_text as details_text,
                node.description as description, node.avg_rating as avg_rating
         ORDER BY score DESC, coalesce(price, 999999.0) ASC
@@ -963,11 +1036,16 @@ LIMIT $depth""",
                 where_clauses.append(f"""
                 (
                     EXISTS {{
-                        MATCH (node)-[:BELONGS_TO_CATEGORY]->(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)
-                        WHERE c.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
+                        MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)
+                        WHERE toLower(ancestor.name) = toLower($category_filter)
+                           OR toLower(leaf.name) = toLower($category_filter)
+                           OR ancestor.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
                            OR leaf.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
                     }}
-                    OR {title_condition}
+                    OR (
+                        NOT EXISTS {{ MATCH (node)-[:IN_TAXON]->(:Taxon) }}
+                        AND {title_condition}
+                    )
                 )
                 """)
                 params["category_filter"] = value
@@ -987,10 +1065,13 @@ LIMIT $depth""",
                 where_clauses.append("""
                 (
                     EXISTS {
-                        MATCH (node)-[:BELONGS_TO_CATEGORY]->(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)
-                        WHERE ANY(cat_rx IN $categories_filter WHERE c.name =~ cat_rx OR leaf.name =~ cat_rx)
+                        MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)
+                        WHERE ANY(cat_rx IN $categories_filter WHERE ancestor.name =~ cat_rx OR leaf.name =~ cat_rx)
                     }
-                    OR ANY(raw_rx IN $raw_categories_filter WHERE toLower(node.title) =~ raw_rx)
+                    OR (
+                        NOT EXISTS { MATCH (node)-[:IN_TAXON]->(:Taxon) }
+                        AND ANY(raw_rx IN $raw_categories_filter WHERE toLower(node.title) =~ raw_rx)
+                    )
                 )
                 """)
                 params["categories_filter"] = cat_regexes
