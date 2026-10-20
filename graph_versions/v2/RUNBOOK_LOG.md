@@ -118,3 +118,5 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
   no arm changes significantly (MRR p_Holm ≥ 0.875). Largest moves: rrf3 MRR 0.226 → 0.319 (+0.093, 95% CI
   [-0.004, +0.208]); vector_only MRR 0.162 → 0.047. Full table: `graph_versions/v2/baseline_comparison.json`.
   Awaiting user review (CP-9).
+- **CP-9 accepted by the user (2026-10-20).** F4 (graph v2 rebuild) is complete. Next: R2b benchmark freeze on v2
+  (with the G-9 S1 redefinition) and a redefinition of review-coverage-bias@K, which no longer separates arms on v2.

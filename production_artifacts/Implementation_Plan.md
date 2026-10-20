@@ -6,6 +6,7 @@
 > **Retrieval redesign**: 2026-10-17 — Retrieval score redesign roadmap (releases R1–R5, work packages `RS-xx`) added under A1.1. Source: `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`.
 > **R2a**: 2026-10-18 — Release R2a (RS-23 spurious-CLARIFY fix, constraint-satisfaction@K, paired statistics, citable-run provenance, `evaluations_archive/`) implemented; exit gate PASS (`production_artifacts/Audit_Report.md`, "R2a exit gate"). R2b (RS-21 benchmark v2, RS-02 evidence) is open.
 > **Graph v2**: 2026-10-19 — F4 added (user-approved). 39% of live products were empty "ghost" nodes; the graph is rebuilt from the raw Amazon 2023 files (Vision 2026-10-19-018 … 021). Code done and audited; no graph operation run yet. R2b waits for F4.
+> **Graph v2 built**: 2026-10-20 — F4 complete. Live Neo4j runs on volume `kg_neo4j_data_v2` (265,307 products, 8 untitled; 3,382,248 reviews; 1,183-node category tree), `GraphVersion` v2 stamped; v1 kept as a stopped container and a dump. R2b (benchmark v2) is next.
 
 ---
 
@@ -254,14 +255,14 @@ MATCH (p:ParentProduct) RETURN p LIMIT 1;
   ```
 
 ### F4 — Graph v2 Rebuild (Vision 2026-10-19-018 … 021)
-**Status (2026-10-19): code implemented and audited (PASS WITH FIXES, delta audit PASS; `production_artifacts/Audit_Report_Graph_Rebuild.md`); no graph operation run yet.** Spec: `production_artifacts/Technical_Specification_Graph_Rebuild.md`. Research: `production_artifacts/Research_Report_Graph_Rebuild.md`. Supersedes the curated-subset story of F2/F3 for the live graph. Runbook: `scripts/graph_ingestion/README.md` ("Graph v2").
-* [x] **F4.1 Code**: transform package `src/knowledge_graph/graph_v2/` and `scripts/graph_ingestion/build_graph_v2.py` (catalogue-first products, K-11/K-12 review selection, `Taxon` tree, lineage); import, post-import and validation scripts; `embedding_templates.py`; legacy guards (`batch_ingest.py` MERGE → MATCH, skip-empty in `backfill_embeddings.py`, `AmazonDataProcessor` field names); G-12 prompt cleanup; `GraphVersion` in `provenance.py`; compose volume and memory via env. Not yet committed.
-* [ ] **F4.2 Pre-flight** (read-only) and user-approved `graph_versions/v2/build_params.json` (CP-1).
-* [ ] **F4.3 Start gate**: R2a v1 reference runs archived and confirmed (CP-2); catalogue frozen; v1 stopped and dumped (SHA-256 in `graph_versions/v1/DUMP.json`).
-* [ ] **F4.4 Pilot** (5%) on a scratch volume; size and time extrapolation approved.
-* [ ] **F4.5 Full import** into `kg_neo4j_data_v2`; post-import (constraints, embeddings with v1 templates, top-5 review embeddings, vector indexes in procedure form, full-text index).
-* [ ] **F4.6 Validation gate** H-01 … H-18 passed; `GraphVersion` v2 stamped; `graph_versions/v2/*` committed.
-* [ ] **F4.7 v2 baseline**: R1 arms on legacy-21, r = 3, at the allow-listed baseline commit; archived; v1 vs v2 comparison reviewed.
+**Status (2026-10-20): ✅ done.** Graph v2 is the live graph: built, validated (18/18 hard gates), stamped `GraphVersion` v2, v2 baseline accepted at CP-9. Record: `graph_versions/v2/` (incl. `RUNBOOK_LOG.md`, `validation_report.json`, `baseline_comparison.json`). Code audited (PASS WITH FIXES, delta audit PASS; `production_artifacts/Audit_Report_Graph_Rebuild.md`); three post-import bugs found during the build were fixed with tests (`8b10a35`, `0a32604`). Spec: `production_artifacts/Technical_Specification_Graph_Rebuild.md`. Research: `production_artifacts/Research_Report_Graph_Rebuild.md`. Supersedes the curated-subset story of F2/F3 for the live graph. Runbook: `scripts/graph_ingestion/README.md` ("Graph v2").
+* [x] **F4.1 Code**: transform package `src/knowledge_graph/graph_v2/` and `scripts/graph_ingestion/build_graph_v2.py` (catalogue-first products, K-11/K-12 review selection, `Taxon` tree, lineage); import, post-import and validation scripts; `embedding_templates.py`; legacy guards (`batch_ingest.py` MERGE → MATCH, skip-empty in `backfill_embeddings.py`, `AmazonDataProcessor` field names); G-12 prompt cleanup; `GraphVersion` in `provenance.py`; compose volume and memory via env.
+* [x] **F4.2 Pre-flight** (read-only) and user-approved `graph_versions/v2/build_params.json` (CP-1, 2026-10-20). P-04 crashed twice on MPS out-of-memory before the fix in `8306d9b`; encode batch 32.
+* [x] **F4.3 Start gate** (CP-2 to CP-4, 2026-10-20): R2a v1 reference runs archived and confirmed (CP-2); catalogue frozen; v1 stopped and dumped (SHA-256 in `graph_versions/v1/DUMP.json`).
+* [x] **F4.4 Pilot** (5%) on a scratch volume; size and time extrapolation approved (CP-5: 18/18 gates; embedding estimate 2.25 h, store 12.5 GB).
+* [x] **F4.5 Full import** (CP-6/CP-7: 94 s import, 0 bad rows; post-import about 2.6 h) into `kg_neo4j_data_v2`; post-import (constraints, embeddings with v1 templates, top-5 review embeddings, vector indexes in procedure form, full-text index).
+* [x] **F4.6 Validation gate** (CP-8, report SHA-256 `d8a68b7f…8af`) H-01 … H-18 passed; `GraphVersion` v2 stamped; `graph_versions/v2/*` committed.
+* [x] **F4.7 v2 baseline**: R1 arms on legacy-21, r = 3, at the allow-listed baseline commit; archived; v1 vs v2 comparison reviewed (CP-9, runs `eval_2026-10-20_1114/_1128/_1142`; no arm changes significantly, rrf3 MRR 0.226 → 0.319, p_Holm 0.875; allow-list amendment A-7).
 * Unblocks: R2b benchmark freeze on v2 (with the G-9 S1 redefinition), AI-03, AI-06, RS-12, RS-03.
 
 ---
@@ -404,7 +405,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 * [ ] Remove `ResponseGenerator` dead code (GAP-013)
 * [ ] Move `PreferenceAgentFlow` to `src/legacy/`
 * [ ] Final dependency audit
-* [ ] **AI-13** Refresh stale docs (`production_artifacts/graph_state_snapshot.md`, `scripts/graph_ingestion/README.md`) and add `seaborn` to the project `.venv`.
+* [x] **AI-13** Refresh stale docs (`production_artifacts/graph_state_snapshot.md`, `scripts/graph_ingestion/README.md`) and add `seaborn` to the project `.venv`. _Done 2026-10-20_: `seaborn` in `.venv` and `requirements.txt`; the snapshot now describes the live graph v2 and the runbook covers the v2 build and rollback.
 
 ---
 
@@ -495,7 +496,7 @@ Goal: the retrieval score measures how well a product matches the request, not h
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |
 | GAP-013 | ResponseGenerator Cleanup | Meta-Phase B6 | ❌ Not done |
 | GAP-015 | Legacy Adapter Deprecation | Meta-Phase D | ❌ Not done |
-| F4 | Graph v2 Rebuild (ghost fix) | Foundation F4 | ⚠️ Code done and audited; graph operations (F4.2–F4.7) not run |
+| F4 | Graph v2 Rebuild (ghost fix) | Foundation F4 | ✅ Done 2026-10-20 (graph v2 live, stamped, baseline accepted) |
 | RS-01 … RS-24 | Retrieval Score Redesign (AFP-002 and follow-ups) | Meta-Phase A1.1 | ⚠️ R1 and R2a done (RS-01, 02 ablation, 05, 20, 23); R2b (RS-21, RS-02 evidence) and R3–R5 open |
 
 ---
