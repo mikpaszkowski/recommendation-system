@@ -66,3 +66,31 @@ Checkpoint approvals for the graph v2 rebuild (`scripts/graph_ingestion/README.m
 - Full-build estimate (`pilot/pilot_report.json`): import ≈ 4 min; embedding ≈ 2.25 h (reviews ≈ 110 min at
   164 texts/s, products ≈ 22 min); store ≈ 12.5 GB plus ≈ 0.5–1 GB transaction logs.
 - Pilot container removed (`compose down`, no `-v`) and scratch volume `kg_neo4j_data_v2_pilot` deleted.
+
+## R-8 full import — CP-6 approved (2026-10-20)
+
+- `docker volume create kg_neo4j_data_v2`; `import_graph_v2.py import --volume kg_neo4j_data_v2 … --execute`: 94 s,
+  store 4.0 GB, empty import report (0 bad rows). Record `graph_versions/v2/import_run.json`.
+
+## R-9 switch, post-import, validate — CP-7 approved (2026-10-20)
+
+- Compose started on `kg_neo4j_data_v2` with the build profile (heap 4G, page cache 1G, tx timeout 600s).
+- `post_import_v2.py all` (run detached with nohup; ~2.6 h): all labels embedded on MPS at batch 32 with no
+  out-of-memory event (reviews 1,081,137; products 265,303, 4 skipped by `title_description`; brands 49,663;
+  categories 38). The run stopped at the full-text step; three code bugs were fixed and committed with tests:
+  - `8b10a35`: the single-token smoke test did not scale (token matched 11,828 products) and triggered the
+    `features_text` fallback; 2 Attribute nodes with unpaired surrogates were not written back (string match).
+    Now: phrase smoke test, fallback recovery, elementId write-back with write counts.
+  - `0a32604`: the smoke query passed `query=` to `Session.run` (argument clash); now `$search`.
+  - Re-ran `embed --labels Attribute` (2 embedded; 36,187/36,187) and `fulltext-index` (fallback index dropped,
+    `features_text` removed from 215,032 products, index rebuilt over title, description, features,
+    details_text; phrase smoke test found at rank 1).
+- `validate_graph.py`: **18/18 hard gates passed**; report SHA-256
+  `d8a68b7f2ac1589353fc8d32b6b00646dfe4e2aca98150b1964f8f1e6b1bb8af`.
+
+## R-10 stamp — CP-8 approved (2026-10-20)
+
+- User reviewed and approved the validation report above.
+- `post_import_v2.py stamp … --confirm-validation-sha256 d8a68b7f…8af`: `(:GraphVersion {version: 'v2',
+  validation_passed: true})` written at 2026-10-20T08:20:05Z (lineage `3f985952…86ec`, code commit `75c5c0a`,
+  stamp commit `0a32604`, Neo4j 5.14.0).
