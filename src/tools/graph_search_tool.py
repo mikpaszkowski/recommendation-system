@@ -269,10 +269,10 @@ class GraphSearchTool:
         # Normalize filters before searching
         if self._filters_present(filters):
             logger.info(f"[GST] Normalizing filters...")
-            filters = self._normalize_filters(filters)
+            filters = self._normalize_filters(filters, query_text=text)
             logger.info(f"[GST] Normalized filters: {filters}")
         # Applied-filter telemetry (R2a, FR-016): the filters after normalisation, before MACS relaxation
-        normalized_filters = dict(filters)
+        normalized_filters = {k: v for k, v in filters.items() if not str(k).startswith("_")}
         
         if not self.db or not self.embedder:
              return {"status": "error", "message": "Database or Embedder not initialized.", "items": [], "metadata": {"cypher": "", "params": {}}}
@@ -332,8 +332,9 @@ class GraphSearchTool:
                         if parent_cat and parent_cat.lower() != str(current_cat).lower():
                             logger.warning(f"[GST] MACS Triggered: Broadening category '{current_cat}' -> '{parent_cat}'")
                             filters["category"] = parent_cat
-                            if "categories" in filters:
-                                filters.pop("categories", None)
+                            filters.pop("categories", None)
+                            filters.pop("_resolved_category_family", None)
+                            filters.pop("_resolved_taxon_paths", None)
                             relaxed_constraints.append(f"Broadened category constraint from '{current_cat}' to parent category '{parent_cat}'")
                             result = self._execute_hybrid_search(
                                 text, filters, raw_filters, limit, config,
@@ -345,6 +346,8 @@ class GraphSearchTool:
                         logger.warning(f"[GST] MACS Triggered: Yield still < 3 after category broadening. Dropping category constraint.")
                         filters.pop("category", None)
                         filters.pop("categories", None)
+                        filters.pop("_resolved_category_family", None)
+                        filters.pop("_resolved_taxon_paths", None)
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
                         result = self._execute_hybrid_search(
                             text, filters, raw_filters, limit, config,
@@ -466,16 +469,23 @@ class GraphSearchTool:
         config = config or self.fusion_config
 
         # RS-07: Adaptive Filter-First Order for small selective subtrees (product_count <= 500)
+        # Only activate when resolution maps to a single well-populated Taxon (avoiding partial/promotional subtrees)
         if config.method != "sum":
             cat_val = filters.get("category") or filters.get("categories")
+            resolved_family = filters.get("_resolved_category_family")
+            is_single_family = not resolved_family or len(resolved_family) <= 1
             if isinstance(cat_val, (list, tuple)) and cat_val:
+                if len(cat_val) > 1:
+                    is_single_family = False
                 cat_val = cat_val[0]
-            if cat_val and hasattr(self, "resolver") and self.resolver:
+            if cat_val and is_single_family and hasattr(self, "resolver") and self.resolver:
                 try:
                     cat_matches = self.resolver.resolve_category(str(cat_val), k=1)
                     if cat_matches and "product_count" in cat_matches[0]:
                         pc = cat_matches[0].get("product_count")
-                        if pc is not None and 1 <= pc <= 500:
+                        t_name = str(cat_matches[0].get("name") or "")
+                        is_promo_subset = "bestselling" in t_name.lower() or "renewed" in t_name.lower() or "savings" in t_name.lower()
+                        if pc is not None and 1 <= pc <= 500 and not is_promo_subset:
                             resolved_taxon = cat_matches[0]
                             logger.info(f"[GST:Hybrid] Small selective Taxon '{resolved_taxon.get('name')}' (count={pc} <= 500). Activating filter-first search.")
                             return self._execute_filter_first_search(
@@ -759,16 +769,21 @@ LIMIT $depth""",
         params["vector"] = query_vector
         params["query_text"] = self._sanitize_lucene_query(text) if text else "*"
 
-        # GV2-09: Selectivity-based dynamic ANN oversampling for selective Taxon subtrees
+        # GV2-09 & RS-24: Selectivity-based dynamic ANN oversampling and multi-path target family
         ann_factor = config.ann_k_per_limit
         cat_filter = filter_params.get("category_filter")
-        target_path: Optional[List[str]] = None
+        target_paths: List[List[str]] = [
+            list(p) for p in (filter_params.get("_resolved_taxon_paths") or [])
+            if isinstance(p, (list, tuple)) and p
+        ]
         if cat_filter and hasattr(self, "resolver") and self.resolver:
             try:
                 cat_matches = self.resolver.resolve_category(str(cat_filter), k=1)
-                if cat_matches:
+                if cat_matches and isinstance(cat_matches, list) and isinstance(cat_matches[0], dict):
                     if "path" in cat_matches[0] and cat_matches[0]["path"]:
-                        target_path = list(cat_matches[0]["path"])
+                        primary_tp = list(cat_matches[0]["path"])
+                        if primary_tp not in target_paths:
+                            target_paths.insert(0, primary_tp)
                     if "product_count" in cat_matches[0]:
                         pc = cat_matches[0].get("product_count")
                         if pc and pc < 5000:
@@ -776,6 +791,11 @@ LIMIT $depth""",
                             logger.info(f"[GST:{tag}] Selective Taxon '{cat_filter}' (count={pc}): scaling ann_k_per_limit {config.ann_k_per_limit} -> {ann_factor}")
             except Exception as e:
                 logger.debug(f"[GST:{tag}] Could not evaluate Taxon subtree size: {e}")
+
+        # Strip internal metadata keys from Cypher params
+        params.pop("_resolved_taxon_paths", None)
+        escape_rx = params.get("head_noun_escape_regex")
+        excl_rx = params.get("accessory_exclusion_regex")
 
         params["k"] = limit * ann_factor
         params["depth"] = config.channel_depth
@@ -807,11 +827,27 @@ LIMIT $depth""",
                 logger.info(f"[GST:{tag}] Channel '{channel}': {len(channel_hits[channel])} products")
 
             fused: List[FusedCandidate] = fuse(channel_hits, config)
-            candidate_pool = fused[:max(limit * 3, 30)] if target_path else fused[:limit]
+            candidate_pool = fused[:max(limit * 3, 30)] if target_paths else fused[:limit]
             details: Dict[str, Dict[str, Any]] = {}
             if candidate_pool:
                 detail_rows = session.run(DETAIL_QUERY, {"asins": [fc.asin for fc in candidate_pool]})
                 details = {row["asin"]: row for row in (dict(record) for record in detail_rows)}
+
+        # RS-24 Pillar E: Bottom-Up Category Consensus among top-10 retrieved candidates
+        if target_paths and candidate_pool:
+            path_counts: Dict[Tuple[str, ...], int] = {}
+            for fc in candidate_pool[:10]:
+                d_row = details.get(fc.asin)
+                if d_row and d_row.get("primary_taxon_path"):
+                    pt = tuple(d_row["primary_taxon_path"])
+                    path_counts[pt] = path_counts.get(pt, 0) + 1
+            for pt, cnt in path_counts.items():
+                if cnt >= 4 and list(pt) not in target_paths:
+                    # Only include consensus path if its leaf is not an accessory trap
+                    from src.knowledge_graph.graphdb.resolver_service import decompose_type_phrase
+                    leaf_decomp = decompose_type_phrase(pt[-1])
+                    if not leaf_decomp["is_accessory_head"]:
+                        target_paths.append(list(pt))
 
         items: List[Dict[str, Any]] = []
         for fc in candidate_pool:
@@ -821,10 +857,14 @@ LIMIT $depth""",
                 continue
             ordered_channels = [c for c in config.channels if c in fc.channels]
 
-            # Taxon distance multiplier (RS-10)
+            # Taxon distance multiplier (RS-10 + RS-24 Multi-Path & Guarded Escape Hatch verification)
             cand_path = detail.get("primary_taxon_path")
-            if target_path:
-                dist = self._compute_taxon_distance(target_path, cand_path)
+            if target_paths:
+                dist = min(self._compute_taxon_distance(tp, cand_path) for tp in target_paths)
+                if dist >= 5 and escape_rx:
+                    title_low = str(detail.get("title") or "").lower()
+                    if re.match(escape_rx, title_low) and not (excl_rx and excl_rx != "^$" and re.match(excl_rx, title_low)):
+                        dist = 1
                 distance_multiplier = self._get_taxon_distance_multiplier(dist)
             else:
                 dist = 0
@@ -861,7 +901,7 @@ LIMIT $depth""",
                 },
             })
 
-        if target_path:
+        if target_paths:
             items.sort(key=lambda x: x["score"], reverse=True)
             items = items[:limit]
 
@@ -1345,6 +1385,8 @@ LIMIT $depth""",
                 )
                 params["exclude_brands_filter"] = ex_brand_list
                 params["raw_exclude_brands_filter"] = raw_ex_brand_list
+            elif str(key).startswith("_"):
+                continue
             elif key == "category" and not isinstance(value, (list, tuple)):
                 if filters.get("categories"):
                     continue
@@ -1363,12 +1405,20 @@ LIMIT $depth""",
                     escaped_raw = re.escape(raw_cat).replace("'", "\\'")
                     title_condition = f"toLower(node.title) =~ '(?i).*(^|[^a-z]){escaped_raw}(s)?([^a-z]|$).*'"
 
+                family_names = filters.get("_resolved_category_family") or [value]
+                family_lower = list(dict.fromkeys([str(c).lower().strip() for c in family_names if c] + [str(value).lower().strip()]))
+                escape_rx, excl_rx = self._build_head_noun_escape_patterns(raw_cat)
+
                 where_clauses.append(f"""
                 (
                     EXISTS {{
                         MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)
                         WHERE toLower(ancestor.name) = toLower($category_filter)
                            OR toLower(leaf.name) = toLower($category_filter)
+                           OR toLower(ancestor.name) IN $category_family_filter
+                           OR toLower(leaf.name) IN $category_family_filter
+                           OR any(alt IN coalesce(ancestor.alt_labels, []) WHERE toLower(alt) = toLower($category_filter) OR toLower(alt) IN $category_family_filter)
+                           OR any(alt IN coalesce(leaf.alt_labels, []) WHERE toLower(alt) = toLower($category_filter) OR toLower(alt) IN $category_family_filter)
                            OR ancestor.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
                            OR leaf.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
                     }}
@@ -1376,10 +1426,19 @@ LIMIT $depth""",
                         NOT EXISTS {{ MATCH (node)-[:IN_TAXON]->(:Taxon) }}
                         AND {title_condition}
                     )
+                    OR (
+                        toLower(node.title) =~ $head_noun_escape_regex
+                        AND NOT toLower(node.title) =~ $accessory_exclusion_regex
+                    )
                 )
                 """)
                 params["category_filter"] = value
                 params["raw_category_filter"] = raw_cat
+                params["category_family_filter"] = family_lower
+                params["head_noun_escape_regex"] = escape_rx
+                params["accessory_exclusion_regex"] = excl_rx
+                if filters.get("_resolved_taxon_paths"):
+                    params["_resolved_taxon_paths"] = filters["_resolved_taxon_paths"]
             elif key == "categories" or (key == "category" and isinstance(value, (list, tuple))):
                 cat_list = [str(c).strip() for c in (value if isinstance(value, (list, tuple)) else [value]) if str(c).strip()]
                 if key == "categories" and isinstance(filters.get("category"), str) and filters["category"].strip():
@@ -1392,6 +1451,7 @@ LIMIT $depth""",
 
                 cat_regexes = [f"(?i).*(^|[^a-z]){re.escape(c)}(s)?([^a-z]|$).*" for c in cat_list]
                 raw_cat_regexes = [f"(?i).*(^|[^a-z]){re.escape(rc)}(s)?([^a-z]|$).*" for rc in raw_cat_list]
+                escape_rx, excl_rx = self._build_head_noun_escape_patterns(raw_cat_list[0] if raw_cat_list else "")
                 where_clauses.append("""
                 (
                     EXISTS {
@@ -1402,10 +1462,16 @@ LIMIT $depth""",
                         NOT EXISTS { MATCH (node)-[:IN_TAXON]->(:Taxon) }
                         AND ANY(raw_rx IN $raw_categories_filter WHERE toLower(node.title) =~ raw_rx)
                     )
+                    OR (
+                        toLower(node.title) =~ $head_noun_escape_regex
+                        AND NOT toLower(node.title) =~ $accessory_exclusion_regex
+                    )
                 )
                 """)
                 params["categories_filter"] = cat_regexes
                 params["raw_categories_filter"] = raw_cat_regexes
+                params["head_noun_escape_regex"] = escape_rx
+                params["accessory_exclusion_regex"] = excl_rx
             # EAV Numeric filters dynamically intercepted with toFloat fallback for string attribute values
             elif key.endswith("_min") and key != "price_min":
                 attr_name = key.replace("_min", "")
@@ -1460,6 +1526,71 @@ LIMIT $depth""",
             
         return where_clauses, params
 
+    @staticmethod
+    def _build_head_noun_escape_patterns(raw_cat: str) -> Tuple[str, str]:
+        """
+        RS-24 Pillar D: Builds a guarded lexical head-noun regex and an accessory-trap
+        exclusion regex so miscategorized genuine devices (e.g. Samsung Galaxy S20+ in
+        'samsung_tradein', Logitech C920 in 'Computers', MacBook Air with empty taxon)
+        pass the category filter while accessory traps ('Case for iPhone') are blocked.
+        """
+        from src.knowledge_graph.graphdb.resolver_service import (
+            decompose_type_phrase,
+            get_equivalent_head_lemmas,
+        )
+
+        decomp = decompose_type_phrase(raw_cat)
+        head_lemma = decomp["head_lemma"]
+        if not head_lemma:
+            escaped = re.escape(str(raw_cat).strip().lower())
+            return (f"(?i).*(^|[^a-z]){escaped}(s)?([^a-z]|$).*", "^$")
+
+        equivs = set(get_equivalent_head_lemmas(head_lemma))
+        if head_lemma == "mouse":
+            equivs.update({"mouse", "mice"})
+        elif head_lemma in ("phone", "smartphone", "cellphone", "iphone"):
+            equivs.update({"smartphone", "cellphone", "iphone", "galaxy s20", "galaxy s9", "cell phone", "mobile phone"})
+        elif head_lemma in ("laptop", "notebook", "chromebook", "macbook"):
+            equivs.update({"laptop", "notebook", "chromebook", "macbook"})
+        elif head_lemma in ("bundle", "system") and "security" in decomp["lemmas"]:
+            equivs.update({"bundle", "doorbell", "security"})
+
+        # Add parenthetical lemmas if any (e.g. 'macbook air', 'iphone')
+        for pl in decomp.get("parenthetical_lemmas") or ():
+            if len(pl) >= 3:
+                equivs.add(pl)
+
+        # Surface plural forms not covered by the regex `(s|es)?` suffix:
+        # irregular plurals ('mouse' -> 'mice', 'accessory' -> 'accessories') and consonant+y -> -ies.
+        from src.knowledge_graph.graphdb.resolver_service import IRREGULAR_PLURALS
+        for plural, lemma in IRREGULAR_PLURALS.items():
+            if lemma in equivs and plural != lemma:
+                equivs.add(plural)
+        for term in list(equivs):
+            if len(term) > 2 and term.endswith("y") and term[-2] not in "aeiou":
+                equivs.add(term[:-1] + "ies")
+
+        sorted_terms = [re.escape(t) for t in sorted(equivs) if t and len(t) >= 2]
+        if not sorted_terms:
+            sorted_terms = [re.escape(head_lemma)]
+        alt_group = "|".join(sorted_terms)
+        head_noun_escape_regex = f"(?i).*(^|[^a-z])({alt_group})(s|es)?([^a-z]|$).*"
+
+        if decomp["is_accessory_head"]:
+            accessory_exclusion_regex = "^$"
+        else:
+            trap_nouns = {
+                "case", "cover", "protector", "cable", "cord", "mount", "stand",
+                "holder", "bag", "sleeve", "skin", "strap", "replacement", "part",
+                "pouch", "holster", "bracket", "tripod", "adapter", "charger",
+            } - equivs
+            trap_group = "|".join(sorted(trap_nouns))
+            accessory_exclusion_regex = (
+                f"(?i).*(^|[^a-z])({trap_group})(s|es)?([^a-z].*|\\s+)"
+                f"(for|compatible with|fits|designed for)([^a-z]|$).*"
+            )
+        return head_noun_escape_regex, accessory_exclusion_regex
+
     def _normalize_single_brand(self, raw_val: str, label: str = "brand") -> str:
         """Resolve a single brand string via ResolverService, falling back to raw_val."""
         BRAND_CONFIDENCE = getattr(self, "BRAND_CONFIDENCE", 0.85)
@@ -1481,6 +1612,7 @@ LIMIT $depth""",
         CATEGORY_CONFIDENCE = getattr(self, "CATEGORY_CONFIDENCE", 0.70)
         CATEGORY_MARGIN = getattr(self, "CATEGORY_MARGIN", 0.05)
         try:
+            from src.knowledge_graph.graphdb.resolver_service import decompose_type_phrase
             matches = self.resolver.resolve_category(raw_val, k=3)
             if matches and matches[0]["score"] >= CATEGORY_CONFIDENCE:
                 # Check candidate margin against runner-up candidates to prevent cross-domain drift
@@ -1489,15 +1621,23 @@ LIMIT $depth""",
                     top = matches[0]
                     top_name = top.get("name", "").lower()
                     top_path = [p.lower() for p in (top.get("path") or [])]
+                    top_head = decompose_type_phrase(top_name)["head_lemma"]
 
                     # Find the first runner-up candidate that is a true cross-domain competitor.
-                    # Candidates that contain the top candidate's name or share taxonomy lineage
-                    # belong to the same taxonomic branch and are not cross-domain competitors.
+                    # Candidates that contain the top candidate's name, share taxonomy lineage,
+                    # or share the same grammatical head noun belong to the same product family.
                     comp_candidate = None
                     for runner_up in matches[1:]:
                         ru_name = runner_up.get("name", "").lower()
                         ru_path = [p.lower() for p in (runner_up.get("path") or [])]
-                        if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
+                        ru_head = decompose_type_phrase(ru_name)["head_lemma"]
+                        if (
+                            top_name in ru_name
+                            or ru_name in top_name
+                            or ru_name in top_path
+                            or top_name in ru_path
+                            or (top_head and top_head == ru_head)
+                        ):
                             continue
                         comp_candidate = runner_up
                         break
@@ -1510,16 +1650,6 @@ LIMIT $depth""",
                                 f"[GST] ✗ Category '{raw_val}' failed margin check: "
                                 f"top match '{top['name']}' ({top['score']:.3f}) vs "
                                 f"runner-up '{comp_candidate['name']}' ({comp_candidate['score']:.3f}), "
-                                f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
-                            )
-                    elif len(matches) > 1 and not (top_name in matches[1].get("name", "").lower() or matches[1].get("name", "").lower() in top_name):
-                        margin = top["score"] - matches[1]["score"]
-                        if margin < CATEGORY_MARGIN:
-                            has_margin = False
-                            logger.warning(
-                                f"[GST] ✗ Category '{raw_val}' failed margin check: "
-                                f"top match '{top['name']}' ({top['score']:.3f}) vs "
-                                f"runner-up '{matches[1]['name']}' ({matches[1]['score']:.3f}), "
                                 f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
                             )
 
@@ -1536,17 +1666,8 @@ LIMIT $depth""",
             logger.warning(f"[GST] Category normalization failed: {e}")
         return raw_val
 
-    def _normalize_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize filter values to canonical graph node names using ResolverService.
-        
-        Confidence thresholds:
-        - Brand: 0.85 (brand names are precise nouns, require high similarity to avoid Sennheiser -> Senso false positives)
-        - Category: 0.70 (recalibrated with candidate margin check >= 0.05 to reliably resolve plurals and inflections while blocking cross-domain drift)
-        
-        NOTE: If normalization fails or confidence is low, the filter is NO LONGER dropped.
-        Instead, it remains as the raw string so that the Cypher title fallback logic 
-        (e.g., `OR toLower(node.title) CONTAINS $raw`) can still attempt a textual match.
-        """
+    def _normalize_filters(self, filters: Dict[str, Any], query_text: Optional[str] = None) -> Dict[str, Any]:
+        """Normalize filter values to canonical graph node names using ResolverService."""
         if not self.resolver:
             logger.warning("[GST] ResolverService not available. Skipping normalization.")
             return filters
@@ -1579,12 +1700,26 @@ LIMIT $depth""",
             else:
                 normalized["exclude_brands"] = [self._normalize_single_brand(str(normalized["exclude_brands"]), "exclude_brands")]
 
-        # Normalize category / categories
+        # Normalize category / categories and expand Multi-Taxon Family (RS-24)
         if "category" in normalized and normalized["category"]:
-            if isinstance(normalized["category"], (list, tuple)):
-                normalized["category"] = [self._normalize_single_category(str(c)) for c in normalized["category"] if c]
+            raw_cat_val = normalized["category"]
+            if isinstance(raw_cat_val, (list, tuple)):
+                normalized["category"] = [self._normalize_single_category(str(c)) for c in raw_cat_val if c]
             else:
-                normalized["category"] = self._normalize_single_category(str(normalized["category"]))
+                raw_cat_str = str(raw_cat_val)
+                normalized["category"] = self._normalize_single_category(raw_cat_str)
+                if hasattr(self.resolver, "resolve_category_family"):
+                    try:
+                        fam = self.resolver.resolve_category_family(raw_cat_str, query_text=query_text)
+                        if isinstance(fam, list) and fam and all(isinstance(m, dict) for m in fam):
+                            fam_names = [m["name"] for m in fam if m.get("name")]
+                            fam_paths = [list(m["path"]) for m in fam if isinstance(m.get("path"), (list, tuple)) and m.get("path")]
+                            if fam_names:
+                                normalized["_resolved_category_family"] = fam_names
+                            if fam_paths:
+                                normalized["_resolved_taxon_paths"] = fam_paths
+                    except Exception as e:
+                        logger.debug(f"[GST] Category family expansion skipped: {e}")
 
         if "categories" in normalized and normalized["categories"]:
             if isinstance(normalized["categories"], (list, tuple)):

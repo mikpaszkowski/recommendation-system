@@ -707,4 +707,39 @@ Stage 1 (`GV2-07` .. `GV2-09`) completely resolves the structural category disco
 - **Backward Compatibility**: When `category` filter is not provided, `distance_multiplier` defaults to `1.00` and `dist = 0`, preserving legacy scoring exactly.
 - **Query Parameterization**: User inputs and category filters remain fully parameterized in Cypher queries (`$category_filter`, `$asins`, etc.).
 
+---
+
+# Audit Report: Release R3.2 — Domain-Agnostic Hybrid Product-Type Matching & W3C SKOS Induction (RS-24)
+
+**Date**: 2026-10-22  
+**Spec Audited**: `production_artifacts/Technical_Specification_R3_2.md` (v1.1.0, approved 2026-10-22)  
+**Context**: `production_artifacts/Research_Report.md` §10, Vision Decision `2026-10-22-026`  
+**Verdict**: **PASS** (`71 passed in 13.44s` across `tests/test_r3_2_hybrid_product_type.py`, `tests/test_stage1_taxon_and_lexical.py`, and `tests/test_r3_1_retrieval_refinements.py`)
+
+## 1. Spec Compliance Matrix (Release R3.2)
+
+| ID | Acceptance Criterion | Status | Evidence |
+|---|---|---|---|
+| **AC-R3.2-00** | Full-Graph W3C SKOS `alt_labels` Induction: All 1,183 `:Taxon` nodes in Neo4j updated via `scripts/enrich_taxons_skos.py --all` and exported to `graph_versions/v2/taxon_skos_alt_labels.json`. Zero token-reduplication noise, zero compound-fragment modifiers (`ear`, `bay`, `way`, `via`, `port`), and Head-Noun Integrity enforced on accessory taxa (no bare device labels). | ✅ PASS | Verified in `tests/test_r3_2_hybrid_product_type.py` (`test_ac_r3_2_00_skos_artifact_covers_full_graph`, `test_ac_r3_2_00_skos_labels_have_no_reduplication_or_compound_fragments`, `test_ac_r3_2_00_accessory_taxa_keep_head_noun_integrity`). Live Neo4j Cypher verification confirmed 12/12 SKOS test queries (`streaming camera`, `pc camera`, `notebook`, `laptop`, `tablet`, `mouse`, `microphone`, `smartphone`, `wall charger`, `travel power adapter`, `around-ear headphones`, `digicam`) resolve to exact canonical taxa via `t.alt_labels`. |
+| **AC-R3.2-01** | Dual-Side Morphological Lemmatization & Head-Noun Decomposition: Pure-Python deterministic normalizer (`normalize_lemma`, `decompose_type_phrase`) compliant with Principle P-9, handling irregular plurals (`mice` $\to$ `mouse`, `batteries` $\to$ `battery`, `lenses` $\to$ `lens`), invariant plurals (`headphones`, `glasses`, `jeans`, `series`), parenthetical brand qualifiers (`laptop (MacBook Air)` $\to$ `clean_text='laptop'`, `head_lemma='laptop'`), and accessory-container head identification. | ✅ PASS | Verified in `tests/test_r3_2_hybrid_product_type.py` (`test_ac_r3_2_01_normalize_lemma`, `test_ac_r3_2_01_decompose_type_phrase`, `test_ac_r3_2_01_equivalent_head_lemmas`). Zero external runtime corpus download required (no NLTK WordNet LookupError). |
+| **AC-R3.2-02** | SKOS + Anti-Hijacking Taxon Resolution: Device queries resolve to device taxa and never get hijacked by accessory containers (`Mouse` $\to$ `Mice` [score=1.0], `Tablet` $\to$ `Tablets` [score=1.0], `Laptop` $\to$ `Laptops`/`Traditional Laptops` [score $\ge 0.96$], `streaming camera` $\to$ `Webcams` [score=0.96], `Phone` $\to$ `Bestselling Renewed Smartphones` [score=0.96]). Disjoint specific modifiers (`acoustic speakers` vs `Bookshelf Speakers`) fall through to Tier 3 vector search. | ✅ PASS | Verified in `tests/test_r3_2_hybrid_product_type.py` (`test_ac_r3_2_02_skos_colloquial_synonyms`, `test_ac_r3_2_02_singular_device_queries_are_not_hijacked`, `test_ac_r3_2_02_phone_resolves_to_smartphone_device_taxon`, `test_ac_r3_2_02_disjoint_specific_modifiers_fall_through_to_vector_tier`). |
+| **AC-R3.2-03** | Multi-Taxon Family Expansion (`ResolverService.resolve_category_family`): Broad product types expand into cohesive multi-branch families (e.g. `Charger` $\to$ `Chargers`, `Chargers & Adapters`, `Battery Chargers`; `Camera` + query `streaming webcam` $\to$ `Digital Cameras`, `Webcams`). Attached to search filters via `_resolved_category_family` and `_resolved_taxon_paths`. | ✅ PASS | Verified in `tests/test_r3_2_hybrid_product_type.py` (`test_ac_r3_2_03_charger_family_spans_multiple_branches`, `test_ac_r3_2_03_camera_family_includes_webcams`, `test_ac_r3_2_03_family_never_contains_accessory_containers_for_device_query`, `test_ac_r3_2_03_normalize_filters_propagates_family_and_paths`). |
+| **AC-R3.2-04** | Guarded Lexical Head-Noun Escape Hatch: Hybrid Cypher structural clause (`IN_TAXON -> BROADER*0..7` + `alt_labels` + `category_family_filter`) OR guarded lexical head-noun regex (`$head_noun_escape_regex` AND `NOT $accessory_exclusion_regex`). Positively admits miscategorized genuine devices (`Samsung Galaxy S20+` in `samsung_tradein`, `MacBook Air` with empty taxa) while strictly blocking accessory traps (`Silicone Case Compatible with iPhone`, `Adjustable Stand for Laptop`). | ✅ PASS | Verified in `tests/test_r3_2_hybrid_product_type.py` (`test_ac_r3_2_04_escape_hatch_phone`, `test_ac_r3_2_04_escape_hatch_laptop_with_parenthetical`, `test_ac_r3_2_04_escape_hatch_does_not_block_accessory_queries`, `test_ac_r3_2_04_build_filters_emits_hybrid_structural_and_escape_clause`). |
+| **AC-R3.2-05** | 100% Target Admission on Tuning Benchmark Queries: Target product admission rate across all 105 retrieval queries of `evaluations/benchmarks/benchmark_v2.json`. | ✅ PASS | **105 / 105 (100.0%)** admitted (0 rejected by category filter), up from 92/105 (87.6%). All 13 previously rejected targets (`B08GNRGB67`, `B0BRZ6VK9N`, `B0BVF77738`, `B08C7KG5LP`, `B07S9H324F`, `B0BFJWCYTL`, `B0863TXGM3`, etc.) now admitted into the retrieval candidate pool. |
+| **AC-R3.2-06** | Zero Regression on Existing Suites: All pre-existing test suites continue to pass without error. | ✅ PASS | Full test suite passed: `71 passed in 13.44s` across `tests/test_r3_2_hybrid_product_type.py`, `tests/test_stage1_taxon_and_lexical.py`, and `tests/test_r3_1_retrieval_refinements.py`. |
+
+## 2. Target Admission Audit Details ($n=105$)
+
+Prior to R3.2, 13 of 105 tuning queries had their target products rejected by category filter due to 4 root causes:
+1. **Accidental Singular/Plural Taxonomic Hijack**: Fixed by dual-side morphological lemmatization and Head-Noun Integrity (`tune_009`, `tune_040`, `tune_044`, `tune_046`, `tune_048`, `tune_050`, `tune_051`, `tune_090`).
+2. **Catalog Misclassification / Promotion Taxa**: Admitted by Guarded Lexical Head-Noun Escape Hatch (`tune_039` Samsung S20+ in `samsung_tradein`).
+3. **Empty Taxa**: Admitted by title fallback & escape hatch (`tune_019` MacBook Air `taxa = []`).
+4. **Cross-Subtree Split Categories**: Admitted by Multi-Taxon Family expansion (`tune_060` webcams under camera filter, `tune_061`, `tune_062` chargers across battery & adapters).
+
+Post-R3.2 Admission Result:
+- **Total Queries Evaluated**: 105
+- **Admitted**: 105 / 105 (**100.0%**)
+- **Category Filter Rejections**: **0 / 105**
+
+
 

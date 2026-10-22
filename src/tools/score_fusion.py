@@ -61,6 +61,7 @@ class FusionConfig:
     channel_depth: int = 100
     ann_k_per_limit: int = 30
     soft_bonus_beta: float = 0.25
+    use_hyde: bool = True
 
     def channel_weight(self, channel: str) -> float:
         """Weight of one channel; channels without an explicit weight count 1.0."""
@@ -92,6 +93,7 @@ class FusionConfig:
             "ann_k_per_limit": self.ann_k_per_limit,
             "soft_bonus_beta": self.soft_bonus_beta,
             "soft_bonus_unit": self.soft_bonus_unit(),
+            "use_hyde": self.use_hyde,
         }
 
     @classmethod
@@ -120,6 +122,31 @@ FUSION_ARMS: Dict[str, FusionConfig] = {
     ),
     "cc4": FusionConfig(name="cc4", method="cc", channels=CHANNELS, weights={c: 1.0 for c in CHANNELS}),
     "lexical_only": FusionConfig(name="lexical_only", channels=("lexical",), weights={"lexical": 1.0}),
+    # RS-08a & AI-10 Dual-Channel HyDE ablation arms
+    "rrf3_no_hyde": FusionConfig(name="rrf3_no_hyde", use_hyde=False),
+    "wrrf3_no_hyde": FusionConfig(
+        name="wrrf3_no_hyde",
+        weights={"product": 0.60, "attribute": 0.25, "review": 0.15},
+        use_hyde=False,
+    ),
+    "rrf4_no_hyde": FusionConfig(
+        name="rrf4_no_hyde",
+        channels=CHANNELS,
+        weights={c: 1.0 for c in CHANNELS},
+        use_hyde=False,
+    ),
+    "wrrf4_no_hyde": FusionConfig(
+        name="wrrf4_no_hyde",
+        channels=CHANNELS,
+        weights={"product": 0.35, "attribute": 0.20, "review": 0.15, "lexical": 0.30},
+        use_hyde=False,
+    ),
+    "hyde_only": FusionConfig(
+        name="hyde_only",
+        channels=("product", "review"),
+        weights={"product": 0.70, "review": 0.30},
+        use_hyde=True,
+    ),
 }
 
 

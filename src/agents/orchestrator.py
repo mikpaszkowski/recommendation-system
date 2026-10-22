@@ -49,6 +49,53 @@ PRODUCT_TYPE_DECIDED_RULE = """- `product_type_decided` is true only if the user
   different kinds of products. When `product_type_decided` is false, `category` MUST be null.
 """
 
+HYDE_PRODUCT_MAX_CHARS: int = 1000
+HYDE_REVIEW_MAX_CHARS: int = 800
+
+HYDE_GENERATION_RULE = """- `hyde_product` (Hypothetical Product Document for `product_embedding_index`):
+  Write a concise hypothetical catalog entry (< 160 words) matching the exact catalog schema:
+  "Product: <generic product title>. Category: <category>. Features: <comma-separated technical specs>. Description: <1-2 sentence technical overview>".
+  Do NOT invent a brand or model code unless the user explicitly requested that brand. Convert negative
+  preferences into affirmative technical specifications (e.g., "not loud" -> "Silent Linear Switches, Sound-Dampening Foam").
+  When `product_type_decided` is false, `hyde_product` MUST be null.
+- `hyde_review` (Hypothetical Customer Review for `review_embedding_index`):
+  Write a concise first-person verified-purchaser review (< 800 characters) formatted as:
+  "<Short Review Title>. <1-2 paragraph experiential review body>".
+  Praise the user's subjective and experiential priorities (comfort, quietness, reliability, build quality, ease of setup)
+  using affirmative phrasing without negation traps. When `product_type_decided` is false, `hyde_review` MUST be null.
+"""
+
+
+def _normalize_hyde_product(raw_hyde: Any, category: Optional[str] = None) -> Optional[str]:
+    """
+    Validates and normalises a hypothetical product document to match product_text_v1
+    ('Product: ... Category: ... Features: ... Description: ...') within HYDE_PRODUCT_MAX_CHARS.
+    Returns None for blank or null-like inputs (FR-HYDE-002).
+    """
+    if not isinstance(raw_hyde, str):
+        return None
+    cleaned = " ".join(raw_hyde.strip().split())
+    if not cleaned or cleaned.lower() in NULL_CATEGORY_VALUES:
+        return None
+    if not cleaned.lower().startswith("product:"):
+        cat_label = (category.strip() if isinstance(category, str) and category.strip() else None) or "Unknown"
+        cleaned = f"Product: {cleaned}. Category: {cat_label}. Features: . Description: {cleaned}"
+    return cleaned[:HYDE_PRODUCT_MAX_CHARS]
+
+
+def _normalize_hyde_review(raw_hyde: Any) -> Optional[str]:
+    """
+    Validates and truncates a hypothetical customer review to HYDE_REVIEW_MAX_CHARS (800 chars).
+    Returns None for blank or null-like inputs (FR-HYDE-002).
+    """
+    if not isinstance(raw_hyde, str):
+        return None
+    cleaned = " ".join(raw_hyde.strip().split())
+    if not cleaned or cleaned.lower() in NULL_CATEGORY_VALUES:
+        return None
+    return cleaned[:HYDE_REVIEW_MAX_CHARS]
+
+
 SEARCH_GENERATION_PROMPT = """
 YOUR GOAL: Help the user find the perfect product by translating their request into search arguments.
 
@@ -57,7 +104,7 @@ You are given the user's CURRENT MESSAGE, the CONVERSATION HISTORY, and the curr
 
 [TASK]
 1. Analyze if the user is MODIFYING existing filters, ADDING new ones, or STARTING OVER.
-2. Generate a JSON containing the *updates* to the filters and a semantic query.
+2. Generate a JSON containing the *updates* to the filters, a semantic query, and hypothetical product/review documents (HyDE).
 
 [OUTPUT FORMAT (JSON)]
 {
@@ -69,6 +116,8 @@ You are given the user's CURRENT MESSAGE, the CONVERSATION HISTORY, and the curr
      "category": "laptop"  // the product type the user asked for, or null if undecided
   },
   "semantic_query": "high performance gaming...", // abstract visualization of the product
+  "hyde_product": "Product: High-Performance Gaming Laptop. Category: Laptops. Features: Dedicated GPU, 144Hz Display, 16GB RAM, Fast NVMe SSD. Description: Built for modern gaming and heavy multitasking with high refresh rate visuals.",
+  "hyde_review": "Runs modern games smoothly and stays cool. I bought this laptop for gaming and university work. Frame rates are consistently high, the screen is crisp, and the cooling fan is surprisingly quiet under load.",
   "_thinking": "Detailed step-by-step reasoning"
 }
 
@@ -77,7 +126,7 @@ You are given the user's CURRENT MESSAGE, the CONVERSATION HISTORY, and the curr
   product phrase, without its modifiers). If the user has not decided what kind of product they want
   (e.g. they are choosing between kinds of products or only describe a need), set `category` to null.
   Never guess a category.
-""" + PRODUCT_TYPE_DECIDED_RULE + """- Copy numbers exactly as the user states them; never rescale, round or convert units.
+""" + PRODUCT_TYPE_DECIDED_RULE + HYDE_GENERATION_RULE + """- Copy numbers exactly as the user states them; never rescale, round or convert units.
 - If user says "actually under 1500", UPDATE `price_max` to 1500.
 - If user says "show me Dell instead", UPDATE `brand` to "Dell".
 - If user says "what about that one?", use context to identify "that one".
@@ -499,10 +548,20 @@ class AgentOrchestrator:
             if not semantic_query:
                 semantic_query = user_message
 
+            hyde_product = _normalize_hyde_product(
+                updates.get("hyde_product"),
+                self._category_from_filters(catalog_filters),
+            )
+            hyde_review = _normalize_hyde_review(updates.get("hyde_review"))
+
             logger.info("==============================================")
             logger.info("--- 2. Building Payload for Search Engine ---")
             logger.info("==============================================")
             logger.info(f"📝 Semantic Query (Vector): '{semantic_query}'")
+            if hyde_product:
+                logger.info(f"📦 HyDE Product (product_embedding_index): '{hyde_product}'")
+            if hyde_review:
+                logger.info(f"⭐ HyDE Review (review_embedding_index): '{hyde_review}'")
             logger.info(f"🎯 Structured Filters (Cypher): {json.dumps(catalog_filters, indent=2, default=str)}")
                 
             # 3c. Search (normalization + Cypher happens inside)
@@ -522,10 +581,18 @@ class AgentOrchestrator:
                     search_kwargs["soft_preferences"] = soft_preferences
                 if masked_reviews and ("mask_review_asins" in sig.parameters or has_var_kw):
                     search_kwargs["mask_review_asins"] = list(masked_reviews)
+                if hyde_product and ("hyde_product" in sig.parameters or has_var_kw):
+                    search_kwargs["hyde_product"] = hyde_product
+                if hyde_review and ("hyde_review" in sig.parameters or has_var_kw):
+                    search_kwargs["hyde_review"] = hyde_review
             except Exception:
                 search_kwargs["soft_preferences"] = soft_preferences
                 if masked_reviews:
                     search_kwargs["mask_review_asins"] = list(masked_reviews)
+                if hyde_product:
+                    search_kwargs["hyde_product"] = hyde_product
+                if hyde_review:
+                    search_kwargs["hyde_review"] = hyde_review
 
             try:
                 search_result = self.graph_tool.search(**search_kwargs)
@@ -815,7 +882,17 @@ class AgentOrchestrator:
                 raise ValueError(f"Search params JSON is a {type(parsed).__name__}, expected an object")
             if not isinstance(parsed.get("structured_filters"), dict):
                 parsed["structured_filters"] = {}
-            parsed["product_type_decided"] = parsed.get("product_type_decided")
+            decided = parsed.get("product_type_decided")
+            parsed["product_type_decided"] = decided
+            if decided is False or (isinstance(decided, str) and decided.strip().lower() == "false"):
+                parsed["hyde_product"] = None
+                parsed["hyde_review"] = None
+            else:
+                cat_hint = self._category_from_filters(parsed["structured_filters"]) or self._category_from_filters(current_filters)
+                if "hyde_product" in parsed:
+                    parsed["hyde_product"] = _normalize_hyde_product(parsed.get("hyde_product"), cat_hint)
+                if "hyde_review" in parsed:
+                    parsed["hyde_review"] = _normalize_hyde_review(parsed.get("hyde_review"))
             parsed["param_source"] = "llm"
             logger.info(f"Search params parsed successfully")
             return parsed

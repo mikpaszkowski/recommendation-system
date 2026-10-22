@@ -874,6 +874,11 @@ def run_retrieval_evaluation(
             if head_popular_asins is not None and target_asin:
                 record["target_head_popular"] = target_asin in head_popular_asins
             annotate_target_admission(record, graph_tool)
+            if search_request:
+                record["hyde"] = {
+                    "hyde_product": search_request.get("hyde_product"),
+                    "hyde_review": search_request.get("hyde_review"),
+                }
 
             # Constraint-satisfaction verdicts (FR-022 … FR-025): one fact fetch per query, all strategies
             gold = _gold_constraints(item)

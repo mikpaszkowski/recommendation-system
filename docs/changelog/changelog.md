@@ -5,6 +5,59 @@
 
 ---
 
+## 📅 2026-10-22 (Release R3.2: Hybrydowe Dopasowanie Typu Produktu Niezależne od Domeny oraz Indukcja W3C SKOS altLabels [RS-24])
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-21 dot. Release R3.1)
+
+> **Kontekst**: W audycie po Release R3.1 zidentyfikowano, że 13 ze 105 zapytań zbioru tuningowego (`evaluations/benchmarks/benchmark_v2.json`) cierpiało na całkowite odrzucenie produktu docelowego przez filtr kategoryczny (Target Admission wynosił $87.6\%$). Analiza wykazała cztery kluczowe źródła problemu:
+> 1. **Morfologiczne przejęcie taksonomii przez kontenery akcesoriów (Taxonomic Hijacking)**: Zapytania o urządzenia w liczbie pojedynczej (`Laptop`, `Tablet`, `Mouse`, `Phone`, `microphone`) nie trafiały w dokładną nazwę węzła w Tier 1 (gdzie kategorie urządzeń są w l. mn.: `Laptops`, `Tablets`, `Mice`, `Microphones`), przez co spadały do Tier 2 regex i były przejmowane przez liczniejsze kategorie akcesoriów (`Laptop Accessories`, `Tablet Accessories`, `Keyboard & Mouse Combos`).
+> 2. **Błędy kategoryzacji w katalogu źródłowym (Catalog Misclassification)**: Prawdziwe urządzenia zaklasyfikowane pod węzłami promocyjnymi lub zastępczymi (np. smartfon `Samsung Galaxy S20+` pod `samsung_tradein`).
+> 3. **Brakujące relacje taksonomiczne (Empty Taxa)**: Urządzenia bez przypisanego węzła taksonu w grafie (np. `MacBook Air M2` z `taxa = []`).
+> 4. **Rozszczepienie kategorii na rozłączne gałęzie taksonomiczne (Cross-Subtree Splits)**: Pytania o typ produktu, którego asortyment jest podzielony pomiędzy odległe gałęzie (np. `Charger` rozbity na `Chargers & Adapters` oraz `Batteries & Chargers`; `Camera` z kontekstem kamery internetowej rozbity na `Digital Cameras` oraz `Webcams`).
+>
+> Zrealizowano kompleksowy pakiet **Release R3.2 (`RS-24`)** wdrażający 5-filarową architekturę hybrydową opartą na standardzie W3C SKOS (*Simple Knowledge Organization System*) oraz czysto pythonowej normalizacji morfologicznej (Zasada P-9), zgodnie ze specyfikacją techniczną `production_artifacts/Technical_Specification_R3_2.md` (v1.1.0) oraz raportem badawczym `production_artifacts/Research_Report.md` (§10).
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-22-026**.
+> **Wynik empiryczny**: **100.0% Target Admission (105 / 105 zapytań)** na zbiorze tuningowym (0 odrzuceń przez filtr kategoryczny). Zestaw 71 testów jednostkowych i regresyjnych zakończył się wynikiem **PASS**.
+
+#### 🔴 Nowe komponenty
+
+1. **Wzbogacenie całego grafu Neo4j o synonimy W3C SKOS `alt_labels` (`scripts/enrich_taxons_skos.py` — Critical, RS-24):**
+   * Zaimplementowano narzędzie `SKOSTaxonEnricher` dokonujące indukcji leksykalnej na wszystkich 1,183 węzłach `:Taxon` w Neo4j.
+   * Ekstrakcja łączy kontekst ścieżki taksonomicznej (`path`), tytuły powiązanych produktów katalogowych oraz kuratorowane synonimy potoczne.
+   * Gwarancja integralności rzeczownika głównego (*Head-Noun Integrity*): kategorie akcesoriów nigdy nie otrzymują nagich etykiet urządzeń (np. `Laptop Accessories` nigdy nie otrzyma synonimu `'laptop'`).
+   * Eliminacja zduplikowanych tokenów (`'webcam webcam'`) oraz fragmentów złożeń (`ear`, `bay`, `way`, `via`, `port`).
+   * Zapisano właściwości `t.alt_labels` do bazy Neo4j i wyeksportowano zrzut do `graph_versions/v2/taxon_skos_alt_labels.json`.
+   * Weryfikacja bezpośrednio w Cypherze potwierdziła 100% poprawność zapytań testowych (`streaming camera` $\to$ `Webcams`, `notebook` $\to$ `Laptops`, `digicam` $\to$ `Digital Cameras`, `wall charger` $\to$ `Chargers & Adapters`).
+
+2. **Zestaw testów jednostkowych i integracyjnych R3.2 (`tests/test_r3_2_hybrid_product_type.py` — Critical):**
+   * 55 testów weryfikujących kryteria akceptacyjne `AC-R3.2-00` .. `AC-R3.2-04`:
+     * `test_ac_r3_2_00_*`: kompletność artefaktu SKOS (1,183 węzły), brak szumu reduplikacji, brak fragmentów złożeń, ochrona integralności akcesoriów.
+     * `test_ac_r3_2_01_*`: reguły normalizacji lematów `normalize_lemma` (nieregularne, przyrostkowe, niezmienne), dekompozycja `decompose_type_phrase`, usuwanie dopisków w nawiasach (`laptop (MacBook Air)` $\to$ `clean_text='laptop'`).
+     * `test_ac_r3_2_02_*`: rezolucja SKOS i zapobieganie przejmowaniu taksonomii przez akcesoria (`Mouse` $\to$ `Mice`, `Tablet` $\to$ `Tablets`, `Laptop` $\to$ `Laptops`, `Phone` $\to$ `Bestselling Renewed Smartphones`).
+     * `test_ac_r3_2_03_*`: rozwijanie rodzin taksonów dla zapytań przekrojowych (`Charger`, `Camera` + webcam, `Phone`).
+     * `test_ac_r3_2_04_*`: dopuszczanie poprawnych urządzeń przez strzeżoną furtkę leksykalną oraz blokowanie pułapek akcesoriów (`Case for iPhone`).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Dwustronna lematyzacja morfologiczna i dekompozycja składniowa (`src/knowledge_graph/graphdb/resolver_service.py` — Critical, P-9):**
+   * Dodano czysto pythonowe funkcje `normalize_lemma(token)` oraz `decompose_type_phrase(phrase)`, działające deterministycznie bez potrzeby pobierania zewnętrznych korpusów NLTK WordNet w środowisku produkcyjnym.
+   * Obsługa form nieregularnych (`mice` $\to$ `mouse`, `batteries` $\to$ `battery`, `lenses` $\to$ `lens`), form niezmiennych w l. mnogiej (`headphones`, `earbuds`, `glasses`, `jeans`, `series`) oraz odrzucanie wtrąceń markowych w nawiasach.
+   * Wykrywanie pojemników akcesoriów (`ACCESSORY_HEAD_LEMMAS`) zapobiegające ich fałszywemu dopasowaniu jako główny typ produktu.
+   * Dodano metodę `resolve_category_family(text, query_text)` rozwijającą zapytanie kategoryczne w spójną rodzinę pokrewnych taksonów.
+
+2. **Hybrydowa klauzula Cypher i strzeżona furtka bezpieczeństwa w `GraphSearchTool` (`src/tools/graph_search_tool.py` — Critical):**
+   * W `_normalize_filters` zintegrowano rozwijanie rodziny kategorii `resolve_category_family`, przekazując `_resolved_category_family` oraz `_resolved_taxon_paths`.
+   * W `_build_filters` klauzula kategoryczna Cypher łączy weryfikację strukturalną (`IN_TAXON -> BROADER*0..7` z uwzględnieniem `t.name`, `t.alt_labels` oraz `category_family_filter`) ze strzeżoną furtką leksykalną (`head_noun_escape_regex` oraz wykluczeniem `accessory_exclusion_regex`).
+   * Poprawne urządzenia bez taksonu lub ze złym taksonem są dopuszczane, podczas gdy akcesoria (`Case for...`, `Stand for...`) są bezwzględnie odrzucane.
+   * W `_execute_fused_search` zaimplementowano ważenie bliskości taksonomicznej na zbiorze wielu ścieżek rodziny (`_resolved_taxon_paths`), stosując podejście *best-path consensus*.
+
+3. **Plany i audyt projektu (`production_artifacts/Implementation_Plan.md`, `production_artifacts/Audit_Report.md`):**
+   * Zadanie `RS-24` oznaczone jako ukończone `[x]`.
+   * Dodano szczegółowy raport audytu specyfikacji R3.2 z metryką dopuszczenia celów $105/105$ ($100.0\%$).
+
+---
+
 ## 📅 2026-10-21 (Release R3.1: Precyzja Atrybutów i Hierarchii — Ważenie Rzadkości IDF [RS-03], Stopniowana Bliskość Taksonomiczna LCP [RS-10], Adaptacyjny Porządek Filter-First [RS-07])
 
 ### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. Stage 1 [GV2-07..GV2-09])

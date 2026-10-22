@@ -479,3 +479,65 @@ Following Stage 1 (`GV2-07` .. `GV2-09`), empirical analysis identified three re
 | **R3.1-D2 (Graded Taxonomic Proximity)** | In `DETAIL_QUERY`, retrieve `head(taxon_paths) AS primary_taxon_path`. In `_execute_fused_search`, compute tree distance between target taxon path and candidate path, scaling fused scores by $[1.00, 0.85, 0.70, 0.20]$. |
 | **R3.1-D3 (Filter-First Adaptive Order)** | When `product_count < 500`, execute Cypher-first subtree candidate retrieval with in-memory vector scoring, bypassing global ANN truncation. |
 
+---
+
+## 10. Release R3.2 Research Addendum — Domain-Agnostic Hybrid Product-Type Matching (`RS-24`) (2026-10-22)
+
+### 10.1 Empirical Failure Diagnosis on Live Graph v2 (`tuning` split, $n = 105$)
+
+Following Release R3.1, an empirical audit of target admission across the 105 retrieval tuning queries (`evaluations/benchmarks/benchmark_v2.json`) revealed that **13 of 105 target products (12.4% overall; 10 of 21 legacy queries = 47.6%) are hard-rejected by the Cypher category filter before vector/lexical fusion even evaluates them**:
+
+| Query ID | Stratum | Input Category Filter | Currently Resolved Taxon | Target ASIN | Target's Actual Taxon in Graph v2 | Failure Mechanism |
+|---|---|---|---|---|---|---|
+| `r2b_s3_001` | `S3` | `microphone` | `Headsets & Microphones` | `B000VXF2I6` | `['Microphones']` | Compound taxon hijacking (`product_count` tie-break) |
+| `r2b_s3_036` | `S3` | `tablet` | `Tablet Accessories` | `B004QPAKSW` | `['Tablets']` | Accessory-modifier taxon hijacking (`Tablet Accessories` count $>$ `Tablets`) |
+| `live_eval_mouse_01..03` | `legacy` | `Mouse` | `Keyboard & Mouse Combos` | `B0B4SWZTZ1`, `B0B4KJRD1C`, `B006MCDUZM` | `['Mice']` | Irregular plural blindness (`mouse(s)?` misses `Mice`, hits `Mouse Combos`) |
+| `live_eval_laptop_02..03` | `legacy` | `Laptop` | `Laptop Accessories` | `B08CSHM6L3`, `B0BWV4MXQG` | `['Traditional Laptops']` | Accessory-modifier taxon hijacking (`Laptop Accessories` count $>$ `Traditional Laptops`) |
+| `live_eval_phone_01..03` | `legacy` | `Phone` | `Phone & Tablet Accessories` | `B08GNRGB67`, `B07VV9HSGL`, `B089SRK8VQ` | `['samsung_tradein']`, `['Bestselling Renewed Smartphones']` | Accessory hijacking + promotional/miscategorized seller taxon |
+| `live_eval_charger_01, 03` | `legacy` | `Charger` | `Batteries & Chargers` | `B088FHJLR1`, `B095LLDH4H` | `['Chargers & Adapters']`, `['Power Converters']` | Single-taxon collapse (`k=1`) amputates parallel charger branches |
+| `live_eval_camera_01` | `legacy` | `Camera` | `Camera` (unresolved) | `B0BGXS26QL` | `['Webcams']` | Query asks for "streaming webcam", filter says `Camera`; `Webcams` is under `Computers & Accessories` |
+
+### 10.2 Four Architectural Root Causes
+
+1. **Accessory-Modifier Taxon Hijacking**:
+   In `ResolverService._execute_waterfall`, Tier 2 matches `node.name =~ '(?i).*(^|[^a-z])tablet(s)?([^a-z]|$).*' ORDER BY COALESCE(node.product_count, 0) DESC`. Because `Tablet Accessories` and `Laptop Accessories` contain the modifier token `Tablet`/`Laptop` and have larger product counts than the primary device leaves (`Tablets`, `Traditional Laptops`), sorting by `product_count DESC` without head-noun awareness systematically resolves primary device queries to accessory subtrees.
+2. **Irregular Morphology & Inflection Blindness**:
+   The hardcoded regex `(s)?` fails on irregular plurals (`mouse` $\leftrightarrow$ `mice`), `-y`/`-ies` inflections (`battery` $\leftrightarrow$ `batteries`, `accessory` $\leftrightarrow$ `accessories`), and invariant nouns (`headphones`, `glasses`, `jeans`).
+3. **Single-Taxon Collapse (`k=1`)**:
+   `_normalize_single_category` collapses a broad product type (e.g., `"Charger"`, `"Laptop"`, `"Microphone"`) into a single `Taxon` string, amputating legitimate sibling/parallel device branches (`Chargers & Adapters` vs `Power Adapters` vs `Power Converters` vs `Wall Chargers`; `Traditional Laptops` vs `2 in 1 Laptops`).
+4. **Hard-Filter Cliff on Miscategorized Products**:
+   In Graph v2, 99.4% of products have an `IN_TAXON` edge, but sellers frequently assign promotional or coarse leaves (e.g., Samsung Galaxy S20+ in `samsung_tradein`, Logitech C920 in `Computers`). Blocking title/lexical head-noun matching whenever `EXISTS { (node)-[:IN_TAXON]->(:Taxon) }` causes 100% recall loss on miscategorized products.
+
+### 10.3 Recommended Architecture: Domain-Agnostic Hybrid Product-Type Matching (`RS-24`)
+
+To guarantee domain-agnosticism (transferable to Fashion, Cosmetics, Movies, Home without code rewrites) while achieving 100% target admission, we unite **SKOS `alt_labels` Graph Enrichment** (`scripts/enrich_taxons_skos.py`) with **Runtime Hybrid Resolution**:
+
+1. **Pillar A — Full-Graph W3C SKOS `alt_labels` Induction (`scripts/enrich_taxons_skos.py`)**:
+   - Currently, only 4 of 1,183 `:Taxon` nodes in Neo4j have `t.alt_labels` populated from the prototype run, and `ResolverService` does not yet query `t.alt_labels`.
+   - Upgrade `scripts/enrich_taxons_skos.py` to enrich **all 1,183 `:Taxon` nodes** in Neo4j with clean `t.alt_labels` (and export `graph_versions/v2/taxon_skos_alt_labels.json` for reproducibility):
+     - Combines taxonomic path context, sample product titles (`(:ParentProduct)-[:IN_TAXON]->(t)`), and morphological lemmatization (`WordNetLemmatizer` + irregular plural handling: `Mice` $\to$ `mouse`, `Batteries` $\to$ `battery`) with LLM/catalogue n-gram mining.
+     - Enforces **Head-Noun Integrity during `alt_labels` generation**: a device taxon like `Traditional Laptops` receives `["laptop", "laptops", "notebook", "gaming laptop", ...]`, whereas an accessory taxon like `Laptop Accessories` only receives accessory-headed labels (`["laptop accessory", "notebook accessory"]`) and **never** bare `"laptop"`.
+     - Eliminates token-reduplication noise (e.g., `'webcam webcam'`, `'batteries camera'`, `'toys cameras'`, brand leaks like `'oladance headphones'`).
+2. **Pillar B — Dual-Side Morphological Normalizer & SKOS-Aware `ResolverService` (`src/knowledge_graph/graphdb/resolver_service.py`)**:
+   - Update `ResolverService` (both Cypher Tier 1/2 and the in-memory `_taxon_cache`) to load and match against `t.name` (`skos:prefLabel`) **and** `t.alt_labels` (`skos:altLabel`).
+   - Apply dual-side morphological normalization (Principle **P-9**) and head-noun vs. accessory-modifier scoring so primary device queries (`"Laptop"`, `"Tablet"`, `"Mouse"`, `"Phone"`) resolve to device taxa with `score = 1.0` via `alt_labels` / `head_lemma`, while accessory-head taxa (`Laptop Accessories`, `Tablet Accessories`, `Keyboard & Mouse Combos`) are demoted when no accessory was requested.
+3. **Pillar C — Multi-Taxon Family Shortlist Resolution (`resolve_category_family`)**:
+   - Instead of collapsing a category to a single string (`k=1`), `ResolverService.resolve_category_family(text, query_text=None, max_taxa=6)` returns the **cohesive family of all high-confidence `Taxon` nodes** matching `t.name` or `t.alt_labels` (plus any more specific product type mentioned in `query_text`, e.g., `"webcam"` when the coarse filter is `"Camera"`).
+4. **Pillar D — Hybrid Agreement Gating & Guarded Lexical Escape Hatch (`src/tools/graph_search_tool.py`)**:
+   - In `GraphSearchTool._build_filters`, a candidate product is admitted if:
+     - **(Structural Taxon Match)**: Its `Taxon` or any `BROADER*0..7` ancestor matches the resolved `Taxon` family `$categories_filter` (by `name` or `alt_labels`), **OR**
+     - **(Guarded Lexical Head-Noun Escape Hatch)**: Its `title` matches the lemmatized product-type head noun word-boundary regex `$raw_categories_filter` **AND** is not an accessory-for-X phrase (`for `, `compatible with `, `fits `) unless an accessory was requested.
+5. **Pillar E — Bottom-Up Category Consensus & Multi-Path Taxonomic Ranking**:
+   - In `GraphSearchTool._execute_fused_search`, `_compute_taxon_distance` evaluates the minimum distance across **all** `Taxon` paths in the resolved family (and top-$K$ consensus leaf), granting a verified proximity multiplier ($0.85$–$1.00$) to miscategorized genuine devices while penalizing accessory traps ($0.20$).
+
+### 10.4 Release R3.2 Decisions (`R3.2-D1` .. `R3.2-D5`)
+
+| ID | Decision |
+|---|---|
+| **R3.2-D1 (Full-Catalog SKOS `alt_labels` Enrichment)** | Refine `scripts/enrich_taxons_skos.py` (removing reduplication/brand noise and enforcing head-noun integrity so accessory taxa never steal bare device nouns) and execute it across all 1,183 `:Taxon` nodes in Neo4j, persisting `t.alt_labels` and `graph_versions/v2/taxon_skos_alt_labels.json`. |
+| **R3.2-D2 (SKOS + Lemmatized Head-Noun Scoring in `ResolverService`)** | Wire `t.alt_labels` into `ResolverService._execute_waterfall` and `_ensure_taxon_cache`. Score exact `prefLabel`/`altLabel` and lemmatized head-noun matches at $1.00$–$0.95$, while capping accessory-head taxons (`Laptop Accessories`) at $0.45$ when no accessory was requested. |
+| **R3.2-D3 (Multi-Taxon Family Resolution)** | Add `ResolverService.resolve_category_family` and update `GraphSearchTool._normalize_filters` so a single category filter expands to the cohesive family of matching `Taxon` names (plus query-refined sub-types like `Webcams` when `query_text` specifies `"webcam"` under coarse filter `"Camera"`). |
+| **R3.2-D4 (Guarded Lexical Head-Noun Escape Hatch)** | In `GraphSearchTool._build_filters`, allow products miscategorized in non-matching or promotional `Taxon` nodes (e.g., `samsung_tradein`) to pass the filter if their title matches the lemmatized head-noun pattern and does not match the accessory-trap exclusion pattern (`for/fits/compatible with + target`). |
+| **R3.2-D5 (Multi-Path Taxon Distance & Consensus)** | Extend `GraphSearchTool._execute_fused_search` to compute the minimum taxonomic tree distance across all `Taxon` paths in the resolved category family, with head-noun verification for escape-hatch candidates. |
+
+
