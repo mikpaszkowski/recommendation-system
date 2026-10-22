@@ -189,7 +189,7 @@ _Amended (§13, A-11): the recovery node also gives CLARIFY `recovery_failed` wh
 - **`scripts/evaluate_retrieval.py`**: gold validation, provenance, `--require-clean`, per-query records, facts fetch, CS verdicts, dialogue metrics, comparisons, JSONL.
 - **New scripts**: `scripts/archive_eval_run.py`, `scripts/check_eval_gate.py`.
 - **Knowledge Graph**: read-only; no schema, index or data change.
-- **Unchanged**: `DialogueManager`, `CriticAgent`, `KnowledgePathExtractor`, `score_fusion.py`, MACS logic, the router prompt.
+- **Unchanged**: `DialogueManager`, `CriticAgent`, `KnowledgePathExtractor` (Graph Evidence Paths: template metapaths inspired by KECR/PGPR), `score_fusion.py`, hierarchical constraint relaxation logic (formerly called MACS), the router prompt.
 
 ### 3.4 Interaction with `DialogueManager._evaluate_dialogue_state` (unchanged)
 

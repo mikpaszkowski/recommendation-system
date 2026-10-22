@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The Foundation phase is 100% complete. Meta-Phase A has made significant progress, with the Hybrid Search Tool Hardening (GAP-A1) and KECR Path Extraction (GAP-A4) now structurally implemented and wired into the orchestrator. Flow 1 (Recommendation) is now fully wired end-to-end. However, automated tests for KECR and the end-to-end recommendation pipeline are missing, as are the evaluation scripts (GAP-A6). Meta-Phase B (persistence and LangGraph orchestration) remains completely unstarted, leaving the system without cross-session memory.
+The Foundation phase is 100% complete. Meta-Phase A has made significant progress, with the Hybrid Search Tool Hardening (GAP-A1) and Graph Evidence Path Extraction (template metapaths inspired by KECR/PGPR, GAP-A4) now structurally implemented and wired into the orchestrator. Flow 1 (Recommendation) is now fully wired end-to-end. However, automated tests for Graph Evidence Paths and the end-to-end recommendation pipeline are missing, as are the evaluation scripts (GAP-A6). Meta-Phase B (persistence and LangGraph orchestration) remains completely unstarted, leaving the system without cross-session memory.
 
 ---
 
@@ -17,10 +17,10 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 
 | File | Primary Class / Function | Responsibility | Completeness Signal |
 |------|--------------------------|----------------|---------------------|
-| `src/agents/orchestrator.py` | `AgentOrchestrator` | Main entry point for conversational routing, updated with KECR | ✅ No stubs |
+| `src/agents/orchestrator.py` | `AgentOrchestrator` | Main entry point for conversational routing, updated with Graph Evidence Paths | ✅ No stubs |
 | `src/agents/critic_agent.py` | `CriticAgent` | Context-aware LLM reranking | ✅ No stubs |
-| `src/tools/graph_search_tool.py` | `GraphSearchTool` | Hybrid retrieval with MACS & excluded_asins | ✅ No stubs |
-| `src/tools/kecr_tool.py` | `KnowledgePathExtractor` | Extracts reasoning paths using shortestPath Cypher | ✅ No stubs |
+| `src/tools/graph_search_tool.py` | `GraphSearchTool` | Hybrid retrieval with constraint relaxation & excluded_asins | ✅ No stubs |
+| `src/tools/kecr_tool.py` | `KnowledgePathExtractor` | Extracts Graph Evidence Paths (template metapaths inspired by KECR/PGPR) | ✅ No stubs |
 | `src/tools/profile_tool.py` | `ProfileTool` | Profile wrapper | ✅ No stubs |
 | `src/llm_interface/prompt_constructor.py` | `PromptConstructor` | Final prompt generation with graph reasoning slots | ✅ No stubs |
 | `src/user/profile_manager.py` | `InMemoryUserProfileManager`| Profile state storage (in-memory only) | ✅ No stubs |
@@ -32,7 +32,7 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 
 | Flow | Status | Broken/Missing Step |
 |------|--------|---------------------|
-| Flow 1: Recommendation (SEARCH) | ✅ | Fully wired (KECR now feeds into PromptConstructor) |
+| Flow 1: Recommendation (SEARCH) | ✅ | Fully wired (Graph Evidence Paths now feed into PromptConstructor) |
 | Flow 2: Profile Update | 🟡 | Missing persistent storage (B2) |
 | Flow 3: Clarification | 🟡 | Missing `pending_clarification` contextual memory (B3) |
 | Flow 4: Session Memory | ❌ | Missing persistent storage (B2) |
@@ -47,10 +47,10 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 | Phase | Criterion | Status | Notes |
 |----|-----------|--------|-------|
 | Foundation | asyncio Refactor, Neo4j Vector API, requirements.txt, KG Build | ✅ | Fully implemented |
-| Meta-Phase A | A1: Soft-Scored Hybrid Retrieval & MACS | ✅ | Implemented `excluded_asins` and MACS |
+| Meta-Phase A | A1: Soft-Scored Hybrid Retrieval & Constraint Relaxation | ✅ | Implemented `excluded_asins` and constraint relaxation |
 | Meta-Phase A | A2: CriticAgent Reranking | ✅ | Fully implemented |
 | Meta-Phase A | A3: PromptConstructor Graph Slots | ✅ | `graph_reasoning_paths` param added |
-| Meta-Phase A | A4: KECR Reasoning Path Extraction | 🟡 | Logic implemented and wired, but tests missing |
+| Meta-Phase A | A4: Graph Evidence Path Extraction (KECR/PGPR-inspired) | 🟡 | Logic implemented and wired, but tests missing |
 | Meta-Phase A | A5: Explainable Response Gen | 🟡 | Wired, but `test_recommendation_pipeline.py` missing |
 | Meta-Phase A | A6: Quantitative & Qualitative Eval | ❌ | Missing `evaluate_retrieval.py` and `evaluate_generative.py` |
 | Meta-Phase B | LangGraph Orchestration & MemoCRS Persistence | ❌ | B1-B6 missing completely |
@@ -80,7 +80,7 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 
 ## 6. Gap Backlog
 
-### [GAP-A4-TESTS] KECR Integration Tests
+### [GAP-A4-TESTS] Graph Evidence Paths (KECR/PGPR-inspired) Integration Tests
 **Phase**: Meta-Phase A4
 **Priority**: 🟠 High
 **Implementation Plan ref**: Meta-Phase A > A4
@@ -138,9 +138,9 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 
 | Order | Gap ID | Title | Can Parallelise With | Rationale |
 |-------|--------|-------|----------------------|-----------|
-| 1     | GAP-A4-TESTS | KECR Integration Tests | GAP-B2, GAP-B3 | Finishes A4 implementation properly. |
+| 1     | GAP-A4-TESTS | Graph Evidence Paths Integration Tests | GAP-B2, GAP-B3 | Finishes A4 implementation properly. |
 | 1     | GAP-B2 | MemoCRS Persistent Memory | GAP-A4-TESTS, GAP-B3 | Unblocks multi-turn accumulation and LangGraph persistence. |
-| 2     | GAP-A5-TESTS | Pipeline End-to-End Tests | GAP-B2 | Depends on KECR tests. |
+| 2     | GAP-A5-TESTS | Pipeline End-to-End Tests | GAP-B2 | Depends on Graph Evidence Paths tests. |
 | 3     | GAP-A6 | Quantitative & Qual Evaluation | GAP-B2 | Depends on a fully tested recommendation pipeline. |
 | 4     | GAP-B3 | CLARIFY Path State | GAP-A6 | Independent flow enhancement. |
 

@@ -51,8 +51,8 @@ Follow these steps when responding to users:
             conversation_history: Optional conversation history
             retrieved_items: Optional list of retrieved items
             preferences: Optional weighted preferences (likes/dislikes/constraints)
-            graph_reasoning_paths: Optional list of KECR-inspired graph evidence paths (Phase A3/A4)
-            relaxed_constraints: Optional list of MACS constraint relaxations applied during retrieval
+            graph_reasoning_paths: Optional list of Graph Evidence Paths (template metapaths inspired by KECR/PGPR, Phase A3/A4)
+            relaxed_constraints: Optional list of hierarchical constraint relaxations applied during retrieval
             
         Returns:
             List of LangChain message objects ready for the LLM

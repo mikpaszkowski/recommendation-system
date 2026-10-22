@@ -727,9 +727,9 @@ class AgentOrchestrator:
                 search_result["partial_matches_only"] = True
 
             # =========================================================================
-            # STEP 3d.5: Phase A4 KECR-inspired Graph Evidence Path Extraction
+            # STEP 3d.5: Graph Evidence Path Extraction (template metapaths inspired by KECR/PGPR)
             # =========================================================================
-            logger.info("[STEP 3d.5] Extracting KECR-inspired Graph Evidence Paths...")
+            logger.info("[STEP 3d.5] Extracting Graph Evidence Paths (template metapaths inspired by KECR/PGPR)...")
             extraction_result = self.kecr_tool.extract_paths(
                 user_id=user_id,
                 candidate_items=search_result["items"],

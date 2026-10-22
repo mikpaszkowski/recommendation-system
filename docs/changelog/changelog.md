@@ -1735,3 +1735,40 @@ W odpowiedzi na analizę awarii zapytania 16 (`ret_016`) w sesji ewaluacyjnej `e
 * Przeprowadzono pełny zestaw testów regresyjnych (78/78 testów zaliczonych).
 
 
+
+
+---
+
+## 📅 2026-10-22
+
+### Realizacja Audytu E.5: Uczciwe Nazewnictwo Komponentów Grafowych, Relaksacja Ograniczeń i Rzeczywiste Wagi RRF
+
+W odpowiedzi na zalecenia audytu akademickiego (punkt E.5 „Uczciwe nazewnictwo”) przeprowadzono kompleksowe dostosowanie dokumentacji technicznej, planu implementacji, raportu wizji oraz specyfikacji wkładu do pracy magisterskiej w celu eliminacji nadinterpretacji terminologicznych i zapewnienia pełnej przejrzystości naukowej.
+
+#### 1. Uczciwe Nazewnictwo Ekstrakcji Ścieżek: Graph Evidence Paths (Inspirowane KECR/PGPR)
+* **Rozróżnienie od KECR (Ren i in., ACM TIST 2024)**: Model KECR Rena i in. osadza wiedzę grafową oraz uczy się sekwencyjnego łańcucha rozumowania za pomocą algorytmu optymalizacji polityki RL (ich Algorithm 1). Zaimplementowany w projekcie moduł (`KnowledgePathExtractor`, dawniej `KECRTool`) nie wykorzystuje uczenia maszynowego ani sieci neuronowych — jest to w pełni deterministyczny wyszukiwacz szablonowych metapaths w Cypherze (`BOUGHT_TOGETHER`, `HAS_ATTRIBUTE`, `IN_TAXON`).
+* **Rozróżnienie od KECRS (Zhang i in., SIGIR 2022)**: Wyeliminowano potencjalne mylenie modułu z generatywnym modelem KECRS opartym na podgrafach i pamięciach zewnętrznych.
+* **Nowa nazwa formalna**: Wprowadzono precyzyjne określenie: **Graph Evidence Paths (szablonowe metapaths, inspirowane KECR/PGPR)** (ang. *Graph Evidence Paths — template metapaths inspired by KECR/PGPR*), nawiązujące do koncepcji uziemiania ścieżek grafowych (PGPR, Xian i in., 2019; KECR, Ren i in., 2024).
+
+#### 2. Uczciwa Rola w Wyjaśnianiu Rekomendacji
+* **Charakterystyka komponentu**: Skorygowano opisy w planie implementacji i raporcie wizji wskazujące, jakoby komponent generował gotowe wyjaśnienia rekomendacji. W rzeczywistości komponent ten ekstrahuje surowe ciągi dowodowe (`[GRAPH EVIDENCE]`), które są wstrzykiwane do prompta generacji.
+* **Brak historii i fallbacki**: W przypadku użytkowników w scenariuszu *cold-start* lub bez powiązanych recenzji w grafie, moduł generuje standardowe komunikaty zapasowe (*„Matched via hybrid semantic retrieval...”*). Rzeczywiste wyjaśnienia konwersacyjne w języku naturalnym są syntetyzowane dopiero na etapie prompta przez model LLM (często na bazie ogólnych cech z katalogu), a nie przez sam algorytm grafowy.
+
+#### 3. Przemianowanie „MACS/MACR” na Relaksację Ograniczeń (Constraint Relaxation)
+* Zrezygnowano z arbitralnego pseudonimu „MACS” (rozwijanego niejednolicie jako *Minimal Active Constraint Set*, *Multi-Agent Constraint Solving* lub mylonego z *MACR*), w tym usunięto fikcyjne odwołania bibliograficzne.
+* Mechanizm w `GraphSearchTool` został sformalizowany jako **hierarchiczna relaksacja ograniczeń (relaksacja ograniczeń)** — deterministyczna 3-etapowa kaskada heurystyczna: poszerzenie widełek budżetowych o 15% $\to$ uogólnienie taksonomiczne w górę hierarchii `Taxon` poprzez relację `[:BROADER]` $\to$ ostateczne wycofanie filtru kategorii przy niedoborze kandydatów ($< 3$).
+
+#### 4. Mechanizm Rankingu: Wagi Kanałów RRF Zamiast „Bramkowania $\alpha$”
+* Wyjaśniono rzeczywisty wpływ parametru $\alpha$ w `KnowledgePathExtractor`: służy on wyłącznie jako wewnętrzna waga liniowa do porządkowania rekordów dowodowych w zapytaniu Cypher ($S_{composite} = \min(1.0, \alpha \cdot s_{hist} + (1-\alpha) \cdot s_{conv})$) i nie modyfikuje kolejności kandydatów przekazywanych użytkownikowi.
+* Pozycjonowanie i ranking kandydatów są determinowane wyłącznie przez **ważoną fuzję odwrotności rang (wRRF / RRF)** na 4 kanałach MaxP (`product`, `attribute`, `review`, `lexical` w `src/tools/score_fusion.py`) oraz weryfikację filtracyjną przez `CriticAgent`.
+
+#### 5. Zaktualizowane Artefakty i Moduły
+* `production_artifacts/Vision_Report.md`: Decyzja `2026-10-22-027`, aktualizacja celów i metryk.
+* `production_artifacts/Implementation_Plan.md`: Aktualizacja sekcji A1, A4, B1 oraz tabeli GAP.
+* `production_artifacts/Technical_Specification.md`: Klaryfikacja telemetryczna i nazewnicza.
+* `production_artifacts/Project_State_Report.md`: Aktualizacja inwentarza modułów i backlogu luk.
+* `production_artifacts/Research_Report.md`: Ujednolicenie opisów architektury wieloagentowej.
+* `thesis/6-doc-orthogonal-gating.md`: Gruntowna rewizja dokumentu wkładu pracy magisterskiej (Noty korekcyjne C-4, C-5, C-6, nowy diagram przepływu, aktualizacja hipotez i metryk).
+* `thesis/4-doc-hybrid-scoring.md`, `thesis/7-doc-evaluation-framework.md`, `thesis/15-doc-taxonomic-lexical-fusion.md`, `thesis/README.md`: Dostosowanie terminologii relaksacji ograniczeń i usunięcie zmyślonych cytowań.
+* `src/tools/kecr_tool.py`: Aktualizacja docstringów modułu i klasy `KnowledgePathExtractor` oraz dodanie aliasu wstecznego `KECRTool`.
+* `src/llm_interface/prompt_constructor.py`, `src/agents/orchestrator.py`: Dostosowanie komentarzy i logów telemetrycznych.

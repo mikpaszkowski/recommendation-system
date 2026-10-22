@@ -7,7 +7,7 @@ This repository contains the implementation of a modern Multi-Agent System (MAS)
 The system addresses the fundamental limitations of pure LLM implementations (hallucinations, lack of deterministic grounding) and traditional engines (cold-start problem) by synthesizing:
 1. **Multi-Agent Orchestration**: `AgentOrchestrator` handles dialogue policy and `CriticAgent` evaluates semantic constraints.
 2. **Hybrid GraphRAG Retrieval**: Combines Neo4j dense vector ANN search with hard structural Cypher filtering.
-3. **Knowledge-Enhanced Conversational Reasoning (KECR)**: Injects explicit graph reasoning pathways into the LLM context window to guarantee data provenance.
+3. **Graph Evidence Paths (template metapaths inspired by KECR/PGPR)**: Injects explicit deterministic graph reasoning pathways into the LLM context window to guarantee data provenance.
 
 ## Directory Structure
 
@@ -15,7 +15,7 @@ The system addresses the fundamental limitations of pure LLM implementations (ha
   * `agents/` - Multi-agent implementations (`orchestrator.py`, `critic_agent.py`)
   * `dialog_manager/` - Dialogue state modeling and session adapters
   * `knowledge_graph/` - Neo4j database connectors and resolver services; `graph_v2/` holds the graph v2 transform, taxonomy, lineage and validation code
-  * `tools/` - GraphSearchTool and KECRTool for retrieval
+  * `tools/` - `GraphSearchTool` and `KnowledgePathExtractor` (Graph Evidence Paths) for retrieval
   * `llm_interface/` - Prompt parsers and LLM extraction utilities
   * `evaluation/` - Two-Tiered evaluation metrics and harnesses
 * `scripts/` - Execution scripts for Graph Ingestion and Retrieval Evaluation

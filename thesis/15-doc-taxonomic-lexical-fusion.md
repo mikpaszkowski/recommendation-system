@@ -16,7 +16,7 @@ In conversational recommender systems (CRS) backed by hybrid Knowledge Graphs (G
 
 We demonstrate that combining:
 1. Deterministic taxonomic subtree matching via transitive `[:BROADER*0..7]` edges over fine-grained `:Taxon` hierarchies,
-2. Taxonomic progressive generalization (stepping up ancestor nodes via Minimal Unsatisfiable Core / MACS relaxation) prior to constraint dropping,
+2. Taxonomic progressive generalization (stepping up ancestor nodes via hierarchical constraint relaxation) prior to constraint dropping,
 3. Multi-channel reciprocal rank fusion integrating dense semantic channels (title, attribute, review) with an online full-text BM25 lexical channel ($RRF_4$),
 4. Selectivity-adaptive vector oversampling ($k_{ann}$ scaled dynamically for selective subtrees),
 
@@ -29,7 +29,7 @@ yields a **$+10.48\text{ percentage point}$ gain in $HR@20$** ($0.2286 \to 0.333
 ### 2.1 Research Questions (RQ)
 - **RQ 15.1 (Taxonomic vs. Coarse Disconnect)**: How does resolving user intent against a fine-grained hierarchical taxonomy ($|\mathcal{T}| = 1,183$ `:Taxon` nodes) with variable-depth path traversal compare against legacy coarse category filtering in preventing false-positive cross-domain drift and false-negative title-blind exclusions?
 - **RQ 15.2 (Lexical Channel Attribution in Dense Fusion)**: Does the addition of a 4th lexical channel ($C_{\text{lex}}$, online Lucene BM25 over title, description, features, and specs) into reciprocal rank fusion statistically improve ranking precision ($NDCG@10$) and candidate rescue rates without exacerbating catalogue popularity bias?
-- **RQ 15.3 (MACS Taxonomic Step-Up)**: When a parametric constraint set $\mathcal{C}$ yields fewer than $K_{\min} = 3$ candidates, does generalizing to the immediate taxonomic parent $\text{parent}(T)$ along the directed acyclic graph $\mathcal{G}_{\text{tax}}$ preserve domain adherence compared to unconstrained constraint dropping?
+- **RQ 15.3 (Hierarchical Taxonomic Step-Up)**: When a parametric constraint set $\mathcal{C}$ yields fewer than $K_{\min} = 3$ candidates, does generalizing to the immediate taxonomic parent $\text{parent}(T)$ along the directed acyclic graph $\mathcal{G}_{\text{tax}}$ preserve domain adherence compared to unconstrained constraint dropping?
 
 ---
 
@@ -51,7 +51,7 @@ WHERE toLower(ancestor.name) = toLower($resolved_taxon)
    OR toLower(leaf.name) = toLower($resolved_taxon)
 ```
 
-### 3.2 Progressive Taxonomic Relaxation (MACS $\text{BROADER}$ Generalization)
+### 3.2 Progressive Taxonomic Relaxation (`BROADER` Hierarchical Generalization)
 Traditional constraint relaxation drops categorical filters completely when candidate yield $|\mathcal{R}| < K_{\min} = 3$, leading to severe semantic drift. Under our formulation, relaxation proceeds through a directed topological step-up:
 
 $$\mathcal{T}_{\text{relaxed}} = \begin{cases} 

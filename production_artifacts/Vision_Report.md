@@ -20,7 +20,7 @@ The project moves away from rigid processing pipelines and pure Text-to-Cypher g
 3. **Hybrid Semantic-Structural Retrieval**: 
     * **Vector Search**: Natural language intents are embedded into dense vectors for rapid Approximate Nearest Neighbor (ANN) search via Neo4j Vector Indexes.
     * **Structural Filtering**: Semantic results are simultaneously and deterministically filtered using hard Cypher constraints (e.g., price boundaries, brand exclusions) parsed dynamically by the Orchestrator.
-4. **Response Generation with Explicit Reasoning**: By injecting explicit graph reasoning pathways into the LLM's context window, the model is architecturally constrained to generate responses rooted in demonstrable data provenance.
+4. **Response Generation with Explicit Reasoning (Graph Evidence Paths)**: Injecting deterministic graph evidence paths (template metapaths inspired by KECR/PGPR) into the LLM's context window constrains the model to reference demonstrable data provenance, grounding recommendations in topological evidence rather than ungrounded claims.
 
 ## 4. Key Architectural Decisions & Scope Definition
 To guarantee the successful execution and focus of the master's thesis, the project scope is rigorously defined:
@@ -47,6 +47,21 @@ We will use an advanced LLM model to evaluate the generated responses according 
 
 ## Decision Log
 
+### 📅 2026-10-22-027: Honest Nomenclature Alignment — Graph Evidence Paths (Inspired by KECR/PGPR), Hierarchical Constraint Relaxation (ex-MACS), and Weighted RRF Ranking (E.5)
+**Context**: An academic audit (Review E.5 "Uczciwe nazewnictwo") identified nomenclature inflation and misattributions across project documentation:
+1. **KECR Inflation**: The path extraction component (`KnowledgePathExtractor`, formerly referred to as `KECR` or `KECRTool`) was loosely named after KECR (Ren et al., "Explicit Knowledge Graph Reasoning for Conversational Recommendation", ACM TIST 2024). However, Ren et al.'s model learns multi-hop reasoning chains through a dedicated training algorithm (their Algorithm 1 policy network). Our system has no policy training and no learned neural walk; it executes deterministic Cypher pattern comprehensions matching fixed template metapaths (co-purchase, shared attribute, shared category, conversational match). Furthermore, it must not be conflated with KECRS (Zhang et al., SIGIR 2022), another model focused on generative subgraphs.
+2. **Explanation Reality**: The path extractor was conceived to produce transparent recommendation explanations, but in reality it outputs raw template evidence strings (`[GRAPH EVIDENCE]`). When history is absent (cold-start or unlinked reviews), it emits fallback strings (`Matched via hybrid semantic retrieval...`). It does not synthesize natural language explanations itself; it merely passes structural snippets to the LLM prompt. In practice, the LLM generator often produces generic text rather than genuine reasoning over graph paths.
+3. **MACS / MACR Pseudo-Acronym**: The constraint relaxation cascade in `GraphSearchTool` was arbitrarily labeled "MACS" (variously expanded as Minimal Active Constraint Set, Multi-Attribute Constraint Satisfaction, or confused with MACR). There is no formal MACS algorithm implemented; it is a pragmatic 3-pass heuristic waterfall (budget widening $\to$ `Taxon` step-up via `[:BROADER]` $\to$ category drop).
+4. **"Orthogonal $\alpha$-Gating" vs. RRF Reality**: Early documents claimed recommendations were ranked or intercepted via "KECR orthogonal $\alpha$-gating". In reality, candidate ranking is governed exclusively by **Reciprocal Rank Fusion (RRF / wRRF)** channel weights ($w_{prod}, w_{attr}, w_{rev}, w_{lex}$ in `score_fusion.py`) and CriticAgent verification. The $\alpha$ parameter in `KnowledgePathExtractor` is only an internal heuristic weight between historical and conversational Cypher scores for ordering evidence strings; it has zero impact on the final candidate order presented to the user.
+
+**Decision**:
+1. **Rename to Graph Evidence Paths**: Explicitly designate the component as **Graph Evidence Paths (szablonowe metapaths, inspirowane KECR/PGPR)** in Polish and **Graph Evidence Paths (template metapaths inspired by KECR/PGPR)** in English. Clearly document that it is a zero-training, deterministic template metapath extractor inspired by structural path grounding concepts (PGPR, Xian et al., 2019; KECR, Ren et al., 2024), not a trained reasoning policy.
+2. **Clarify Explanation Role and Limitations**: Document that Graph Evidence Paths provides factual provenance grounding snippets, not synthesized causal explanations. True conversational explanations remain the responsibility of the generator LLM and CriticAgent, and improving genuine explainability remains an ongoing focus.
+3. **Rename MACS/MACR to Hierarchical Constraint Relaxation (relaksacja ograniczeń)**: Retire the pseudo-acronym MACS/MACR. Refer to this mechanism strictly as hierarchical constraint relaxation or constraint relaxation cascade.
+4. **Clarify Ranking Mechanics**: Formally document that retrieval ranking is determined by weighted RRF channel fusion, not $\alpha$-gating.
+**Rationale**: Eliminates academic overclaiming, establishes absolute scientific honesty for the Master's Thesis, and ensures system behavior accurately matches technical descriptions.
+**Status**: ✅ Accepted
+
 ### 📅 2026-10-22-026: Release R3.2 — Domain-Agnostic Hybrid Product-Type Matching & W3C SKOS `alt_labels` Induction (`RS-24`)
 **Context**: Following Release R3.1, an empirical target-admission audit across the 105 retrieval tuning queries (`evaluations/benchmarks/benchmark_v2.json`) revealed that 13 of 105 target products (12.4% overall; 10 of 21 legacy queries = 47.6%) were hard-rejected by the Cypher category filter due to four mechanisms: (1) accessory-modifier taxon hijacking (`Laptop` $\to$ `Laptop Accessories`, `Tablet` $\to$ `Tablet Accessories`, `Phone` $\to$ `Phone & Tablet Accessories`), (2) irregular morphology blindness (`Mouse` $\neq$ `Mice`), (3) single-taxon collapse (`k=1` amputating parallel device branches such as `Chargers & Adapters` vs `Power Adapters`), and (4) hard-filter cliffs on seller-miscategorized listings (e.g., Samsung Galaxy S20+ in `samsung_tradein`). Furthermore, only 4 of 1,183 `:Taxon` nodes had prototype `t.alt_labels` populated and `ResolverService` did not yet query `t.alt_labels`.
 **Decision**:
@@ -70,13 +85,13 @@ We will use an advanced LLM model to evaluate the generated responses according 
 **Status**: ✅ Accepted
 
 
-### 📅 2026-10-20-024: Stage 1 Graph v2 Structural & Lexical Consumption — Taxon Subtree Filtering, BROADER MACS Relaxation, and Lexical RRF Channel (GV2-07 .. GV2-09)
+### 📅 2026-10-20-024: Stage 1 Graph v2 Structural & Lexical Consumption — Taxon Subtree Filtering, BROADER Taxonomic Constraint Relaxation, and Lexical RRF Channel (GV2-07 .. GV2-09)
 **Context**: Release R2b tuning on live Graph v2 exposed a critical recall cliff ($HR@20$ collapsing from $90.5\%$ on legacy queries to $9.52\%$ on $S_0$–$S_4$). Empirical investigation confirmed that GraphSearchTool was querying legacy Graph v1 `BELONGS_TO_CATEGORY` and `Category.SUBCATEGORY_OF` relationships which do not exist in Graph v2. This caused 100% of category-filtered products to fail the graph condition and fall back to title matching, which failed on title-blind benchmark queries. Furthermore, Graph v2's prebuilt online `product_fulltext_index` and 1,183-node `Taxon` tree were unconsumed by the retrieval engine.
 **Decision**:
 1. **Taxon Hierarchy Consumption (`GV2-07`, `RS-24`, `RS-10`)**:
    - Re-route `ResolverService.resolve_category` to match against the 1,183 `:Taxon` nodes (Tier 1 exact, Tier 2 word-boundary regex, Tier 3 in-memory vector projection).
    - Update `GraphSearchTool._build_filters` to match `(:ParentProduct)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)` matching leaf or ancestor, with title fallback restricted to products without `IN_TAXON`.
-   - Upgrade MACS category relaxation: when candidates $< 3$, query `(child:Taxon)-[:BROADER]->(parent:Taxon)` to generalize one taxonomic level before dropping the category filter.
+   - Upgrade taxonomic constraint relaxation (relaksacja ograniczeń): when candidates $< 3$, query `(child:Taxon)-[:BROADER]->(parent:Taxon)` to generalize one taxonomic level before dropping the category filter.
 2. **Online Lexical Channel in RRF (`GV2-08`, `RS-03`)**:
    - Add `product_fulltext_index` as the 4th MaxP retrieval channel (`lexical`) in `score_fusion.py` and `GraphSearchTool`, with Lucene query sanitization.
    - Define fusion presets `rrf4` (equal weights), `wrrf4` (`0.35 product, 0.20 attribute, 0.15 review, 0.30 lexical`), and `cc4`.
@@ -215,7 +230,7 @@ Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
 3. **Deferred**: a deterministic fallback against the catalogue category vocabulary waits for RS-24 (R3); a string matcher now would repeat the English-plural rule rejected on 2026-10-17. Merging the parser and `_generate_search_params` stays in AI-07, and the R2 category-extraction metrics become its regression gate.
 4. **Gate**: zero spurious CLARIFY on legacy-21 and the tuning split across 3 repeated runs. Clarification recall on the ambiguous stratum must not fall below its pre-fix value.
 **Rationale**: Both changes are LLM-based and need no vocabulary, so they work for any domain. Recovery adds no LLM call on SEARCH turns. The ambiguous-stratum gate keeps legitimate clarification (precedent: clarification-need prediction in ClariQ, Aliannejadi et al., 2020).
-**Impact on vision**: Strengthens §2 Active Clarification. The system asks only when the request is actually underspecified, not when extraction fails. Router, Critic and KECR are otherwise unchanged.
+**Impact on vision**: Strengthens §2 Active Clarification. The system asks only when the request is actually underspecified, not when extraction fails. Router, Critic and Graph Evidence Paths are otherwise unchanged.
 **Approved by**: User (2026-10-18, `/implement` R2 Gate #1)
 
 ### 📅 2026-10-18-015: R2 Evaluation Protocol — Frozen Split, Paired Statistics, Constraint Satisfaction, RS-02 Rule, Citable Runs
@@ -281,7 +296,7 @@ Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
 5. **Telemetry and metrics**: per-channel ranks, similarities and the fused score are recorded per candidate and in `eval_trace`. `scripts/evaluate_retrieval.py` adds `popularity-bias@K` and `type-precision@K`.
 6. AFP-002 acceptance criteria AC-002.4 (C920 top-5 for `ret_021`) and AC-002.5 (no hub runaway on `ret_001`) remain as regression checks.
 **Rationale**: RRF uses ranks only, so the three indexes need no score calibration, and products found by several channels outrank products found by one. MaxP is the standard passage-to-document aggregation (Dai & Callan, 2019). Bruch, Gai & Ingber (ACM TOIS 2023) show that a tuned convex combination can beat RRF, so CC runs as an arm rather than being discarded.
-**Impact on vision**: Strengthens §3.3 Hybrid Semantic-Structural Retrieval and §2 Explainability: the retrieval score now reflects match quality and channel agreement, not text volume, and per-channel ranks make the reason for retrieval traceable. No model training, no new dataset, no change to the router, Critic or KECR. Release R1 of `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`; later releases R2–R5 need their own decisions (D-2 training, D-3 HyDE correction, D-4 Neo4j 5.14 vs Cypher 25).
+**Impact on vision**: Strengthens §3.3 Hybrid Semantic-Structural Retrieval and §2 Explainability: the retrieval score now reflects match quality and channel agreement, not text volume, and per-channel ranks make the reason for retrieval traceable. No model training, no new dataset, no change to the router, Critic or Graph Evidence Paths. Release R1 of `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md`; later releases R2–R5 need their own decisions (D-2 training, D-3 HyDE correction, D-4 Neo4j 5.14 vs Cypher 25).
 **Approved by**: User (2026-10-17, `/implement` Gate #1)
 
 ### 📅 2026-10-06-002: Academic Target Item Sampling & Contrastive Distinguishing Feature Selection Framework
@@ -300,12 +315,12 @@ Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
 **Decision**: 
 1. **Strict Zero-Mock Mandate**: Completely eliminate all mock candidate generation, fake scores, and synthetic benchmark fixtures. All evaluation scenarios, user contexts, and ground-truth targets must be sourced directly and exclusively from live Neo4j database nodes (specifically sampling from the 12,909 complete products with dense 384-d embeddings and positive prices, and the 72,538 users with $\ge 3$ reviews).
 2. **Multi-Stage Metric-to-Flow Architecture**: Deconstruct evaluation into five distinct algorithmic stages:
-   - *Stage 1 (Candidate Retrieval)*: `GraphSearchTool` evaluated on Recall@K, Hit Rate@K, MRR@K ($K \in \{20, 50\}$), MACS relaxation trigger rate, and latency.
+   - *Stage 1 (Candidate Retrieval)*: `GraphSearchTool` evaluated on Recall@K, Hit Rate@K, MRR@K ($K \in \{20, 50\}$), constraint relaxation trigger rate, and latency.
    - *Stage 2 (Re-ranking & Selection)*: Additive heuristic scoring evaluated on NDCG@K, Precision@K, MRR@K ($K \in \{3, 5, 10\}$).
    - *Stage 3 (Semantic Verification)*: `CriticAgent` evaluated on Constraint Violation Elimination Rate (CVER), False Positive Pruning Accuracy (FPPA), Critic Acceptance Rate (CAR), and Critic Ranking Gain ($\Delta\text{NDCG@K}$).
-   - *Stage 4 (Topological Reasoning)*: `KECRTool` evaluated on Path Discovery Yield, Topological Path Density, and Subgraph Faithfulness.
+   - *Stage 4 (Topological Reasoning)*: Graph Evidence Paths (template metapaths inspired by KECR/PGPR; `KnowledgePathExtractor`) evaluated on Path Discovery Yield, Topological Path Density, and Subgraph Faithfulness.
    - *Stage 5 (End-to-End Dialog)*: `AgentOrchestrator` evaluated on Catalog Validity Rate (100% verified live Neo4j nodes), Attribute Adherence, Inverted CoT Groundedness (with Hard Dilution Cap), Explainability Provenance ($F_1$ / Fake History penalty), Multi-Turn Coherence, and Recoverability.
-3. **Telemetry & `eval_trace` Enhancement**: Extend `AgentOrchestrator._execute_step()` with a non-invasive `eval_trace` payload exposing raw candidates, Critic fit scores, pruned items, and KECR reasoning paths to enable multi-stage evaluation during live conversational execution.
+3. **Telemetry & `eval_trace` Enhancement**: Extend `AgentOrchestrator._execute_step()` with a non-invasive `eval_trace` payload exposing raw candidates, Critic fit scores, pruned items, and Graph Evidence Paths to enable multi-stage evaluation during live conversational execution.
 4. **Real-Time Catalog Verification**: Enforce real-time Cypher validation on 100% of candidate and recommended ASINs (`MATCH (p:ParentProduct {parent_asin: asin}) RETURN count(p)`). Any hallucinated ASIN immediately flags a catalog integrity violation.
 **Rationale**: Eliminates synthetic test inflation, grounds empirical findings strictly in live database hits, isolates the specific contributions of hybrid retrieval, multi-agent critique, and graph reasoning, and ensures 100% publication-grade empirical integrity for the Master's Thesis.
 **Impact on vision**: Solidifies the live Knowledge Graph as the sole arbiter of truth for evaluation, aligning empirical metrics directly with the multi-agent GraphRAG architecture.
@@ -314,8 +329,8 @@ Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
 ### 📅 2026-10-03-008: Two-Tiered Evaluation Framework for CRS Master's Thesis
 **Context**: Design and formalization of the rigorous academic evaluation framework for the Master's Thesis ("Explainable Hybrid GraphRAG for Conversational Recommendation") covering both traditional recommendation algorithms and generative LLM quality.
 **Decision**: Adopt a publication-ready two-tiered evaluation architecture:
-1. **Tier 1 (Recommendation & Retrieval Engine)**: Offline conversational protocol evaluating NDCG@K, Hit Rate@K, MRR, Precision@K, Recall@K, and MAP@K across cutoff horizons K in {1, 3, 5, 10, 20} with dual binary and graded semantic relevance functions on the Amazon Reviews Knowledge Graph. Evaluates multi-stage candidate interception (raw GraphSearchTool vs. post-CriticAgent reranking vs. KECR orthogonal gating).
-2. **Tier 2 (Generative & Conversational Quality)**: Decomposed Multi-Criteria LLM-as-a-Judge architecture (grounded in Zheng et al., G-Eval, Ragas, and TruLens) measuring Groundedness (KG adherence and hallucination penalty), Explainability (topological path and KECR provenance verification), Coherence (multi-turn context retention), and Recoverability (adaptation to negative feedback and preference corrections) with formal 5-point Likert rubrics and bias mitigations.
+1. **Tier 1 (Recommendation & Retrieval Engine)**: Offline conversational protocol evaluating NDCG@K, Hit Rate@K, MRR, Precision@K, Recall@K, and MAP@K across cutoff horizons K in {1, 3, 5, 10, 20} with dual binary and graded semantic relevance functions on the Amazon Reviews Knowledge Graph. Evaluates multi-stage candidate interception (raw GraphSearchTool vs. post-CriticAgent reranking; candidate ranking governed by weighted RRF channel weights rather than heuristic gating).
+2. **Tier 2 (Generative & Conversational Quality)**: Decomposed Multi-Criteria LLM-as-a-Judge architecture (grounded in Zheng et al., G-Eval, Ragas, and TruLens) measuring Groundedness (KG adherence and hallucination penalty), Explainability (topological path and Graph Evidence provenance verification), Coherence (multi-turn context retention), and Recoverability (adaptation to negative feedback and preference corrections) with formal 5-point Likert rubrics and bias mitigations.
 3. **Execution & Versioning**: Versioned directory structure (`evaluations/eval_YYYY-MM-DD_HHMM/`), raw JSON metrics, summary CSVs, and automated publication-grade plotting (matplotlib/seaborn at 300 DPI).
 **Rationale**: Traditional IR metrics cannot evaluate hallucination, dialogue flow, or explanation validity; conversely, n-gram metrics (BLEU/ROUGE) cannot evaluate ranking quality or Knowledge Graph adherence. This two-tiered framework rigorously validates thesis research questions RQ1 through RQ6.
 **Impact on vision**: Establishes the definitive empirical testing standard and versioned visualization framework for validating the thesis claims against classic baselines.
@@ -341,7 +356,7 @@ Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
 **Trigger**: User decision to reorganise the build order to reflect academic priorities
 **Decision**: Replaced linear Phase 0–3 with a two-axis build strategy:
 - **Foundation**: Infrastructure fixes + REDIAL-first KG pipeline (prerequisite for both axes)
-- **Meta-Phase A — Recommendation Engine**: Primary academic contribution. GraphSearchTool, CriticAgent, KECR, Explainable Generation, full Evaluation suite. Fully evaluatable without UI.
+- **Meta-Phase A — Recommendation Engine**: Primary academic contribution. GraphSearchTool, CriticAgent, Graph Evidence Paths (template metapaths inspired by KECR/PGPR), Explainable Generation, full Evaluation suite. Fully evaluatable without UI.
 - **Meta-Phase B — Conversational Flow**: CRS packaging. AgentOrchestrator, MemoCRS persistence, CLARIFY quality, Recoverability, Chainlit integration.
 **Rationale**: Meta-Phase A maps directly to Vision Report priorities (Explainability > Groundedness). A complete Meta-Phase A is a publishable thesis contribution independent of Meta-Phase B. Building the recommendation engine first reduces academic risk.
 **Status**: ✅ Accepted
@@ -363,7 +378,7 @@ Research report: `production_artifacts/Research_Report_Graph_Rebuild.md`.
 - 20 active users (147–532 reviews each) + 5 cold-start users (1 review each)
 - 20 well-reviewed products (292–519 reviews each) + 5 low-review products (1–2 reviews each)
 - Target database:  (separate from existing graph — existing data preserved)
-**Rationale**: Unblocks the entire development pipeline immediately. The curated subset is sufficient to test KECR, CriticAgent, hybrid search, evaluation scripts, and the full recommendation engine. REDIAL adds conversational dialogue data — important for evaluation quality but not required for building the recommendation engine.
+**Rationale**: Unblocks the entire development pipeline immediately. The curated subset is sufficient to test Graph Evidence Paths, CriticAgent, hybrid search, evaluation scripts, and the full recommendation engine. REDIAL adds conversational dialogue data — important for evaluation quality but not required for building the recommendation engine.
 **Status**: ✅ Accepted
 
 ### Decision 2026-09-23-005: Unified Baseline Strategy (Amazon Only)
