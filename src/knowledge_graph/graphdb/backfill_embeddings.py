@@ -1,3 +1,11 @@
+"""
+Online embedding backfill for the v1 graph (BackfillService).
+
+The text builders delegate to `embedding_templates` (Technical Specification Graph Rebuild FR-032):
+blank products (no title, description or features) and blank reviews (no title and body) are never
+embedded, and the product fetch orders attributes before `collect` so the top-5 attribute text is
+deterministic. Graph v2 embeds through `scripts/graph_ingestion/post_import_v2.py embed`.
+"""
 import logging
 import os
 import sys
@@ -9,15 +17,30 @@ try:
     from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
     from src.knowledge_graph.graphdb.attribute_normalizer import AttributeNormalizer
     from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
+    from src.knowledge_graph.graphdb.embedding_templates import (
+        GENERIC_KEYS,
+        attribute_text_v1,
+        brand_text_v1,
+        category_parent_text_legacy,
+        product_text_v1,
+        review_text_v1,
+    )
 except ImportError:
     from neo4j_connector import Neo4jConnector
     from attribute_normalizer import AttributeNormalizer
     from embedding_service import EmbeddingService
+    from embedding_templates import (
+        GENERIC_KEYS,
+        attribute_text_v1,
+        brand_text_v1,
+        category_parent_text_legacy,
+        product_text_v1,
+        review_text_v1,
+    )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-GENERIC_KEYS = {"feature", "bullet_point", "product_feature", "about_this_item"}
 BATCH_SIZE = 100
 
 class BackfillService:
@@ -34,13 +57,8 @@ class BackfillService:
         """
 
         def generator(row):
-            title = row['title'] or ""
-            body = row['body'] or ""
-            text = f"{title}. {body}"
-            # Trim to ~500 chars to save tokens/embedding time for giant reviews
-            if len(text) > 800:
-                return text[:800]
-            return text
+            # None for a blank review (skip-empty); otherwise the v1 text cut at 800 characters
+            return review_text_v1(row['title'], row['body'])
 
         self._process_batch("Review", query_fetch, generator)
 
@@ -67,6 +85,7 @@ class BackfillService:
             return
 
         # 2. Process in batches
+        skipped = 0
         for i in tqdm(range(0, total, BATCH_SIZE), desc=f"Embedding {label}"):
             batch_ids = all_ids[i:i+BATCH_SIZE]
             
@@ -81,6 +100,8 @@ class BackfillService:
                 if text:
                     texts_to_embed.append(text)
                     valid_ids.append(row['id'])
+                else:
+                    skipped += 1
 
             if not texts_to_embed:
                 continue
@@ -105,6 +126,9 @@ class BackfillService:
             with self.connector.session() as session:
                 session.run(query_update, updates=update_data)
 
+        if skipped:
+            logger.info(f"Skipped {skipped} {label} nodes with no embeddable text (skip-empty).")
+
     def backfill_attributes(self):
         query_fetch = """
         MATCH (a:Attribute)
@@ -113,14 +137,7 @@ class BackfillService:
         """
         
         def generator(row):
-            name = row['name'] or ""
-            raw_val = row['val'] or ""
-            norm_val = AttributeNormalizer.normalize(raw_val, name)
-            clean_name = name.lower().strip()
-            
-            if clean_name in GENERIC_KEYS:
-                return norm_val
-            return f"{name}: {norm_val}"
+            return attribute_text_v1(row['name'] or "", row['val'] or "")
 
         self._process_batch("Attribute", query_fetch, generator)
 
@@ -134,9 +151,8 @@ class BackfillService:
         """
 
         def generator(row):
-            name = row['name']
-            domain = "consumer electronics" # Default fallback since domain_description doesn't exist
-            return f"Brand: {name}. Domain: {domain}"
+            # Default domain "consumer electronics" since domain_description doesn't exist
+            return brand_text_v1(row['name'])
 
         self._process_batch("Brand", query_fetch, generator)
 
@@ -149,9 +165,7 @@ class BackfillService:
         """
 
         def generator(row):
-            name = row['name']
-            parent = row['parent_name'] or "Root"
-            return f"Category: {name}. Parent: {parent}"
+            return category_parent_text_legacy(row['name'], row['parent_name'])
 
         self._process_batch("Category", query_fetch, generator)
 
@@ -165,17 +179,18 @@ class BackfillService:
         WHERE elementId(p) IN $ids
         OPTIONAL MATCH (p)-[:BELONGS_TO_CATEGORY]->(c:Category)
         OPTIONAL MATCH (p)-[:HAS_ATTRIBUTE]->(a:Attribute)
+        WITH p, c, a ORDER BY a.attribute_name, a.attribute_value
         WITH p, c, collect(a.attribute_name + ': ' + coalesce(a.attribute_value, a.normalized_value, '')) as features
-        RETURN elementId(p) as id, p.title as title, p.description as description, c.name as category, features
+        RETURN elementId(p) as id, p.title as title, p.description as description, p.features as listing_features,
+               c.name as category, features
         """
 
         def generator(row):
-            title = row['title'] or ""
-            category = row['category'] or "Unknown"
-            description = row['description'] or ""
-            features = ", ".join(row['features'][:5]) # Limit features to top 5 to avoid token limit issues
-            
-            return f"Product: {title}. Category: {category}. Features: {features}. Description: {description}"
+            # None when title, description and listing features are all blank (skip-empty); the v1 text
+            # keeps the top 5 attribute pairs, now in a deterministic order
+            return product_text_v1(
+                row['title'], row['category'], row['features'] or [], row['description'], row['listing_features'],
+            )
 
         self._process_batch("ParentProduct", query_fetch, generator)
 

@@ -1,6 +1,25 @@
 """
-Phase A4 Knowledge-Enhanced Reasoning Path Extraction (KECR).
-Extracts multi-hop reasoning paths bridging user history to conversational candidates.
+Graph Evidence Paths (template metapaths, inspired by KECR/PGPR).
+
+Extracts deterministic multi-hop reasoning evidence paths in Cypher bridging user history
+and conversational preferences to candidate items.
+
+Academic Distinction (Review E.5):
+- NOT learned KECR: Ren et al. ("Explicit Knowledge Graph Reasoning for Conversational
+  Recommendation", ACM TIST 2024) learns multi-hop reasoning chains through an RL policy
+  training algorithm (Algorithm 1). This component performs zero-training deterministic
+  pattern matching over fixed Cypher template metapaths.
+- NOT generative KECRS: Must not be confused with KECRS (Zhang et al., SIGIR 2022),
+  which focuses on subgraph encoding for generation.
+- Relation to PGPR: Inspired by topological path grounding principles (PGPR, Xian et al.,
+  2019; KECR, Ren et al., 2024) to provide factual provenance strings ([GRAPH EVIDENCE]).
+- Candidate Ranking: Candidate retrieval and ranking are governed by multi-channel
+  weighted Reciprocal Rank Fusion (wRRF) in GraphSearchTool, NOT by internal alpha gating.
+  The alpha parameter here is purely an internal heuristic interpolation for ordering
+  extracted evidence paths.
+- Explanation Reality: This component provides raw structural evidence strings, not
+  synthesized conversational explanations. Natural language explanation synthesis is
+  performed downstream by the LLM prompt generator.
 """
 
 import logging
@@ -51,8 +70,9 @@ class PathExtractionResult(BaseModel):
 
 class KnowledgePathExtractor:
     """
-    Core engine for Phase A4 dual-context path extraction.
-    Executes the Unified Dual-Context Cypher Query (Query 4) to extract multi-hop paths.
+    Core engine for Graph Evidence Paths (template metapaths inspired by KECR/PGPR).
+    Executes the Unified Dual-Context Cypher Query to extract deterministic multi-hop
+    evidence paths bridging user history and conversational preferences to candidate items.
     """
     
     def __init__(self, db_connector: Optional[Any] = None):
@@ -289,7 +309,11 @@ RETURN cand.parent_asin AS target_asin,
        CASE 
          WHEN size(all_evidence) > 0 
          THEN reduce(s = head(all_evidence), x IN tail(all_evidence) | s + "; " + x)
-         ELSE "Top-rated category recommendation based on overall customer satisfaction (" + toString(coalesce(cand.avg_rating, 5.0)) + "★)."
+         ELSE CASE
+           WHEN cand.avg_rating IS NOT NULL
+           THEN "Matched via hybrid semantic retrieval (catalog rating: " + toString(cand.avg_rating) + "★; no explicit graph path)."
+           ELSE "Matched via hybrid semantic retrieval (no explicit graph path)."
+         END
        END AS reasoning_path;
         '''
 
@@ -344,3 +368,8 @@ RETURN cand.parent_asin AS target_asin,
         result.serialized_evidence_dict = result.to_evidence_dicts()
         
         return result
+
+
+# Academic and backwards compatibility alias
+KECRTool = KnowledgePathExtractor
+

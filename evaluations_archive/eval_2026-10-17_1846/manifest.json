@@ -1,0 +1,164 @@
+{
+  "run_id": "eval_2026-10-17_1846",
+  "timestamp": "2026-10-17T18:54:35.833505",
+  "git_commit": "989c1cd854242408baa1d71df0aa51db4d1ed251",
+  "evaluation_types": [
+    "retrieval"
+  ],
+  "configuration": {
+    "mode": "live",
+    "benchmark": "live_eval_dataset.json",
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "strategies": [
+      "hybrid",
+      "vector_only",
+      "cypher_only",
+      "hybrid@rrf3",
+      "hybrid@rrf2",
+      "hybrid@wrrf3",
+      "hybrid@cc3",
+      "hybrid@sum_legacy"
+    ],
+    "query_count": 21,
+    "clarification_count": 4,
+    "clarification_rate": 0.19047619047619047,
+    "fusion_default": {
+      "name": "rrf3",
+      "method": "rrf",
+      "channels": [
+        "product",
+        "attribute",
+        "review"
+      ],
+      "weights": {
+        "product": 1.0,
+        "attribute": 1.0,
+        "review": 1.0
+      },
+      "rrf_k": 60,
+      "channel_depth": 100,
+      "ann_k_per_limit": 30,
+      "soft_bonus_beta": 0.25,
+      "soft_bonus_unit": 0.012295081967213115
+    },
+    "fusion_arms": {
+      "rrf3": {
+        "name": "rrf3",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.012295081967213115
+      },
+      "rrf2": {
+        "name": "rrf2",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.00819672131147541
+      },
+      "wrrf3": {
+        "name": "wrrf3",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 0.6,
+          "attribute": 0.25,
+          "review": 0.15
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.004098360655737705
+      },
+      "cc3": {
+        "name": "cc3",
+        "method": "cc",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.25
+      },
+      "sum_legacy": {
+        "name": "sum_legacy",
+        "method": "sum",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.2
+      }
+    },
+    "review_embedded_products": 5715,
+    "catalog_popular_share": 0.021541082594880648
+  },
+  "artifacts_generated": [
+    "manifest.json",
+    "summary.json",
+    "retrieval_metrics.json",
+    "retrieval_metrics.csv",
+    "execution_trace.log",
+    "plots/retrieval_ranking_comparison.png",
+    "plots/retrieval_ranking_comparison.jpg",
+    "plots/retrieval_metrics_comparison.png"
+  ],
+  "citable": false,
+  "archive": {
+    "legacy": true,
+    "note": "Pre-R2 manifest: `git_commit` 989c1cd does not identify the evaluated code; R1 ran uncommitted and was committed later as 99b8506. R1 arm comparison, 4 CLARIFY. Not citable as exact-code evidence.",
+    "archived_at": "2026-10-18T14:48:04"
+  }
+}

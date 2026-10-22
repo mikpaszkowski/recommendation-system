@@ -8,7 +8,9 @@ class PromptConstructorInterface(ABC):
                                       user_profile: Optional[Dict[str, Any]] = None,
                                       conversation_history: Optional[List[Dict[str, str]]] = None,
                                       retrieved_items: Optional[List[Dict[str, Any]]] = None,
-                                      preferences: Optional[Dict[str, Any]] = None) -> List[Any]:
+                                      preferences: Optional[Dict[str, Any]] = None,
+                                      graph_reasoning_paths: Optional[List[Dict[str, Any]]] = None,
+                                      relaxed_constraints: Optional[List[str]] = None) -> List[Any]:
         """Construct a prompt for generating recommendations."""
         pass
     

@@ -88,7 +88,57 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Camera'})-[:DESIRES]->(Attribute {name: '60FPS 1080p ePTZ'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0BGXS26QL'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "webcam",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 60.0,
+        "evidence": "under $60"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "frame_rate",
+        "operator": "greater_than",
+        "value": 60.0,
+        "unit": "fps",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "smooth 60FPS"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "video_resolution",
+        "operator": "equal",
+        "value": 1080.0,
+        "unit": "p",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "at 1080p"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "digital_zoom",
+        "operator": "greater_than",
+        "value": 2.0,
+        "unit": "x",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "2X electronic pan-tilt-zoom"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_camera_02",
@@ -175,7 +225,18 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Camera'})-[:DESIRES]->(Attribute {name: 'Whole Home Bundle'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08F6GPRH6'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "smart home security bundle",
+    "gold_constraints": [],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_camera_03",
@@ -262,7 +323,33 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Camera'})-[:DESIRES]->(Attribute {name: 'Instant Film'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B014TUZ92U'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "instant film camera",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 120.0,
+        "evidence": "under $120"
+      },
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Fujifilm",
+        "evidence": "Fujifilm Instax Mini"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_phone_01",
@@ -353,7 +440,46 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Phone'})-[:DESIRES]->(Attribute {name: '5G Connectivity'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08GNRGB67'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "smartphone",
+    "gold_constraints": [
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Samsung",
+        "evidence": "Samsung Galaxy smartphone"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "storage",
+        "operator": "greater_than",
+        "value": 128.0,
+        "unit": "GB",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "at least 128GB of internal storage"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "rear_camera_resolution",
+        "operator": "greater_than",
+        "value": 64.0,
+        "unit": "MP",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "a 64MP camera"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_phone_02",
@@ -444,7 +570,26 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Phone'})-[:DESIRES]->(Attribute {name: '3.5mm Audio Jack'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B07VV9HSGL'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "smartphone",
+    "gold_constraints": [
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Samsung",
+        "evidence": "Samsung Galaxy S9+ smartphone"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_phone_03",
@@ -535,7 +680,33 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Phone'})-[:DESIRES]->(Attribute {name: 'Touch ID'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B089SRK8VQ'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "smartphone (iPhone)",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 220.0,
+        "evidence": "for under $220"
+      },
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Apple",
+        "evidence": "Apple iPhone"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_charger_01",
@@ -626,7 +797,57 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Charger'})-[:DESIRES]->(Attribute {name: '65W GaN 4 Ports'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B088FHJLR1'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "wall charger",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 60.0,
+        "evidence": "under $60"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "output_power",
+        "operator": "equal",
+        "value": 65.0,
+        "unit": "W",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "compact 65W"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "port_count",
+        "operator": "greater_than",
+        "value": 4.0,
+        "unit": "ports",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "4 simultaneous ports"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "usb_c_port_count",
+        "operator": "greater_than",
+        "value": 3.0,
+        "unit": "ports",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "3 USB-C outputs"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_charger_02",
@@ -768,7 +989,44 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Charger'})-[:DESIRES]->(Attribute {name: 'Apple 20W OEM'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08L5M9BTJ'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "power adapter",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 25.0,
+        "evidence": "under $25"
+      },
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Apple",
+        "evidence": "official Apple"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "output_power",
+        "operator": "equal",
+        "value": 20.0,
+        "unit": "W",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "20W USB-C power adapter"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_charger_03",
@@ -859,7 +1117,46 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Charger'})-[:DESIRES]->(Attribute {name: 'Universal 4 USB-A 3.4A'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B095LLDH4H'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "travel power adapter",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 20.0,
+        "evidence": "under $20"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "usb_a_port_count",
+        "operator": "greater_than",
+        "value": 4.0,
+        "unit": "ports",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "4 dedicated USB-A ports"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "output_current",
+        "operator": "greater_than",
+        "value": 3.4,
+        "unit": "A",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "3.4A smart IC output"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_mouse_01",
@@ -950,7 +1247,26 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Mouse'})-[:DESIRES]->(Attribute {name: 'Noiseless Click'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0B4SWZTZ1'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "mouse",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 15.0,
+        "evidence": "under $15"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_mouse_02",
@@ -1041,7 +1357,18 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Mouse'})-[:DESIRES]->(Attribute {name: 'Triple Mode Vertical Ergonomics'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0B4KJRD1C'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "mouse",
+    "gold_constraints": [],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_mouse_03",
@@ -1132,7 +1459,36 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Mouse'})-[:DESIRES]->(Attribute {name: 'Micro-Precise Scroll'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B006MCDUZM'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "mouse",
+    "gold_constraints": [
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Logitech",
+        "evidence": "durable Logitech wireless mouse"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "battery_life",
+        "operator": "greater_than",
+        "value": 3.0,
+        "unit": "years",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "extended 3-year battery life"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_headphone_01",
@@ -1223,7 +1579,18 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Headphone'})-[:DESIRES]->(Attribute {name: 'Bone Conduction'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08BG7J2MN'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "headphones",
+    "gold_constraints": [],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_headphone_02",
@@ -1314,7 +1681,36 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Headphone'})-[:DESIRES]->(Attribute {name: 'Hybrid ANC Hi-Res'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08PFW1S1V'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "headphones",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 75.0,
+        "evidence": "under $75"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "battery_life",
+        "operator": "greater_than",
+        "value": 40.0,
+        "unit": "hours",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "40 hours of playtime"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_headphone_03",
@@ -1405,7 +1801,18 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Headphone'})-[:DESIRES]->(Attribute {name: 'ErgoFit In-Ear'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B07S764D9V'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "earbuds",
+    "gold_constraints": [],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_laptop_01",
@@ -1496,7 +1903,44 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Laptop'})-[:DESIRES]->(Attribute {name: 'Apple M1 Chip'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0BRZ6VK9N'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "laptop (MacBook Air)",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 900.0,
+        "evidence": "under $900"
+      },
+      {
+        "kind": "brand",
+        "attribute": "brand",
+        "operator": "include",
+        "value": "Apple",
+        "evidence": "Apple MacBook Air"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "screen_size",
+        "operator": "equal",
+        "value": 13.0,
+        "unit": "in",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "13-inch"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_laptop_02",
@@ -1587,7 +2031,37 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Laptop'})-[:DESIRES]->(Attribute {name: '180-Degree Swivel'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08CSHM6L3'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "Chromebook",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 200.0,
+        "evidence": "for under $200"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "screen_size",
+        "operator": "equal",
+        "value": 14.0,
+        "unit": "in",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "14-inch"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_laptop_03",
@@ -1678,7 +2152,47 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Laptop'})-[:DESIRES]->(Attribute {name: 'RTX 3050 144Hz'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B0BWV4MXQG'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "gaming laptop",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 750.0,
+        "evidence": "under $750"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "screen_size",
+        "operator": "equal",
+        "value": 15.6,
+        "unit": "in",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "15.6-inch"
+      },
+      {
+        "kind": "numeric",
+        "attribute": "refresh_rate",
+        "operator": "greater_than",
+        "value": 144.0,
+        "unit": "Hz",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "144Hz IPS display"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_keyboard_01",
@@ -1769,7 +2283,26 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Keyboard'})-[:DESIRES]->(Attribute {name: 'Split Ergonomics'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B08JZZ4TK7'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "keyboard",
+    "gold_constraints": [
+      {
+        "kind": "price",
+        "attribute": "price",
+        "operator": "less_than",
+        "value": 50.0,
+        "evidence": "under $50"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_keyboard_02",
@@ -1860,7 +2393,29 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Keyboard'})-[:DESIRES]->(Attribute {name: 'Tri-Fold Touchpad'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B084G4GY2N'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "keyboard",
+    "gold_constraints": [
+      {
+        "kind": "numeric",
+        "attribute": "paired_device_count",
+        "operator": "greater_than",
+        "value": 3.0,
+        "unit": "devices",
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "switch seamlessly between 3 paired devices"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   },
   {
     "query_id": "live_eval_keyboard_03",
@@ -1955,6 +2510,29 @@
     ],
     "reasoning_paths": [
       "(User:Preference {category: 'Keyboard'})-[:DESIRES]->(Attribute {name: 'Built-in Touchpad'})-[:OFFERED_BY]->(ParentProduct {parent_asin: 'B00SK0FOHG'})"
-    ]
+    ],
+    "type_explicit": true,
+    "gold_action": "SEARCH",
+    "gold_product_type": "keyboard",
+    "gold_constraints": [
+      {
+        "kind": "numeric",
+        "attribute": "touchpad_size",
+        "operator": "equal",
+        "value": 3.5,
+        "unit": "in",
+        "tolerance": 0.05,
+        "graph_attribute_names": [],
+        "graph_unit_scale": 1.0,
+        "evidence": "3.5-inch multi-touch touchpad"
+      }
+    ],
+    "gold_annotation": {
+      "version": "r2a-1",
+      "source": "hand, utterance text only",
+      "proposed_by": "@pm-specs 2026-10-18",
+      "reviewed_by_user": "2026-10-18 (Gate #2)",
+      "graph_attribute_names": "filled 2026-10-18 from the live graph (spec 5.1.4): no Attribute node has numeric_value, so every list is empty and numeric verdicts are unknown"
+    }
   }
 ]

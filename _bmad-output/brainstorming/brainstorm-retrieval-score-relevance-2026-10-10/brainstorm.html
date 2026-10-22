@@ -1,0 +1,443 @@
+<title>Match, Not Mentions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a retrieval lab notebook. One reading column, wide "instrument" panels for the fusion toy, tables and roadmap. */
+:root {
+  --paper: #f2f4f6;
+  --sheet: #ffffff;
+  --ink: #15202a;
+  --ink-soft: #4a5866;
+  --rule: #d5dbe1;
+  --grid: #e6eaee;
+  --accent: #2353c2;
+  --accent-wash: #e3eafb;
+  --hub: #b8402f;
+  --hub-wash: #f8e5e1;
+  --ok: #23794b;
+  --ok-wash: #e0f1e7;
+  --warn: #9a6a07;
+  --warn-wash: #f7eed8;
+  --user: #6a3fb0;
+  --user-wash: #eee6fa;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --s-1: 0.8rem; --s0: 1rem; --s1: 1.25rem; --s2: 1.6rem; --s3: 2.2rem; --s4: clamp(2.6rem, 7vw, 4.6rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1419; --sheet: #161d24; --ink: #e3e9ef; --ink-soft: #9aa8b5; --rule: #2a3540; --grid: #1d262e;
+    --accent: #84a8ff; --accent-wash: #1b2742; --hub: #f08a78; --hub-wash: #3a1f1a; --ok: #6fd39b; --ok-wash: #15301f;
+    --warn: #e6b955; --warn-wash: #33290f; --user: #c4a5f5; --user-wash: #2a2040; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1419; --sheet: #161d24; --ink: #e3e9ef; --ink-soft: #9aa8b5; --rule: #2a3540; --grid: #1d262e;
+  --accent: #84a8ff; --accent-wash: #1b2742; --hub: #f08a78; --hub-wash: #3a1f1a; --ok: #6fd39b; --ok-wash: #15301f;
+  --warn: #e6b955; --warn-wash: #33290f; --user: #c4a5f5; --user-wash: #2a2040; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 17px;
+  line-height: 1.6;
+  padding-inline: 16px;
+  padding-block: 0 64px;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px);
+  background-size: 100% 28px;
+}
+.wrap { max-width: 980px; margin-inline: auto; display: grid; gap: 72px; }
+.col { max-width: 66ch; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.1; }
+h2 { font-size: var(--s3); font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: var(--s1); font-weight: 700; }
+p { margin: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: var(--s-1); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.mono { font-family: var(--f-mono); font-size: 0.86em; }
+section { display: grid; gap: 20px; }
+.lede { font-size: var(--s1); color: var(--ink-soft); }
+
+/* Hero */
+header.hero { padding-top: 56px; display: grid; gap: 22px; }
+header.hero h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.025em; }
+header.hero h1 .strike { color: var(--hub); text-decoration: line-through; text-decoration-thickness: 0.08em; }
+header.hero h1 .keep { color: var(--accent); }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 28px; font-family: var(--f-mono); font-size: var(--s-1); color: var(--ink-soft); }
+.stats b { color: var(--ink); font-weight: 600; font-size: 1.15rem; margin-right: 6px; font-variant-numeric: tabular-nums; }
+
+/* Instrument panels */
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 22px; display: grid; gap: 16px; min-width: 0; }
+.query { font-family: var(--f-mono); font-size: 0.9rem; background: var(--accent-wash); color: var(--ink); padding: 10px 12px; border-radius: 4px; }
+.modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.modes button {
+  font-family: var(--f-mono); font-size: 0.82rem; padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink);
+}
+.modes button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--sheet); }
+.modes button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 400; }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+tr.target td { background: var(--ok-wash); }
+tr.hubrow td:first-child { box-shadow: inset 3px 0 0 var(--hub); }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 0.7rem; padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: 1px; }
+.tag.t { background: var(--ok); color: var(--sheet); }
+.tag.h { background: var(--hub-wash); color: var(--hub); }
+.tag.w { background: var(--warn-wash); color: var(--warn); }
+.dim { color: var(--ink-soft); }
+.verdict { border-left: 3px solid var(--accent); padding-left: 14px; font-size: 1rem; }
+.footnote { font-size: 0.82rem; color: var(--ink-soft); }
+
+/* Journey */
+.journey { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.step { display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-bottom: 1px solid var(--rule); }
+.step .when { font-family: var(--f-mono); font-size: 0.78rem; color: var(--ink-soft); display: grid; gap: 4px; align-content: start; }
+.step .when strong { font-family: var(--f-display); font-size: 1.1rem; color: var(--ink); font-weight: 700; }
+.step ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; min-width: 0; }
+.step li { padding-left: 64px; position: relative; }
+.who { position: absolute; left: 0; top: 3px; font-family: var(--f-mono); font-size: 0.68rem; padding: 1px 6px; border-radius: 3px; width: 54px; text-align: center; }
+.who.u { background: var(--user-wash); color: var(--user); }
+.who.c { background: var(--accent-wash); color: var(--accent); }
+
+/* Ladder + states */
+.ladder { display: grid; gap: 10px; counter-reset: lvl; }
+.rung { display: grid; grid-template-columns: 48px 1fr; gap: 14px; align-items: start; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; }
+.rung .n { font-family: var(--f-display); font-size: 2rem; font-weight: 800; color: var(--accent); line-height: 1; }
+.rung p { color: var(--ink-soft); font-size: 0.96rem; }
+.states { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-family: var(--f-mono); font-size: 0.9rem; }
+.chip { padding: 6px 12px; border-radius: 999px; }
+.chip.ok { background: var(--ok-wash); color: var(--ok); }
+.chip.unk { background: var(--warn-wash); color: var(--warn); }
+.chip.bad { background: var(--hub-wash); color: var(--hub); }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card p { font-size: 0.96rem; color: var(--ink-soft); }
+
+/* Data bars */
+.bars { display: grid; gap: 14px; }
+.bar { display: grid; gap: 6px; }
+.bar .label { display: flex; justify-content: space-between; gap: 12px; font-size: 0.95rem; }
+.bar .label span:last-child { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.track { height: 12px; background: var(--grid); border-radius: 2px; overflow: hidden; }
+.fill { height: 100%; background: var(--accent); }
+.fill.hub { background: var(--hub); }
+.fill.ok { background: var(--ok); }
+
+/* Roadmap */
+.road { display: grid; gap: 0; border-left: 2px solid var(--rule); margin-left: 8px; }
+.rel { position: relative; padding: 0 0 22px 26px; display: grid; gap: 6px; }
+.rel::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--sheet); border: 2px solid var(--rule); }
+.rel.now::before { background: var(--accent); border-color: var(--accent); }
+.rel h3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.rel p { color: var(--ink-soft); font-size: 0.96rem; }
+.status { font-family: var(--f-mono); font-size: 0.72rem; padding: 2px 7px; border-radius: 3px; background: var(--grid); color: var(--ink-soft); font-weight: 400; }
+.rel.now .status { background: var(--accent); color: var(--sheet); }
+
+/* Synthesis */
+.links { display: grid; gap: 14px; }
+.link { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; padding: 16px 0; border-bottom: 1px dashed var(--rule); }
+.link .pair { font-family: var(--f-mono); font-size: 0.74rem; color: var(--accent); white-space: nowrap; padding-top: 3px; }
+.link p { font-size: 1rem; }
+
+footer { font-family: var(--f-mono); font-size: 0.78rem; color: var(--ink-soft); display: grid; gap: 4px; }
+
+@media (max-width: 640px) {
+  .step { grid-template-columns: 1fr; gap: 8px; }
+  .link { grid-template-columns: 1fr; gap: 6px; }
+  .panel { padding: 16px; }
+  body { font-size: 16px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  tbody tr { transition: background-color .25s ease; }
+}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">Brainstorm · 10–17 Oct 2026 · AFP-002 · Creative Partner</span>
+  <h1>Score the <span class="keep">match</span>,<br>not the <span class="strike">mentions</span>.</h1>
+  <p class="lede col">The retrieval score should say how well a product matches what the user asked for. Today it counts how many pieces of text about the product look a bit like the query. Eight techniques later, this is what changed in how we think about it.</p>
+  <div class="stats" aria-label="Session statistics">
+    <span><b>192</b>log entries</span>
+    <span><b>8</b>techniques</span>
+    <span><b>66</b>from you</span>
+    <span><b>118</b>from the coach</span>
+    <span><b>19</b>decisions</span>
+    <span><b>22</b>work packages</span>
+  </div>
+</header>
+
+<section aria-labelledby="toy-h">
+  <span class="eyebrow">The core defect, live</span>
+  <h2 id="toy-h">Same six products, three ways to add them up</h2>
+  <div class="panel">
+    <div class="query">ret_021 · "Plug and play 1080p webcam with built-in microphone for Zoom meetings under $70"</div>
+    <div class="modes" role="group" aria-label="Fusion method">
+      <button type="button" id="m-sum" data-mode="sum" aria-pressed="true">Today: sum(score)</button>
+      <button type="button" id="m-rrf3" data-mode="rrf3" aria-pressed="false">R1: RRF, 3 channels</button>
+      <button type="button" id="m-rrf2" data-mode="rrf2" aria-pressed="false">R1 ablation: RRF, no reviews</button>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th class="num">#</th><th>Product</th><th id="h-p">Title channel</th><th id="h-a">Attribute channel</th><th id="h-r">Review channel</th><th class="num">Score</th></tr>
+        </thead>
+        <tbody id="toy-body"></tbody>
+      </table>
+    </div>
+    <p class="verdict" id="toy-verdict"></p>
+    <p class="footnote">An illustrative set. The C920's title similarity (0.773) and the QuickCam's flood of review matches come from the AFP-002 trace for <span class="mono">ret_021</span>, where the C920 fell to rank 253. The other four products are made up to show the mechanics. Weights for sum: title ×1.0, attribute ×0.8, review ×0.9. RRF uses k = 60 and each product's best match per channel.</p>
+  </div>
+</section>
+
+<section aria-labelledby="journey-h">
+  <span class="eyebrow">How we got here</span>
+  <h2 id="journey-h">Eight lenses, in the order we used them</h2>
+  <div class="journey">
+    <div class="step">
+      <div class="when"><span>Batch 1 · 1</span><strong>First Principles</strong></div>
+      <ul>
+        <li><span class="who c">coach</span>A request has layers: what the product <em>is</em> and what it must <em>have</em>.</li>
+        <li><span class="who u">you</span>A third layer: the <em>experience</em> other buyers report in reviews.</li>
+        <li><span class="who u">you</span>No reviews is not a mismatch. New products must still be found on the first two layers.</li>
+        <li><span class="who u">you</span>Adaptive order: narrow with filters when we know little, lead with similarity when we know a lot.</li>
+        <li><span class="who c">coach</span>Fan-out on the query side is safe; fan-out on the product side is the bug.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 1 · 2</span><strong>Reverse Brainstorming</strong></div>
+      <ul>
+        <li><span class="who u">you</span>A sparse but correct product loses to a verbose one.</li>
+        <li><span class="who u">you</span>The accessory trap: an iPhone 14 charger served for "iPhone 14".</li>
+        <li><span class="who u">you</span>Explanations written after the choice are rationalisations.</li>
+        <li><span class="who u">you</span>One missing detail returns nothing, though the user might trade it for price.</li>
+        <li><span class="who c">coach</span>Make the explanation the score's own receipt.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 1 · 3</span><strong>Provocation</strong></div>
+      <ul>
+        <li><span class="who c">coach</span>"Products should find the user, not the other way round."</li>
+        <li><span class="who u">you</span>Stated preferences ("wireless over cable") belong in the graph or the user's history.</li>
+        <li><span class="who u">you</span>Surface unasked products: similar to past buys, accessories for them, preference fits.</li>
+        <li><span class="who c">coach</span>Two lanes, so unasked items never pollute the main score.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 1 · 4</span><strong>How Might We</strong></div>
+      <ul>
+        <li><span class="who u">you</span>Ten HMW questions; we mined #4 (an honest multi-step score) and #9 (we don't carry it).</li>
+        <li><span class="who u">you</span>Keep two scores: an absolute one to gate, a relative one to rank.</li>
+        <li><span class="who u">you</span>When nothing fits: say so plainly, then show the closest alternatives.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 2 · 5</span><strong>Kill the Crown Jewel</strong></div>
+      <ul>
+        <li><span class="who c">coach</span>With embeddings removed, features become a checklist: confirmed, contradicted, unknown.</li>
+        <li><span class="who u">you</span>Normalise feature labels across the graph and label the user's request the same way.</li>
+        <li><span class="who u">you</span>Label products with a local LLM; regex alone cannot cover the catalogue.</li>
+        <li><span class="who u">you</span>Embeddings keep one job: pulling in semantically close products labels would miss.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 2 · 6</span><strong>Starbursting</strong></div>
+      <ul>
+        <li><span class="who u">you</span>Show the best fit even with bad reviews, and the loved alternative next to it.</li>
+        <li><span class="who u">you</span>Set a threshold for how many reviews make "comfortable" true.</li>
+        <li><span class="who u">you</span>Separate product sentences from delivery and seller noise, by model, for any domain.</li>
+        <li><span class="who u">you</span>Dead on arrival with an intact box counts against the product; silence counts as fine for reliability.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 2 · 7</span><strong>Ecosystem Thinking</strong></div>
+      <ul>
+        <li><span class="who u">you</span>Reviews verify fit; they don't find candidates.</li>
+        <li><span class="who u">you</span>Attributes bring more products onto the list.</li>
+        <li><span class="who u">you</span>Found by both channels beats found by one, unless a requested feature is missing.</li>
+        <li><span class="who u">you</span>The LLM may remove clear non-matches and reorder.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <div class="when"><span>Batch 2 · 8</span><strong>Ship in 60 Minutes</strong></div>
+      <ul>
+        <li><span class="who u">you</span>The one change for this branch: one ranked list per channel, fused by RRF.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="rank-h">
+  <span class="eyebrow">The ranking you designed</span>
+  <h2 id="rank-h">Three levels, each only breaks ties</h2>
+  <div class="ladder">
+    <div class="rung"><span class="n">1</span><div><h3>Feature fit</h3><p>How many requested features are confirmed, unknown or contradicted. Missing evidence never counts as a mismatch, but it loses to confirmed evidence.</p></div></div>
+    <div class="rung"><span class="n">2</span><div><h3>Channel agreement</h3><p>A product found by the title and the attribute channel outranks one found by a single channel. RRF does this by construction.</p></div></div>
+    <div class="rung"><span class="n">3</span><div><h3>Experience</h3><p>Review aspects such as comfort and reliability, only where reviews exist. Fit and quality stay separate axes.</p></div></div>
+  </div>
+  <div class="states" aria-label="Evidence order">
+    <span class="chip ok">confirmed</span><span aria-hidden="true">›</span>
+    <span class="chip unk">unknown</span><span aria-hidden="true">›</span>
+    <span class="chip bad">contradicted</span>
+  </div>
+  <p class="col dim">After that, the LLM judges product type over the final 20–30 candidates. Wrong type is removed; a missing feature sinks with its trade-off stated ("no mic, but $40 cheaper"). Every removal cites a reason, and an LLM error falls back to the deterministic order.</p>
+</section>
+
+<section aria-labelledby="rev-h">
+  <span class="eyebrow">Review evidence rules</span>
+  <h2 id="rev-h">What a review is allowed to prove</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Opinion-driven aspects</h3>
+      <p class="mono">comfort · sound · fit</p>
+      <p>Only reviews that mention the aspect count. Silence means unknown. Three of three positive comfort mentions is strong; ten of forty is weak.</p>
+    </div>
+    <div class="card">
+      <h3>Complaint-driven aspects</h3>
+      <p class="mono">reliability · defects · safety</p>
+      <p>People only write when it breaks, so silence counts as fine. The score is a defect rate over all product reviews, judged against the category's own baseline.</p>
+    </div>
+    <div class="card">
+      <h3>Product or noise?</h3>
+      <p>Anything about the item's physical or functional state is product. Couriers, sellers, support and refunds are noise. The noise list is the same in every store, so it can be fixed once.</p>
+    </div>
+    <div class="card">
+      <h3>Dead on arrival</h3>
+      <p>Crushed box and cracked screen: an unlucky unit. Perfect box and it won't turn on: counts against the product. The whole review decides the cause.</p>
+    </div>
+  </div>
+  <p class="col dim">Every aspect needs at least about three mentions, and its positive share is pulled toward a neutral prior (the same Bayesian pattern the Cypher ranking already uses), so three reviews never look as certain as three hundred.</p>
+</section>
+
+<section aria-labelledby="data-h">
+  <span class="eyebrow">Checked against the live graph</span>
+  <h2 id="data-h">The reviews were there all along</h2>
+  <div class="panel bars">
+    <div class="bar"><div class="label"><span>Products with review text</span><span>123,720 · 47%</span></div><div class="track"><div class="fill ok" style="width:46.6%"></div></div></div>
+    <div class="bar"><div class="label"><span>Products with embedded reviews</span><span>5,715 · 2.2%</span></div><div class="track"><div class="fill hub" style="width:2.2%"></div></div></div>
+    <div class="bar"><div class="label"><span>Priced products with any review</span><span>12,182 of 65,650 · 18.6%</span></div><div class="track"><div class="fill" style="width:18.6%"></div></div></div>
+    <div class="bar"><div class="label"><span>Products with attributes</span><span>83,437 · 31%</span></div><div class="track"><div class="fill" style="width:31.4%"></div></div></div>
+  </div>
+  <p class="col">The low coverage was the unfinished embedding run, not missing reviews. Once reviews verify instead of search, they need no embeddings at all, and review evidence covers 47% of products instead of 2.2%. It also means "no reviews" is the normal case: 53% of all products and 81% of priced ones.</p>
+</section>
+
+<section aria-labelledby="road-h">
+  <span class="eyebrow">Converged</span>
+  <h2 id="road-h">Roadmap</h2>
+  <div class="road">
+    <div class="rel now"><h3>R1 · RRF fusion <span class="status">this branch</span></h3><p>One ranked list per channel, best match per product, fused by RRF. Soft bonus rescaled. 3-vs-2-channel ablation, a tuned-sum arm, popularity-bias@K and type-precision@K.</p></div>
+    <div class="rel"><h3>R2 · Evaluation foundation <span class="status">next</span></h3><p>Hard-case benchmark (no reviews, brand+model titles, accessory traps, trade-offs), a tuning/test split and a leakage check, before any weight is tuned.</p></div>
+    <div class="rel"><h3>R3 · Search order and query side <span class="status">planned</span></h3><p>Filter-first or ANN-first by selectivity, rare attributes weigh more, query versions including HyDE, graded category distance.</p></div>
+    <div class="rel"><h3>R4 · Feature fit and the LLM judge <span class="status">planned</span></h3><p>Full-text feature check, tiered ranking, product type and accessory detection, batched LLM rerank, the "good enough" gate.</p></div>
+    <div class="rel"><h3>R5 · Offline graph enrichment <span class="status">planned</span></h3><p>Typed feature vocabulary with local-LLM labels, the review aspect pipeline, the evidence ledger.</p></div>
+    <div class="rel"><h3>Later · Conversation <span class="status">Meta-Phase B</span></h3><p>Preference edges, two lanes and "we don't carry it", complement edges, doc2query.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="syn-h">
+  <span class="eyebrow">Synthesis</span>
+  <h2 id="syn-h">Links across the techniques</h2>
+  <div class="links">
+    <div class="link"><span class="pair">1 → 6 → 7</span><p>"Unknown is not zero" from First Principles ran through the whole session. It became the confirmed › unknown › contradicted order, the silence rule per aspect, and the gate.</p></div>
+    <div class="link"><span class="pair">2 → 4 → 7</span><p>Explanation as a receipt, the per-product ledger and the LLM's cited removals are one idea. R1's per-channel ranks are its first column.</p></div>
+    <div class="link"><span class="pair">6 → 7</span><p>Giving reviews the verifier role made the unfinished embedding backfill irrelevant to review evidence.</p></div>
+    <div class="link"><span class="pair">1 → 8</span><p>"Product-side fan-out is the bug" is exactly what one best match per channel fixes. The query versions in R3 plug into the same fuser.</p></div>
+    <div class="link"><span class="pair">2 → 4 → 5</span><p>The accessory trap is attacked three times: product type, LLM judge and type-precision@K. The metric ships first so the other two can be measured.</p></div>
+  </div>
+</section>
+
+<footer>
+  <span>Source: .memlog.md, 192 entries, in this folder</span>
+  <span>Canonical plan: production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md</span>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var K = 60;
+  // title: best title similarity; attr: attribute match similarities; rev: review match similarities
+  var products = [
+    { name: "Logitech C920 HD Pro", note: "target", title: 0.773, attr: [0.71, 0.66], rev: [] },
+    { name: "Logitech QuickCam Pro 5000", note: "", title: 0.650, attr: [0.58], rev: [0.72, 0.70, 0.69, 0.68, 0.67, 0.66, 0.66, 0.66] },
+    { name: "1080p USB webcam, no-name brand", note: "", title: 0.742, attr: [0.69, 0.64, 0.61], rev: [] },
+    { name: "Webcam privacy cover, 3-pack", note: "accessory", title: 0.550, attr: [], rev: [0.66, 0.65, 0.64, 0.63, 0.63, 0.62, 0.62, 0.62, 0.61, 0.61, 0.61, 0.60, 0.60, 0.58] },
+    { name: "USB conference microphone", note: "wrong type", title: 0.580, attr: [0.70], rev: [0.70, 0.67, 0.66, 0.65, 0.64, 0.64] },
+    { name: "Ring light for Zoom calls", note: "accessory", title: 0.520, attr: [], rev: [0.69, 0.67, 0.66, 0.66, 0.65, 0.65, 0.65, 0.64, 0.64, 0.64, 0.64, 0.63, 0.63, 0.63, 0.63, 0.62, 0.62, 0.62, 0.61, 0.61] }
+  ];
+  var sum = function (a) { return a.reduce(function (s, x) { return s + x; }, 0); };
+  var max = function (a) { return a.length ? Math.max.apply(null, a) : null; };
+
+  function channelRanks(key) {
+    var present = products.map(function (p, i) { return { i: i, v: key === "title" ? p.title : max(p[key]) }; })
+      .filter(function (x) { return x.v !== null; })
+      .sort(function (a, b) { return b.v - a.v; });
+    var ranks = {};
+    present.forEach(function (x, idx) { ranks[x.i] = idx + 1; });
+    return ranks;
+  }
+
+  var verdicts = {
+    sum: "Every matching review adds to the total, so the products with the most review text win. The ring light and the privacy cover outrank every webcam, and the C920, the best title match with no embedded reviews, comes last.",
+    rrf3: "Each product counts once per channel. The accessories fall and the C920 rises to third. The QuickCam and the microphone still lead because they appear in all three channels: reviews reward the 2.2% of products that have embedded reviews, and nothing yet checks the product type.",
+    rrf2: "Without the review channel, the two best title and attribute matches lead: the C920 first, the no-name webcam second. The wrong-type microphone is still third. That is the job of the type check and LLM judge in R4."
+  };
+
+  function render(mode) {
+    var rP = channelRanks("title"), rA = channelRanks("attr"), rR = channelRanks("rev");
+    var rows = products.map(function (p, i) {
+      var score, cP, cA, cR;
+      if (mode === "sum") {
+        score = p.title + 0.8 * sum(p.attr) + 0.9 * sum(p.rev);
+        cP = p.title.toFixed(3);
+        cA = p.attr.length ? p.attr.length + " × → " + (0.8 * sum(p.attr)).toFixed(2) : "—";
+        cR = p.rev.length ? p.rev.length + " × → " + (0.9 * sum(p.rev)).toFixed(2) : "—";
+      } else {
+        var useRev = mode === "rrf3";
+        score = 1 / (K + rP[i]) + (rA[i] ? 1 / (K + rA[i]) : 0) + (useRev && rR[i] ? 1 / (K + rR[i]) : 0);
+        cP = "rank " + rP[i] + " · " + p.title.toFixed(2);
+        cA = rA[i] ? "rank " + rA[i] + " · " + max(p.attr).toFixed(2) : "—";
+        cR = !useRev ? "off" : (rR[i] ? "rank " + rR[i] + " · " + max(p.rev).toFixed(2) : "—");
+      }
+      return { p: p, score: score, cP: cP, cA: cA, cR: cR };
+    }).sort(function (a, b) { return b.score - a.score; });
+
+    var body = document.getElementById("toy-body");
+    body.innerHTML = "";
+    rows.forEach(function (r, idx) {
+      var tr = document.createElement("tr");
+      if (r.p.note === "target") tr.className = "target";
+      if (r.p.rev.length > 10) tr.className = "hubrow";
+      var tag = r.p.note === "target" ? '<span class="tag t">target</span>'
+        : r.p.note ? '<span class="tag ' + (r.p.note === "wrong type" ? "w" : "h") + '">' + r.p.note + "</span>" : "";
+      tr.innerHTML = '<td class="num">' + (idx + 1) + "</td><td>" + r.p.name + tag + '</td><td class="mono">' + r.cP +
+        '</td><td class="mono">' + r.cA + '</td><td class="mono' + (r.cR === "off" ? " dim" : "") + '">' + r.cR +
+        '</td><td class="num">' + (mode === "sum" ? r.score.toFixed(2) : r.score.toFixed(4)) + "</td>";
+      body.appendChild(tr);
+    });
+    document.getElementById("toy-verdict").textContent = verdicts[mode];
+    document.querySelectorAll(".modes button").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-mode") === mode));
+    });
+  }
+
+  document.querySelectorAll(".modes button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var m = b.getAttribute("data-mode");
+      render(m);
+      try { localStorage.setItem("toy-mode", m); } catch (e) { /* storage unavailable */ }
+    });
+  });
+  var start = "sum";
+  try { start = localStorage.getItem("toy-mode") || "sum"; } catch (e) { start = "sum"; }
+  render(start);
+})();
+</script>

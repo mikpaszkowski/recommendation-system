@@ -1,0 +1,74 @@
+{
+  "_doc": "Free-form pilot record for R-7 / CP-5 (Technical_Specification_Graph_Rebuild.md \u00a75.4, AC-043). Sizes in KB from du -sk inside the container; times in seconds from the run logs; full-build estimates are per-label throughput extrapolations, not measurements.",
+  "created_at": "2026-10-20",
+  "volume": "kg_neo4j_data_v2_pilot",
+  "sample": {
+    "sample_mod": 20,
+    "products": 13381,
+    "reviews": 171212,
+    "embed_reviews": 54668,
+    "users": 165732,
+    "taxon_nodes": 790
+  },
+  "artefacts": {
+    "lineage_sha256": "373956a7aa495109c5ac41279368ef817db56e569cd599178df1cba80dca4db5",
+    "import_run_sha256": "bcbf528997b7143bc59e2cd9ac9bca3d5d438b841ef8793313e3c5ee16ef2b70",
+    "embedding_report_sha256": "b3ec5bfd189457373432ce1a65bf9e6e6bfd5a12966bb4ba0a1ce5e443016add",
+    "validation_report_sha256": "5ceb7c0c31bdd34a741e48076a072d27f8f63932b2effac023e3f8816352091f"
+  },
+  "times_s": {
+    "transform": 353,
+    "import": 13,
+    "post_import_all": 468,
+    "validation": 75
+  },
+  "sizes_kb": {
+    "csv_import_dir": 155648,
+    "store_after_import": 490212,
+    "data_volume_after_post_import": 1444020,
+    "databases_neo4j": 655360,
+    "databases_neo4j_schema": 144384,
+    "transactions_neo4j": 526336,
+    "transactions_system": 264192
+  },
+  "embedding": {
+    "device": "mps:0",
+    "embed_batch_size": 32,
+    "effective_embed_batch_size": 32,
+    "oom_events": 0,
+    "cpu_fallback_batches": 0,
+    "texts_per_s": {
+      "Attribute": 386.56,
+      "Brand": 751.15,
+      "Category": 47.53,
+      "ParentProduct": 197.02,
+      "Review": 164.16
+    }
+  },
+  "smoke_tests": {
+    "constraints": "all created (incl. Taxon.taxon_id, Attribute (name, value), GraphVersion.version)",
+    "vector_indexes": "5 created via db.index.vector.createNodeIndex (no DDL on 5.14)",
+    "fulltext": "token 'rangefinder' -> B004XYZI0Q found in 7 hits; fields title, description, features, details_text",
+    "import_report_lines": 0
+  },
+  "validation": {
+    "passed": true,
+    "hard_gates_passed": 18,
+    "hard_gates_total": 18,
+    "notes": "R-07 lists 20 benchmark targets as absent because they are outside the 5% sample; the one sampled target (live_eval_laptop_02) keeps title, price, brand and category, reviews 33 -> 20 (cap)."
+  },
+  "full_build_estimate": {
+    "import_min": 4.3,
+    "embedding_min": {
+      "ParentProduct": 22.4,
+      "Review": 109.8,
+      "Brand": 1.1,
+      "Attribute": 1.6,
+      "Category": 0.1
+    },
+    "embedding_total_h": 2.25,
+    "store_gb": 12.5,
+    "transaction_logs_gb": "about 0.5-1 (retention 500M size during the build)",
+    "note": "Pilot review embedding ran at 164 texts/s (Neo4j round trips included) vs 335 texts/s in the P-04 encode-only benchmark."
+  }
+}

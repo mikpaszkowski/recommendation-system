@@ -8,6 +8,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-09-28. It was not rewritten. Sources: Vision decisions 2026-10-19-021 (items 4 and 5) and 2026-10-18-017 (item 2), `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` (D-3), and `13-doc-graph-integrity.md`.
+
+**C-1. The EAV numeric schema never existed on the live graph.** No `Attribute` node carries `numeric_value`. There is no `TechnicalSpec` label. Attributes hold only Material, Color, Style and Size. Numeric attribute filters therefore never ran on live data, and the "EAV Numeric Traversal" in §3.1, item 2 of §3.2 and claim 2 of §5 describe a design that was not realised. Graph v2 deliberately writes no `numeric_value`, because parsing colour, style or size strings gives nonsense values (Vision 2026-10-19-018 point 4). Typed specifications are deferred to RS-11. As far as it concerns the EAV schema, $RQ_3$ cannot be answered with this system. The answerable part is entity resolution plus schema injection.
+
+**C-2. Previously recorded corrections, restated here because this document still shows them.** The "Lucene full-text" Tier 2 was superseded by the word-boundary regex tier, and the live Neo4j 5.14 graph had no full-text index (Vision 2026-10-18-017, item 2). Single-pass HyDE generation is claimed in §2.2 and §3.2 but does not exist in `src/` or `scripts/` (roadmap D-3); it is scheduled as a query version in RS-08. Graph v2 adds `product_fulltext_index` over product title, description and features. That index is not a resolver tier, and no current reader uses it.
+
+**C-3. Data behind any resolution result.** On graph v1, 104,281 of 265,307 products (39.3%) were ghost nodes with no title, category or brand. Vector Tier 3 over products and any yield figure computed on v1 therefore ran over a candidate pool that was 39% empty (Vision 2026-10-19-021 items 1 and 5). No such figure is reported in this document. Any later figure must state the graph version.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement

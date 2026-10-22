@@ -8,14 +8,28 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 try:
     from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
     from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
+    from src.knowledge_graph.graphdb.embedding_templates import category_text_v1
 except ImportError:
     from neo4j_connector import Neo4jConnector
     from embedding_service import EmbeddingService
+    from embedding_templates import category_text_v1
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 100
+
+# Sample titles are taken from titled products in a fixed order (review_count DESC, parent_asin ASC)
+# so re-embedding identical data gives identical texts (Technical Specification Graph Rebuild FR-033).
+CATEGORY_FETCH_QUERY = """
+        MATCH (c:Category)
+        WHERE elementId(c) IN $ids
+        OPTIONAL MATCH (p:ParentProduct)-[:BELONGS_TO_CATEGORY]->(c)
+        WHERE p.title IS NOT NULL AND trim(p.title) <> ''
+        WITH c, p ORDER BY coalesce(p.review_count, 0) DESC, p.parent_asin ASC
+        WITH c, collect(p.title)[..5] AS sample_products
+        RETURN elementId(c) as id, c.path as path, c.name as name, sample_products
+        """
 
 def backfill_category_embeddings():
     logger.info("Starting Category Embedding Backfill...")
@@ -38,13 +52,7 @@ def backfill_category_embeddings():
     for i in tqdm(range(0, total, BATCH_SIZE), desc="Embedding Categories"):
         batch_ids = all_ids[i:i+BATCH_SIZE]
         
-        query_fetch = """
-        MATCH (c:Category)
-        WHERE elementId(c) IN $ids
-        OPTIONAL MATCH (p:ParentProduct)-[:BELONGS_TO_CATEGORY]->(c)
-        WITH c, collect(p.title)[..5] as sample_products
-        RETURN elementId(c) as id, c.path as path, c.name as name, sample_products
-        """
+        query_fetch = CATEGORY_FETCH_QUERY
         
         with connector.session() as session:
             rows = list(session.run(query_fetch, ids=batch_ids))
@@ -56,40 +64,8 @@ def backfill_category_embeddings():
         temp_rows = []
         for row in rows:
             cat_id = row['id']
-            name = row['name'] or ""
-            path_list = row['path'] or []
-            products = row['sample_products'] or []
-            
-            # 1. Leaf Name (Priority)
-            leaf_part = f"Category: {name}"
-            
-            # 2. Hierarchy Context (Parents)
-            # path usually includes self at the end, so take everything except the last
-            if len(path_list) > 1:
-                parents = path_list[:-1]
-                # Reverse order? "Parent, Grandparent" vs "Grandparent, Parent"
-                # MiniLM handles natural language well. "Context: Parent, Grandparent" is fine.
-                context_str = ", ".join(parents)
-                context_part = f"Context: {context_str}"
-            else:
-                context_part = "Context: Root Category"
-
-            # 3. Product Augmentation
-            if products:
-                # Clean product titles (sometimes they are super long) -> take first 10 words maybe?
-                # or just join them. 5 products can be long. Let's truncate title to 10 words.
-                clean_prods = []
-                for p in products:
-                    if p:
-                        clean_prods.append(" ".join(p.split()[:10]))
-                
-                prod_str = ", ".join(clean_prods)
-                product_part = f"Related items: {prod_str}"
-            else:
-                product_part = "Related items: None"
-
-            # Combine: "Category: Subwoofers. Context: Car Audio, Electronics. Related items: JBL Bass, Pioneer..."
-            full_text = f"{leaf_part}. {context_part}. {product_part}."
+            # "Category: Subwoofers. Context: Car Audio, Electronics. Related items: JBL Bass, Pioneer..."
+            full_text = category_text_v1(row['name'] or "", row['path'] or [], row['sample_products'] or [])
             
             texts_to_embed.append(full_text)
             temp_rows.append(cat_id)

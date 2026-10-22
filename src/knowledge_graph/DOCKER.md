@@ -12,18 +12,21 @@ This guide explains how to run Neo4j using Docker Compose for the recommendation
 
 ### 1. Start Neo4j
 
-From the `src/knowledge_graph` directory:
+The graph data volume is **external** and must be named in `NEO4J_DATA_VOLUME` (graph v2, FR-020). Compose can neither create nor remove it, so `docker compose down -v` cannot delete a graph. Create it once, set it in `.env` (see `.env.example`), then run from the **repository root**:
 
 ```bash
-docker-compose up -d
+docker volume create <your-volume-name>   # first time only
+docker compose --env-file .env -f src/knowledge_graph/docker-compose.yml up -d
 ```
+
+Compose fails with "Set NEO4J_DATA_VOLUME to the graph volume (v1 or v2)" when the variable is unset. The graph version in use is whichever volume you name (the live graph is **v2**, volume `kg_neo4j_data_v2`, built 2026-10-20; the retired v1 graph is the volume `knowledge-graph_neo4j_data`, kept for rollback, see "Rollback to v1" in `scripts/graph_ingestion/README.md`). Only one Neo4j container can run at a time (ports 7474 and 7687): the v2 container is `neo4j-recommendation`, the stopped v1 container is `neo4j-recommendation-v1`.
 
 This will:
 
 - Pull the Neo4j 5.14.0 image (if not already downloaded)
 - Start Neo4j with APOC and Graph Data Science plugins
 - Expose ports 7474 (HTTP) and 7687 (Bolt)
-- Create persistent volumes for data, logs, and imports
+- Attach the external data volume and create local volumes for logs, imports and plugins
 
 ### 2. Verify Neo4j is Running
 
@@ -88,20 +91,14 @@ NEO4J_PASSWORD=your_secure_password_here
 
 ### Memory Settings
 
-The default memory settings are:
+Memory comes from environment variables (graph v2, FR-020). The runtime profile defaults are:
 
-- **Heap Initial Size**: 512MB
-- **Heap Max Size**: 2GB
-- **Page Cache Size**: 1GB
+- **Heap (initial = max)**: `NEO4J_HEAP`, default 2G
+- **Page Cache Size**: `NEO4J_PAGECACHE`, default 2G
+- **Transaction timeout**: `NEO4J_TX_TIMEOUT`, default 60s (Neo4j 5 setting name `db.transaction.timeout`)
+- **Transaction log retention**: `NEO4J_TX_LOG_RETENTION`, default `2 days`
 
-To adjust these for your system, edit the environment variables in `docker-compose.yml`:
-
-```yaml
-environment:
-  - NEO4J_server_memory_heap_initial__size=512m
-  - NEO4J_server_memory_heap_max__size=2G
-  - NEO4J_server_memory_pagecache_size=1G
-```
+The build profile for the v2 import and post-import is `NEO4J_HEAP=4G NEO4J_PAGECACHE=1G NEO4J_TX_TIMEOUT=600s NEO4J_TX_LOG_RETENTION="500M size"`. Set these in `.env`; see `.env.example`.
 
 **Recommendations**:
 
@@ -144,12 +141,12 @@ docker-compose restart
 docker-compose down
 ```
 
-### Stop and Remove Everything (including data)
+### Stop and Remove Everything (except the graph)
 
-⚠️ **Warning**: This will delete all your graph data!
+The graph data volume is external, so `down -v` removes only the logs, import and plugin volumes and never the graph. To delete a graph deliberately, use `docker volume rm <name>` yourself. **Never do this to the v1 volume**: it is the rollback target and the v1 reference for the thesis.
 
 ```bash
-docker-compose down -v
+docker compose --env-file .env -f src/knowledge_graph/docker-compose.yml down -v
 ```
 
 ### View Logs
@@ -308,9 +305,9 @@ CALL dbms.queryJmx("org.neo4j:*")
 
 ## Volumes
 
-The setup creates four persistent volumes:
+The setup uses four persistent volumes:
 
-1. **neo4j_data**: Database files (nodes, relationships, indexes)
+1. **neo4j_data**: Database files (nodes, relationships, indexes). External, named by `NEO4J_DATA_VOLUME`, not created by compose
 2. **neo4j_logs**: Log files
 3. **neo4j_import**: Import directory for bulk loading
 4. **neo4j_plugins**: Plugin files
@@ -399,9 +396,6 @@ For production deployments:
 
 1. ✅ Start Neo4j with Docker Compose
 2. ✅ Verify connection
-3. 📝 Load your Amazon Reviews dataset
-4. 📝 Create graph schema and indexes
-5. 📝 Implement recommendation queries
-6. 📝 Integrate with your application
+3. ✅ The graph is built (v2, 2026-10-20). To rebuild it or to roll back to v1, follow the "Graph v2" runbook and "Rollback to v1" in [`scripts/graph_ingestion/README.md`](../../scripts/graph_ingestion/README.md); counts are in `production_artifacts/graph_state_snapshot.md`
 
-See [QUICKSTART.md](QUICKSTART.md) for more details on using the Neo4j connector.
+For the Python connector API, see the docstrings in [`graphdb/neo4j_connector.py`](graphdb/neo4j_connector.py). The former `README.md` and `QUICKSTART.md` in this folder were removed on 2026-10-19 because they described a never-implemented schema and wrong import paths (see `production_artifacts/Documentation_Audit_Report.md`).

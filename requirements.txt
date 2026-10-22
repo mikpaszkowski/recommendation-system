@@ -31,5 +31,6 @@ chainlit>=1.0.0
 # Analysis / Testing
 scikit-learn>=1.0.0
 matplotlib>=3.4.0
+seaborn>=0.12
 pytest>=7.0.0
 pytest-asyncio>=0.21.0

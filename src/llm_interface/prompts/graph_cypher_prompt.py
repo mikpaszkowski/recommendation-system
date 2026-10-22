@@ -9,18 +9,15 @@ def prompt() -> str:
         <graph_schema>
         Target Nodes & Properties:
         - ParentProduct (alias: pp): {parent_asin, title, price (float), avg_rating, main_category}
-        - Variant (alias: v): {asin, parent_asin} -> linked to ParentProduct via [:IS_VARIANT_OF]
         - Brand (alias: b): {name} -> linked via [:HAS_BRAND]
         - Category (alias: c): {name, path} -> linked via [:BELONGS_TO_CATEGORY]
         - Attribute (alias: a): {attribute_name, attribute_value, normalized_value} -> linked via [:HAS_ATTRIBUTE]
-        - PriceRange (alias: pr): {label, lower_bound, upper_bound} -> linked via [:IN_PRICE_RANGE]
         
         Key Relationships:
         (pp)-[:HAS_ATTRIBUTE]->(a)
         (pp)-[:HAS_BRAND]->(b)
         (pp)-[:BELONGS_TO_CATEGORY]->(c)
         (c)-[:SUBCATEGORY_OF]->(parent_c)
-        (pp)-[:IN_PRICE_RANGE]->(pr)
         </graph_schema>
 
         <critical_rules>
@@ -41,7 +38,7 @@ def prompt() -> str:
            - **Brands:** Match against `b.name`.
            - **Price:** 
              - If specific amount (e.g. "under $300"): Use numeric comparison `pp.price <= $max_price`.
-             - If abstract range (e.g. "budget", "cheap"): Match `(pp)-[:IN_PRICE_RANGE]->(pr)` and filter on `toLower(pr.label)`.
+             - If abstract (e.g. 'budget', 'cheap'): do not invent a ceiling; keep products with a known price and sort by `pp.price ASC`.
            - **Attributes (Likes/Dislikes):** 
              - Map user `likes` and `dislikes` to `Attribute` nodes.
              - Match `(pp)-[:HAS_ATTRIBUTE]->(a)`.
@@ -114,7 +111,7 @@ def prompt() -> str:
         </input>
         <output>
         {
-          "cypher": "MATCH (pp:ParentProduct)-[:BELONGS_TO_CATEGORY]->(c:Category) WHERE ANY(cat IN $categories WHERE toLower(c.name) CONTAINS toLower(cat)) MATCH (pp)-[:IN_PRICE_RANGE]->(pr:PriceRange) WHERE toLower(pr.label) CONTAINS 'cheap' OR toLower(pr.label) CONTAINS 'budget' OPTIONAL MATCH (pp)-[:HAS_BRAND]->(b:Brand) RETURN pp.parent_asin as parent_asin, pp.title as title, pp.price as price, pp.avg_rating as avg_rating, b.name as brand, collect(DISTINCT c.name) as categories, 0 as score LIMIT $limit",
+          "cypher": "MATCH (pp:ParentProduct)-[:BELONGS_TO_CATEGORY]->(c:Category) WHERE ANY(cat IN $categories WHERE toLower(c.name) CONTAINS toLower(cat)) AND pp.price IS NOT NULL OPTIONAL MATCH (pp)-[:HAS_BRAND]->(b:Brand) RETURN pp.parent_asin as parent_asin, pp.title as title, pp.price as price, pp.avg_rating as avg_rating, b.name as brand, collect(DISTINCT c.name) as categories, 0 as score ORDER BY pp.price ASC LIMIT $limit",
           "parameters": {
             "limit": 10,
             "categories": ["Headphones"],

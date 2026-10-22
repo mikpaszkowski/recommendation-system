@@ -1,0 +1,214 @@
+{
+  "run_id": "eval_2026-10-18_2340",
+  "timestamp": "2026-10-18T23:47:01.988384",
+  "git_commit": "88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29",
+  "evaluation_types": [
+    "retrieval"
+  ],
+  "configuration": {
+    "mode": "live",
+    "benchmark": "live_eval_dataset.json",
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "strategies": [
+      "hybrid",
+      "vector_only",
+      "cypher_only",
+      "hybrid@rrf3",
+      "hybrid@rrf2",
+      "hybrid@wrrf3",
+      "hybrid@cc3",
+      "hybrid@sum_legacy"
+    ],
+    "query_count": 21,
+    "clarification_count": 0,
+    "clarification_rate": 0.0,
+    "fusion_default": {
+      "name": "rrf3",
+      "method": "rrf",
+      "channels": [
+        "product",
+        "attribute",
+        "review"
+      ],
+      "weights": {
+        "product": 1.0,
+        "attribute": 1.0,
+        "review": 1.0
+      },
+      "rrf_k": 60,
+      "channel_depth": 100,
+      "ann_k_per_limit": 30,
+      "soft_bonus_beta": 0.25,
+      "soft_bonus_unit": 0.012295081967213115
+    },
+    "fusion_arms": {
+      "rrf3": {
+        "name": "rrf3",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.012295081967213115
+      },
+      "rrf2": {
+        "name": "rrf2",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.00819672131147541
+      },
+      "wrrf3": {
+        "name": "wrrf3",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 0.6,
+          "attribute": 0.25,
+          "review": 0.15
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.004098360655737705
+      },
+      "cc3": {
+        "name": "cc3",
+        "method": "cc",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.25
+      },
+      "sum_legacy": {
+        "name": "sum_legacy",
+        "method": "sum",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.2
+      }
+    },
+    "review_embedded_products": 5715,
+    "catalog_popular_share": 0.021541082594880648,
+    "catalog_titled_products": 161026,
+    "review_embedded_products_titled": 841,
+    "catalog_popular_share_titled": 0.0052227590575435025,
+    "gold_target_check": {
+      "checked": 17,
+      "constraints": 38,
+      "unknown": 19,
+      "violations": []
+    }
+  },
+  "artifacts_generated": [
+    "manifest.json",
+    "summary.json",
+    "retrieval_metrics.json",
+    "retrieval_metrics.csv",
+    "execution_trace.log",
+    "plots/retrieval_ranking_comparison.png",
+    "plots/retrieval_ranking_comparison.jpg",
+    "plots/retrieval_metrics_comparison.png",
+    "per_query.jsonl"
+  ],
+  "citable": true,
+  "citable_reasons": [],
+  "citable_warnings": [],
+  "provenance": {
+    "git_commit": "88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29",
+    "git_describe": "88cdbdf-dirty",
+    "git_dirty": false,
+    "git_dirty_paths": [],
+    "git_diff_sha256": null,
+    "untracked_files": [],
+    "git_scope": [
+      "src",
+      "scripts"
+    ],
+    "benchmark": {
+      "path": "live_eval_dataset.json",
+      "sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+      "git_tracked": true,
+      "git_dirty": false,
+      "query_count": 21,
+      "split": null,
+      "salt": null
+    },
+    "llm": {
+      "alias": "gpt-4o",
+      "resolved_model_ids": [
+        "gpt-4o-2024-08-06"
+      ]
+    },
+    "neo4j": {
+      "name": "Neo4j Kernel",
+      "version": "5.14.0",
+      "edition": "community"
+    },
+    "graph_snapshot": {
+      "products": 265307,
+      "categories": 71,
+      "reviews": 1629426,
+      "review_embedded_products": 5715
+    },
+    "python": {
+      "version": "3.11.7",
+      "executable": "/opt/homebrew/anaconda3/bin/python"
+    },
+    "category_recovery": true
+  }
+}

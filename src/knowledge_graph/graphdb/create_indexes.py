@@ -1,3 +1,4 @@
+"""Creates the attribute and category vector indexes with DDL. Needs Neo4j >= 5.15 (not used by the graph v2 runbook)."""
 import logging
 import os
 import sys

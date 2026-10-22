@@ -1,0 +1,252 @@
+{
+  "run_id": "eval_2026-10-20_1128",
+  "timestamp": "2026-10-20T11:41:58.813964",
+  "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+  "evaluation_types": [
+    "retrieval"
+  ],
+  "configuration": {
+    "mode": "live",
+    "benchmark": "live_eval_dataset.json",
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "strategies": [
+      "hybrid",
+      "vector_only",
+      "cypher_only",
+      "hybrid@rrf3",
+      "hybrid@rrf2",
+      "hybrid@wrrf3",
+      "hybrid@cc3",
+      "hybrid@sum_legacy"
+    ],
+    "query_count": 21,
+    "clarification_count": 0,
+    "clarification_rate": 0.0,
+    "fusion_default": {
+      "name": "rrf3",
+      "method": "rrf",
+      "channels": [
+        "product",
+        "attribute",
+        "review"
+      ],
+      "weights": {
+        "product": 1.0,
+        "attribute": 1.0,
+        "review": 1.0
+      },
+      "rrf_k": 60,
+      "channel_depth": 100,
+      "ann_k_per_limit": 30,
+      "soft_bonus_beta": 0.25,
+      "soft_bonus_unit": 0.012295081967213115
+    },
+    "fusion_arms": {
+      "rrf3": {
+        "name": "rrf3",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.012295081967213115
+      },
+      "rrf2": {
+        "name": "rrf2",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.00819672131147541
+      },
+      "wrrf3": {
+        "name": "wrrf3",
+        "method": "rrf",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 0.6,
+          "attribute": 0.25,
+          "review": 0.15
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.004098360655737705
+      },
+      "cc3": {
+        "name": "cc3",
+        "method": "cc",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.25
+      },
+      "sum_legacy": {
+        "name": "sum_legacy",
+        "method": "sum",
+        "channels": [
+          "product",
+          "attribute",
+          "review"
+        ],
+        "weights": {
+          "product": 1.0,
+          "attribute": 1.0,
+          "review": 1.0
+        },
+        "rrf_k": 60,
+        "channel_depth": 100,
+        "ann_k_per_limit": 30,
+        "soft_bonus_beta": 0.25,
+        "soft_bonus_unit": 0.2
+      }
+    },
+    "review_embedded_products": 265294,
+    "catalog_popular_share": 0.9999510001620764,
+    "catalog_titled_products": 265299,
+    "review_embedded_products_titled": 265286,
+    "catalog_popular_share_titled": 0.9999509986845031,
+    "gold_target_check": {
+      "checked": 17,
+      "constraints": 38,
+      "unknown": 19,
+      "violations": []
+    }
+  },
+  "artifacts_generated": [
+    "manifest.json",
+    "summary.json",
+    "retrieval_metrics.json",
+    "retrieval_metrics.csv",
+    "execution_trace.log",
+    "plots/retrieval_ranking_comparison.png",
+    "plots/retrieval_ranking_comparison.jpg",
+    "plots/retrieval_metrics_comparison.png",
+    "per_query.jsonl"
+  ],
+  "citable": true,
+  "citable_reasons": [],
+  "citable_warnings": [],
+  "provenance": {
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "git_describe": "4248d03",
+    "git_dirty": false,
+    "git_dirty_paths": [],
+    "git_diff_sha256": null,
+    "untracked_files": [],
+    "git_scope": [
+      "src",
+      "scripts"
+    ],
+    "benchmark": {
+      "path": "live_eval_dataset.json",
+      "sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+      "git_tracked": true,
+      "git_dirty": false,
+      "query_count": 21,
+      "split": null,
+      "salt": null
+    },
+    "llm": {
+      "alias": "gpt-4o",
+      "resolved_model_ids": [
+        "gpt-4o-2024-08-06"
+      ]
+    },
+    "neo4j": {
+      "name": "Neo4j Kernel",
+      "version": "5.14.0",
+      "edition": "community"
+    },
+    "graph_snapshot": {
+      "products": 265307,
+      "categories": 38,
+      "reviews": 3382248,
+      "review_embedded_products": 265294,
+      "graph_version": {
+        "splits_sha256": "27835771f8c3000802703ae90ba902b4f50964f5ef23a55679215a1603de9005",
+        "taxon_count": 1183,
+        "template_ids": [
+          "ParentProduct=product_v1",
+          "Review=review_v1",
+          "Brand=brand_v1",
+          "Attribute=attribute_v1",
+          "Category=category_v1"
+        ],
+        "review_count": 3382248,
+        "neo4j_version": "5.14.0",
+        "source_reviews_sha256": "bf11cf9c94c23ead7d3ffb174d18231fad8fcd76e72ad167f538a5599a38de8e",
+        "validation_passed": true,
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "review_embedding_scope": "top5_nonblank_by_cap_rank",
+        "embedding_report_sha256": "4cc1a24c9d50fe152dd464a07ed6988382bc486eb9e89f08c2935f14fc136f2d",
+        "source_meta_sha256": "5eb4dabd539586c49654297319ef178b62a2fe8e43108376feda125f04455d93",
+        "stamp_commit": "0a32604a2c2c2ce84a0317611ca35a48d0ffa2b8",
+        "version": "v2",
+        "build_params_sha256": "ce16e65dced873f888f9c11aafbdbd455df357b974054e888d244b21dc4eee2e",
+        "fulltext_fields": [
+          "title",
+          "description",
+          "features",
+          "details_text"
+        ],
+        "validation_report_sha256": "d8a68b7f2ac1589353fc8d32b6b00646dfe4e2aca98150b1964f8f1e6b1bb8af",
+        "product_count": 265307,
+        "review_cap": 20,
+        "catalogue_sha256": "76d882abd470978c97e060ab6b640315b1f3b3d5fa827c2832b307568c34f528",
+        "code_commit": "75c5c0acb850ef2a3ff448344b5bc7f5ab9e1bc7",
+        "built_at": "2026-10-20T08:20:05Z",
+        "user_count": 2594661,
+        "lineage_sha256": "3f98595288de52e58d1960fc5ef026ffc45dba2fc99d368b646505ac5e0886ec"
+      },
+      "products_untitled": 8,
+      "reviews_embedded": 1081137
+    },
+    "python": {
+      "version": "3.11.7",
+      "executable": "/Users/mikolajpaszkowski/recommendation-system/.venv/bin/python"
+    },
+    "category_recovery": true
+  }
+}

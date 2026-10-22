@@ -1,5 +1,7 @@
 # Live Graph & Pipeline Audit — 2026-10-10
 
+> **Note (2026-10-19)**: this audit describes the **v1 graph**. Later findings changed several readings: 104,281 of the 265,307 `ParentProduct` nodes are ghosts, `helpful_votes` and `timestamp` were never loaded because of wrong field names in `AmazonDataProcessor` (so the "backfill `sort_timestamp`" idea in F-02 cannot work), and `Variant` / `PriceRange` / `SUBCATEGORY_OF` are legacy structures (Vision 2026-10-19-018 and -021). The v2 rebuild replaces them (`production_artifacts/Technical_Specification_Graph_Rebuild.md`). Graph v2 was built on 2026-10-20 and is now the live Neo4j (v1 is retired; counts in `production_artifacts/graph_state_snapshot.md`). The text below is kept unchanged as the 2026-10-10 record.
+
 **Date**: 2026-10-10
 **Branch**: `feature/foundation-graph-improvement` (base commit `2fdf251`)
 **Scope**: Compare the implemented pipeline and evaluation harness against the **live** Neo4j graph. Verify the status of Meta-Phases A4–A6.

@@ -723,3 +723,92 @@ def test_generate_attribute_unit_variations_with_comparator_prefixes_and_aliases
     assert set(generate_attribute_unit_variations("battery_capacity", "5000mAh")) == {"5000mAh", "5000 mAh", "5000"}
 
 
+def test_generate_attribute_unit_variations_with_trailing_words():
+    """Adversarial check: trailing descriptive words in values are parsed properly."""
+    assert set(generate_attribute_unit_variations("storage", "128GB storage")) == {"128GB", "128 GB", "128"}
+    assert set(generate_attribute_unit_variations("camera", "64MP camera")) == {"64MP", "64 MP", "64 megapixel", "64"}
+    assert set(generate_attribute_unit_variations("display", "6.7 inch display")) == {"6.7-inch", "6.7 inch", '6.7"', "6.7"}
+    assert set(generate_attribute_unit_variations("battery", "5000 mAh battery")) == {"5000mAh", "5000 mAh", "5000"}
+
+
+def test_user_persona_and_legacy_preferences_support_root_constraints_and_pydantic():
+    """Adversarial check: session_context_to_user_persona and session_context_to_legacy_preferences support root constraints."""
+    raw_ctx = {
+        "hard_constraints": [
+            {"attribute": "brand", "operator": "include", "value": "Samsung"},
+            {"attribute": "storage", "operator": "greater_than", "value": "128GB"},
+        ],
+        "soft_preferences": [
+            {"category": "battery", "value": "all day battery", "polarity": 0.9}
+        ]
+    }
+    # Test user persona
+    persona = session_context_to_user_persona(raw_ctx)
+    assert any("Samsung" in req for req in persona["hard_requirements"])
+    assert any("all day battery" in qual for qual in persona["preferred_qualities"])
+    assert any("128GB" in qual for qual in persona["preferred_qualities"])
+
+    # Test legacy preferences
+    legacy = session_context_to_legacy_preferences(raw_ctx)
+    assert legacy["constraints"].get("brand") == "Samsung"
+    assert "all day battery" in legacy["likes"]
+
+
+def test_user_persona_exclusion_attributes_mapped_to_must_avoid():
+    """Adversarial check: exclude_brand, exclude_category, excluded_asins map to must_avoid in user persona."""
+    ctx = {
+        "hard_constraints": [
+            {"attribute": "exclude_brand", "operator": "include", "value": "Apple"},
+            {"attribute": "exclude_category", "operator": "include", "value": "Laptops"},
+            {"attribute": "excluded_asins", "operator": "exclude", "value": ["B001", "B002"]},
+        ]
+    }
+    persona = session_context_to_user_persona(ctx)
+    assert persona["hard_requirements"] == []
+    assert any("brand != Apple" in av for av in persona["must_avoid"])
+    assert any("category != Laptops" in av for av in persona["must_avoid"])
+    assert any("asin != B001" in av for av in persona["must_avoid"])
+    assert any("asin != B002" in av for av in persona["must_avoid"])
+
+
+def test_none_and_empty_soft_preferences_filtered_out():
+    """Adversarial check: soft preferences with None or empty values are cleanly filtered out."""
+    ctx = {
+        "soft_preferences": [
+            {"category": "brand", "value": None, "polarity": 1.0},
+            {"category": "color", "value": "", "polarity": 1.0},
+            {"category": "os", "value": "none", "polarity": 1.0},
+            {"category": "weight", "value": "lightweight", "polarity": 0.9},
+        ]
+    }
+    soft = session_context_to_soft_preferences(ctx)
+    values = [s["value"] for s in soft]
+    assert "lightweight" in values
+    assert None not in values
+    assert "None" not in values
+    assert "" not in values
+
+    persona = session_context_to_user_persona(ctx)
+    assert len(persona["preferred_qualities"]) == 1
+    assert "lightweight" in persona["preferred_qualities"][0]
+
+    legacy = session_context_to_legacy_preferences(ctx)
+    assert legacy["likes"] == ["lightweight"]
+
+
+def test_extract_semantic_query_resilient_to_partial_dictionaries():
+    """Adversarial check: extract_semantic_query works with partial dictionaries without ValidationError."""
+    raw = {
+        "situational_context": "College student needs a laptop",
+        "soft_preferences": [
+            {"value": "lightweight", "polarity": 0.9},  # missing category
+            {"value": None, "polarity": 1.0},
+        ]
+    }
+    query = extract_semantic_query(raw)
+    assert "College student needs a laptop" in query
+    assert "lightweight" in query
+    assert "None" not in query
+
+
+

@@ -17,3 +17,9 @@ my_env
 introspection_results.txt
 .agents/teamwork/*
 /evaluations/*
+!/evaluations/benchmarks/
+!/evaluations/benchmarks/*.json
+# R2a (FR-034): archived evaluation runs are tracked, including their CSVs
+!/evaluations_archive/**/*.csv
+# Ingestion runtime checkpoint; untracked under scripts/ it would mark every evaluation non-citable
+scripts/graph_ingestion/.ingest_checkpoint.json

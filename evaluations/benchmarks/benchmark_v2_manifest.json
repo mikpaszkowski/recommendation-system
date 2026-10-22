@@ -1,0 +1,68 @@
+{
+  "version": "benchmark_v2",
+  "release": "R2b",
+  "created_at": "2026-10-20T17:08:45.462423+00:00",
+  "salt": "crs_r2b_20261020",
+  "seed": 20261020,
+  "benchmark_path": "evaluations/benchmarks/benchmark_v2.json",
+  "sha256": "3ae073ff54f57d6092612ead279872d82edf84e7d3963a23a67d4633422a1f3c",
+  "total_queries": 251,
+  "stratum_split_counts": {
+    "S0": {
+      "total": 40,
+      "tuning": 14,
+      "test": 26
+    },
+    "S1": {
+      "total": 40,
+      "tuning": 17,
+      "test": 23
+    },
+    "S2": {
+      "total": 40,
+      "tuning": 18,
+      "test": 22
+    },
+    "S3": {
+      "total": 40,
+      "tuning": 19,
+      "test": 21
+    },
+    "S4": {
+      "total": 40,
+      "tuning": 16,
+      "test": 24
+    },
+    "A": {
+      "total": 30,
+      "tuning": 10,
+      "test": 20
+    },
+    "legacy": {
+      "total": 21,
+      "tuning": 21,
+      "test": 0
+    }
+  },
+  "split_totals": {
+    "tuning": 115,
+    "test": 136
+  },
+  "distinct_categories_s0_s4": 19,
+  "distinct_taxon_leaves_s0_s4": 158,
+  "unique_target_asins": 221,
+  "leakage_audit_summary": {
+    "s0_s4_count": 200,
+    "model_code_leaks": 0,
+    "unflagged_brand_leaks": 0,
+    "max_title_token_overlap": 0.2,
+    "mean_title_token_overlap": 0.0046,
+    "min_tfidf_target_rank": 2,
+    "tfidf_rank_1_count": 0
+  },
+  "graph_grounding": {
+    "total_scenarios": 251,
+    "valid_scenarios": 251,
+    "violations": []
+  }
+}

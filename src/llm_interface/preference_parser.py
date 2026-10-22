@@ -41,6 +41,12 @@ VALID_OPERATORS = {
     "brand": {"equal", "include", "exclude"},
 }
 
+# RS-23 (FR-005): balances the schema block's "ALL other specifications ... soft_preferences" line
+PRODUCT_TYPE_SCHEMA_HINT = (
+    "The product type the user names is the `category` hard constraint (see PRODUCT TYPE RULE); "
+    "only its modifiers are soft_preferences."
+)
+
 
 def validate_hard_constraint(constraint: Dict[str, Any]) -> bool:
     """
@@ -112,7 +118,11 @@ class LLMPreferenceParser(PreferenceParserInterface):
         try:
             self.logger.debug(f"Invoking LLM with {len(messages)} messages.")
             result = self.llm_with_tools.invoke(messages)
-            
+            # Provenance (FR-031): record the resolved model ID; test doubles may lack the hook
+            record_model = getattr(self.llm_handler, "record_response_model", None)
+            if callable(record_model):
+                record_model(result)
+
             self.logger.debug("LLM invocation completed. Extracting content.")
             raw = self._extract_content(result)
             self.logger.debug(f"Raw extracted content: {raw}")
@@ -174,7 +184,8 @@ class LLMPreferenceParser(PreferenceParserInterface):
                 schema_injection = "\n\n<schema_injection>\n"
                 schema_injection += "CRITICAL STRICT SCHEMA CONSTRAINTS:\n"
                 schema_injection += "You MUST adhere to the EXPLICIT CONSTRAINT TAXONOMY. Only 'price', 'category', and 'brand' (affirmative or excluded) are allowed as hard_constraints.\n"
-                schema_injection += "ALL other specifications MUST be classified as soft_preferences (e.g. 'ram', 'refresh_rate', 'model').\n\n"
+                schema_injection += "ALL other specifications MUST be classified as soft_preferences (e.g. 'ram', 'refresh_rate', 'model').\n"
+                schema_injection += f"{PRODUCT_TYPE_SCHEMA_HINT}\n\n"
                 
                 schema_injection += "Global Attributes (for reference, but only price/category/brand can be hard_constraints):\n"
                 for attr in schemas.get("global_attributes", []):

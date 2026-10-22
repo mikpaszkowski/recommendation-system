@@ -1,5 +1,59 @@
 # Knowledge Graph Schema (Electronics CRS Foundation)
 
+> **Structure of this file (updated 2026-10-20).** Part 1 is the **live schema, graph v2**, built and stamped on 2026-10-20 (validated 18/18; counts in `production_artifacts/graph_state_snapshot.md`). Part 2 is the **original design-time schema** (July 2026), kept for history and for the extension ideas it contains. It is **not** the live graph: the retired v1 graph followed it only partly, and v2 drops `Variant`, `PriceRange`, `Product`, `RATED`, `REVIEWS` and `SUBCATEGORY_OF`. Where the parts disagree, Part 1 is right. Canonical sources: `production_artifacts/Technical_Specification_Graph_Rebuild.md` §5.1, `graph_versions/v2/lineage.json` and Vision 2026-10-19-018 … 021.
+
+---
+
+# Part 1 — Live schema (graph v2)
+
+## Nodes
+
+| Label | Properties | Count | Notes |
+|---|---|---|---|
+| `ParentProduct` | `parent_asin` (STRING, unique); `title`; `price` (FLOAT, null for 57%); `avg_rating` (FLOAT); `review_count` (INTEGER, from `rating_number`); `description` (STRING, array parts joined with ` \| `); `features` (LIST<STRING>, order kept); `details_json` (STRING, canonical JSON of the Amazon `details` map); `details_text` (STRING, `key: value` lines of scalar details); `category_path` (LIST<STRING>); `store` (STRING); `embedding` (LIST<FLOAT>, 384) | 265,307 | one node per catalogue `parent_asin`; `embedding` missing on 4 (no title or description content) |
+| `Review` | `review_id` (STRING, unique, `md5(user-asin-timestamp)`); `review_title`, `review_body`; `rating` (FLOAT); `verified` (BOOLEAN); `timestamp` (INTEGER, ms); `helpful_vote` (INTEGER); `asin` (STRING, child SKU); `in_train_split` (BOOLEAN); `cap_rank` (INTEGER, 1 … 20 per product); `embed_rank` (INTEGER, null outside the top 5); `embedding` (only where `embed_rank` is set) | 3,382,248 | at most 20 reviews per product; reviews of the validation and test splits are excluded |
+| `User` | `user_id` (STRING, unique) | 2,594,661 | |
+| `Brand` | `name` (STRING, unique); `embedding` | 49,663 | case variants are separate nodes |
+| `Category` | `name` (STRING, unique); `embedding` | 38 | Amazon `main_category`; no `level` or `path` |
+| `Attribute` | `attribute_name`, `attribute_value` (STRING, unique together); `embedding` | 36,187 | keys `Material`, `Color`, `Style`, `Size`; no `numeric_value` |
+| `Taxon` | `taxon_id` (STRING, unique); `name` (not unique); `path` (LIST<STRING>); `depth` (INTEGER); `product_count` (subtree); `direct_product_count` | 1,183 | tree built from `categories`; 3 roots, max depth 7 |
+| `GraphVersion` | `version` (unique), `built_at`, hashes of lineage / validation / embedding report / build params / sources / splits / catalogue, `code_commit`, `stamp_commit`, `embedding_model`, `template_ids`, `review_embedding_scope`, `review_cap`, `fulltext_fields`, `neo4j_version`, `product_count`, `review_count`, `user_count`, `taxon_count`, `validation_passed` | 1 | written by `post_import_v2.py stamp`; read by the evaluation manifest as `graph_version` |
+
+Dropped from v1: the labels `Variant`, `Product`, `PriceRange` (and the never-populated `Aspect`, `CoPurchaseSet`), the relationships `RATED`, `REVIEWS`, `SUBCATEGORY_OF`, `IN_PRICE_RANGE`, `IS_VARIANT_OF`, and the properties `Category.level`, `Category.path`. Gate H-16 asserts that none of them exist.
+
+## Relationships
+
+| Type | Start → End | Count | Notes |
+|---|---|---|---|
+| `ABOUT_PRODUCT` | `Review` → `ParentProduct` | 3,382,248 | always the parent; the child SKU is in `Review.asin` |
+| `WROTE` | `User` → `Review` | 3,382,248 | |
+| `HAS_BRAND` | `ParentProduct` → `Brand` | 264,274 | brand from `store`, else `details["Brand"]` |
+| `BELONGS_TO_CATEGORY` | `ParentProduct` → `Category` | 261,664 | |
+| `HAS_ATTRIBUTE` | `ParentProduct` → `Attribute` | 190,043 | |
+| `IN_TAXON` | `ParentProduct` → `Taxon` | 248,053 | at most one per product, to the deepest level; 22,684 point to an inner taxon |
+| `BROADER` | `Taxon` → `Taxon` | 1,180 | child → parent; exactly one for each non-root |
+
+No relationship has properties. Example: the `categories` list `["Electronics", "Television & Video", "Accessories", "Cables", "HDMI Cables"]` creates 5 `Taxon` nodes (depth 1 … 5) linked by 4 `BROADER` edges, and the product gets `IN_TAXON` to the depth-5 node. A second `Accessories` under `Computers & Accessories` is a different node with the same `name`.
+
+## Indexes and constraints
+
+| Name | Kind | Target |
+|---|---|---|
+| `product_embedding_index`, `review_embedding_index`, `brand_embedding_index`, `attribute_embedding_index`, `category_embedding_index` | vector, 384, cosine; created with `db.index.vector.createNodeIndex` (Neo4j 5.14 has no DDL form) | `embedding` on `ParentProduct`, `Review`, `Brand`, `Attribute`, `Category` |
+| `product_fulltext_index` | full-text, `english` | `ParentProduct` `[title, description, features, details_text]` |
+
+Uniqueness constraints (`post_import_v2.py constraints`): `product_id` (`ParentProduct.parent_asin`), `review_id`, `user_id`, `brand_id` (`Brand.name`), `category_id` (`Category.name`), `taxon_id`, `attribute_key` (`Attribute.attribute_name`, `attribute_value`), `graph_version_id` (`GraphVersion.version`).
+
+Embedding templates (`src/knowledge_graph/graphdb/embedding_templates.py`, ids `product_v1`, `review_v1`, `brand_v1`, `attribute_v1`, `category_v1`): a product is embedded only if it has a title or description (`product_content_rule = "title_description"`, so a product with only `features` gets no embedding); reviews from title and body (top 5 per product, truncated); brand, attribute and category texts are built from their names and values (category text also uses the taxon path and sample product titles). Model `sentence-transformers/all-MiniLM-L6-v2`.
+
+## Not in v2 (ideas from the design that remain unbuilt)
+
+Aspect extraction (`Aspect`, `MENTIONS_ASPECT`, `PREFERS`, `DISLIKES`), co-purchase sets and `BOUGHT_TOGETHER`, `OpinionPhrase` and commonsense nodes. The raw `bought_together` field is dropped by the transform. See Part 2 for what those were meant to be; they are candidates for the offline enrichment releases (R5) of the retrieval roadmap, not features of the live graph.
+
+---
+
+# Part 2 — Original design-time schema (July 2026, historical, not the live graph)
+
 This document captures the extensible Neo4j schema that underpins the conversational recommendation system. The design emphasises explicit entities and relationships extracted from the Amazon Reviews 2023 dataset while leaving dedicated attachment points for future commonsense knowledge, embeddings, and LLM alignment layers.
 
 ## Core Node Labels

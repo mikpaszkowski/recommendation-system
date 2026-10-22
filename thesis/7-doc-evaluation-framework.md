@@ -18,6 +18,18 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-10-04. It was not rewritten. Sources: Vision decisions 2026-10-19-018 and 2026-10-19-021 (items 1, 5 and 6), the brainstorm `_bmad-output/brainstorming/brainstorm-kg-attribute-problems-2026-10-18/brainstorm-intent.md` ("Thesis corrections"), and `13-doc-graph-integrity.md`.
+
+**C-1. Groundedness on graph v1 conflates hallucination with KG incompleteness.** The Hard Dilution Cap scores any claim absent from the KG evidence $\mathcal{E}_{KG}$ as fabricated. On graph v1, listing `features` text was never loaded, 39% of product nodes (104,281 of 265,307) had no metadata at all, and attributes held only Material, Color, Style and Size. A true specification taken from the Amazon listing would therefore be scored as a critical violation. No Tier 2 score on system output exists yet (Implementation Plan AI-04), so no reported number is invalidated. The Groundedness target in §4.1 ("0% Critical Hallucinations") cannot be interpreted on v1 data. Graph v2 stores `p.features` and `p.details_json`, but this release does not pass them to the judge's evidence. That is required before Groundedness is reported.
+
+**C-2. `profiled_user` scenarios and history-based explanations.** The v1 review timestamps and helpful votes are 0 throughout, and the KECR historical path yields nothing on the live graph (see the correction note in `6-doc-orthogonal-gating.md`). Scenarios "grounded in historical user reviews" therefore had no working historical evidence path on v1.
+
+**C-3. Citability now also requires a validated graph version.** Since the graph v2 change to `src/evaluation/provenance.py` (FR-028, FR-029), a live run is citable only if the graph carries one `GraphVersion` node with `validation_passed: true`. Tier 1 results from this framework must state the graph version. v1 evidence is limited to the archived runs.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement
@@ -28,15 +40,15 @@ Traditional recommendation systems evaluate candidate generation using static co
 Without a decoupled, two-tiered framework:
 1. Retrieval failures cannot be isolated from generative hallucinations (an optimal item may be retrieved by the graph engine but ignored or distorted by the LLM).
 2. Fluent hallucinations in conversational output dilute ranking penalties, masking severe factual errors.
-3. System behavior under conversational edge cases (e.g., preference shifts, over-constrained queries triggering MACS relaxation, explicit negative feedback) cannot be measured with reproducibility.
+3. System behavior under conversational edge cases (e.g., preference shifts, over-constrained queries triggering constraint relaxation, explicit negative feedback) cannot be measured with reproducibility.
 
 ### 1.2 Formal Research Question ($\mathbf{RQ_7}$)
 $$\mathbf{RQ_7}: \text{"To what extent does a two-tiered evaluation framework decoupling GraphRAG candidate retrieval from LLM generative explanation with Hard Dilution Capping more reliably detect recommendation failure modes and correlate with expert human judgment than monolithic end-to-end conversational evaluations?"}$$
 
 Additionally, this framework provides the empirical instrumentation required to evaluate:
-* $\mathbf{RQ_4}$: Decoupling hard boundaries from soft preferences via additive scoring and MACS progressive relaxation.
+* $\mathbf{RQ_4}$: Decoupling hard boundaries from soft preferences via additive scoring and hierarchical constraint relaxation.
 * $\mathbf{RQ_5}$: Multi-agent candidate verification (`CriticAgent`) on explanation coherence, semantic constraint adherence, and ranking gain ($\Delta \text{NDCG@K}$).
-* $\mathbf{RQ_6}$: Orthogonal Gating ($\alpha$) of exponentially-decayed historical graph paths and conversational evidence in KECR reasoning.
+* $\mathbf{RQ_6}$: Groundedness via Graph Evidence Paths (template metapaths inspired by KECR/PGPR) and multi-channel weighted RRF candidate ranking.
 
 ### 1.3 Hypotheses
 * **$\mathbf{H_1}$ (Alternative Hypothesis)**: Decoupling evaluation into Tier 1 (rank-preserving IR metrics across cutoff horizons $K \in \{1, 3, 5, 10, 20\}$) and Tier 2 (Inverted Chain-of-Thought LLM-as-a-Judge with a Hard Dilution Cap) provides statistically superior sensitivity to retrieval errors ($p < 0.01$) and penalizes catastrophic attribute hallucinations with zero score inflation compared to uncalibrated monolithic LLM scoring.
@@ -201,7 +213,7 @@ The framework is instrumented with two benchmark datasets:
 1. `evaluations/benchmarks/retrieval_benchmark.json`: 25 curated Amazon Electronics scenarios covering diverse query taxonomies:
    - `profiled_user`: Grounded in historical user reviews and category affinity.
    - `budget_constrained`: Evaluating hard numeric inequality filtering in Cypher.
-   - `over_constrained_macs`: Testing Minimal Active Constraint Set (MACS) progressive relaxation.
+   - `over_constrained_relaxation`: Testing hierarchical constraint relaxation (relaksacja ograniczeń).
    - `brand_excluded`: Testing negative entity exclusion in graph traversal.
 2. `evaluations/benchmarks/generative_benchmark.json`: 15 multi-turn dialogue scenarios covering:
    - Dynamic preference correction and negative feedback handling.
@@ -250,7 +262,7 @@ python scripts/evaluate_generative.py --mode live --model gpt-4o
   1. Traditional end-to-end conversational metrics (such as BLEU or monolithic LLM scoring) suffer from severe hallucination dilution, frequently assigning passing scores to responses containing fabricated product specifications.
   2. The proposed Two-Tiered Evaluation Framework decouples candidate retrieval ranking ($\text{NDCG@K}$, $\text{HR@K}$) from generative explanation quality, enabling isolated diagnosis of retrieval versus generative failure modes.
   3. The **Hard Dilution Cap Rule** and **Inverted Chain-of-Thought (Inverted CoT)** protocol provide a rigorous defense against LLM-as-a-Judge verbosity and anchor biases, ensuring zero tolerance for ungrounded entity claims.
-  4. The framework enables systematic empirical validation of CriticAgent reranking gain ($\Delta \text{NDCG@K}$ for $\mathbf{RQ_5}$) and KECR orthogonal gating parameter sensitivity ($\alpha \in [0.0, 1.0]$ for $\mathbf{RQ_6}$).
+  4. The framework enables systematic empirical validation of CriticAgent reranking gain ($\Delta \text{NDCG@K}$ for $\mathbf{RQ_5}$) and Graph Evidence Paths grounding with multi-channel weighted RRF fusion ($\mathbf{RQ_6}$).
 * **Suggested Baseline Comparisons**:
   - *Tier 1 Baselines*: Hybrid Multi-Index Search vs. Vector-Only Search vs. Cypher-Only Deterministic Filtering vs. Pre-Critic vs. Post-Critic Reranking.
   - *Tier 2 Baselines*: Full GraphRAG with Inverted CoT Judge vs. Flat Ragas Faithfulness vs. Monolithic Zero-Shot LLM Judge vs. Reference-based BLEU-4/ROUGE-L.

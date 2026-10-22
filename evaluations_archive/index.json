@@ -1,0 +1,86 @@
+[
+  {
+    "run_id": "eval_2026-10-09_1336",
+    "citable": false,
+    "legacy": true,
+    "timestamp": "2026-10-09T13:44:10.252880",
+    "git_commit": "2fdf251abeefcd0dad20dc9679b48be9a6609f06",
+    "benchmark_sha256": null,
+    "note": "Pre-R2 manifest: `git_commit` (2fdf251) records HEAD only; the working-tree state is unknown. Pre-R1 hybrid-only baseline (0 CLARIFY). Not citable as exact-code evidence."
+  },
+  {
+    "run_id": "eval_2026-10-17_1846",
+    "citable": false,
+    "legacy": true,
+    "timestamp": "2026-10-17T18:54:35.833505",
+    "git_commit": "989c1cd854242408baa1d71df0aa51db4d1ed251",
+    "benchmark_sha256": null,
+    "note": "Pre-R2 manifest: `git_commit` 989c1cd does not identify the evaluated code; R1 ran uncommitted and was committed later as 99b8506. R1 arm comparison, 4 CLARIFY. Not citable as exact-code evidence."
+  },
+  {
+    "run_id": "eval_2026-10-17_1937",
+    "citable": false,
+    "legacy": true,
+    "timestamp": "2026-10-17T19:43:27.102597",
+    "git_commit": "989c1cd854242408baa1d71df0aa51db4d1ed251",
+    "benchmark_sha256": null,
+    "note": "Pre-R2 manifest: `git_commit` 989c1cd does not identify the evaluated code; R1 ran uncommitted (with audit fixes M-1, M-2) and was committed later as 99b8506. R1 audit run, 5 CLARIFY. Not citable as exact-code evidence."
+  },
+  {
+    "run_id": "eval_2026-10-18_2340",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-18T23:47:01.988384",
+    "git_commit": "88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-18_2349",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-18T23:56:32.314409",
+    "git_commit": "88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-18_2358",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-19T00:06:11.996388",
+    "git_commit": "88cdbdfd75c81e9f6dbf55c7ab71e4d08280ae29",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-20_1114",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-20T11:28:20.483157",
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "graph_version": "v2",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-20_1128",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-20T11:41:58.813964",
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "graph_version": "v2",
+    "note": null
+  },
+  {
+    "run_id": "eval_2026-10-20_1142",
+    "citable": true,
+    "legacy": false,
+    "timestamp": "2026-10-20T11:53:52.395982",
+    "git_commit": "4248d03ee38d5959791ff3c01d3a28768370a7cc",
+    "benchmark_sha256": "cbbf3621bdfc64f56f143d8379be6fc1cdc561d4e7cde4a808204e2a59a8f041",
+    "graph_version": "v2",
+    "note": null
+  }
+]

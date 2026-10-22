@@ -1,17 +1,61 @@
 import logging
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Mapping, Optional, Sequence, Set, Tuple
 
 from src.knowledge_graph.graphdb.neo4j_connector import Neo4jConnector
 from src.knowledge_graph.graphdb.embedding_service import EmbeddingService
 from src.knowledge_graph.graphdb.resolver_service import ResolverService
 from src.knowledge_graph.graphdb.vector_search_helper import build_vector_search_query
+from src.tools.score_fusion import (
+    CHANNELS,
+    LEGACY_SOFT_BONUS_UNIT,
+    ChannelHit,
+    FusedCandidate,
+    FusionConfig,
+    fuse,
+)
 
 logger = logging.getLogger(__name__)
 
 BRAND_CONFIDENCE = 0.85
 CATEGORY_CONFIDENCE = 0.70
 CATEGORY_MARGIN = 0.05
+
+CHANNEL_INDEXES = {
+    "product": "product_embedding_index",
+    "attribute": "attribute_embedding_index",
+    "review": "review_embedding_index",
+    "lexical": "product_fulltext_index",
+}
+
+DETAIL_QUERY = """
+MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins
+OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
+OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
+WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT t.path) AS taxon_paths, collect(DISTINCT c.name) AS cats
+RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
+       CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END AS category,
+       head(taxon_paths) AS primary_taxon_path, elementId(node) AS id,
+       node.features AS features, node.details_text AS details_text,
+       node.description AS description, node.avg_rating AS avg_rating
+"""
+
+# Constraint-satisfaction@K facts (R2a, FR-025): one batched, parameterised read per query.
+# Attribute.numeric_value is never set by the current full ingest (batch_ingest.py reads
+# processed_metadata.csv, which keeps only brand/material/color/style/size details), so the
+# numeric list is empty on the live graph and Neo4j logs an unknown-property notice.
+CONSTRAINT_FACTS_QUERY = """
+UNWIND $asins AS asin
+MATCH (p:ParentProduct {parent_asin: asin})
+RETURN p.parent_asin AS asin,
+       p.price AS price,
+       p.title AS title,
+       [(p)-[:HAS_BRAND]->(b:Brand) | b.name] AS brands,
+       [(p)-[:HAS_ATTRIBUTE]->(a:Attribute)
+          WHERE a.numeric_value IS NOT NULL AND toLower(a.attribute_name) IN $attribute_names
+        | {name: toLower(a.attribute_name), value: a.numeric_value}] AS numeric_attributes
+"""
 
 class GraphSearchTool:
     """
@@ -21,7 +65,7 @@ class GraphSearchTool:
     BRAND_CONFIDENCE = BRAND_CONFIDENCE
     CATEGORY_CONFIDENCE = CATEGORY_CONFIDENCE
     CATEGORY_MARGIN = CATEGORY_MARGIN
-    def __init__(self, db_connector: Optional[Neo4jConnector] = None, embedding_service: Optional[EmbeddingService] = None, resolver: Optional[ResolverService] = None):
+    def __init__(self, db_connector: Optional[Neo4jConnector] = None, embedding_service: Optional[EmbeddingService] = None, resolver: Optional[ResolverService] = None, fusion_config: Optional[FusionConfig] = None):
         try:
             self.db = db_connector or Neo4jConnector()
             # Ensure connection is open if not passed in
@@ -30,6 +74,10 @@ class GraphSearchTool:
         except Exception as e:
             logger.error(f"Failed to initialize Neo4jConnector: {e}")
             self.db = None
+
+        # Cross-channel fusion arm (R1): rrf3 by default, overridable per call for ablation replay.
+        # Read after Neo4jConnector, which loads .env, so RETRIEVAL_FUSION_ARM set there is honoured.
+        self.fusion_config = fusion_config or FusionConfig.from_env()
 
         try:
             self.embedder = embedding_service or EmbeddingService()
@@ -42,6 +90,65 @@ class GraphSearchTool:
         except Exception as e:
             logger.warning(f"Failed to initialize ResolverService: {e}. Filter normalization disabled.")
             self.resolver = None
+
+    @staticmethod
+    def _sanitize_lucene_query(text: Optional[str]) -> str:
+        """Sanitizes raw text for Neo4j fulltext index Lucene query syntax."""
+        if not text or not str(text).strip():
+            return "*"
+        tokens = re.findall(r"[a-zA-Z0-9]+", str(text))
+        if not tokens:
+            return "*"
+        return " ".join(tokens)
+
+    @staticmethod
+    def _compute_taxon_distance(target_path: Optional[Sequence[str]], candidate_path: Optional[Sequence[str]]) -> int:
+        """
+        Computes the topological tree distance between two taxonomy lineage paths (RS-10).
+        Distance 0: Exact leaf or candidate is a descendant inside target subtree
+        Distance 1-2: Sibling sharing immediate parent
+        Distance 3-4: Cousin sharing grandparent
+        Distance >= 5: Distant branch or disjoint
+        Distance 99: Either path missing/empty
+        """
+        if not target_path or not candidate_path:
+            return 99
+        t = [str(x).strip().lower() for x in target_path if str(x).strip()]
+        c = [str(x).strip().lower() for x in candidate_path if str(x).strip()]
+        if not t or not c:
+            return 99
+
+        lcp = 0
+        for x, y in zip(t, c):
+            if x == y:
+                lcp += 1
+            else:
+                break
+
+        # Candidate is exact match or specialization (descendant) of target
+        if lcp == len(t):
+            return 0
+
+        # Topological distance: hops up from target to LCA + hops down from LCA to candidate
+        return (len(t) - lcp) + (len(c) - lcp)
+
+    @staticmethod
+    def _get_taxon_distance_multiplier(distance: int) -> float:
+        """
+        Maps topological taxonomy distance to score penalty multiplier (RS-10).
+        Distance 0 (exact / descendant) -> 1.00
+        Distance 1-2 (sibling)          -> 0.85
+        Distance 3-4 (cousin)           -> 0.70
+        Distance >= 5 (distant)         -> 0.20
+        """
+        if distance == 0:
+            return 1.00
+        elif distance <= 2:
+            return 0.85
+        elif distance <= 4:
+            return 0.70
+        else:
+            return 0.20
 
     @staticmethod
     def _clean_params_for_metadata(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -62,6 +169,63 @@ class GraphSearchTool:
             cleaned[k] = v
         return cleaned
 
+    @staticmethod
+    def _group_soft_preferences(soft_preferences: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+        """
+        Groups soft preferences so that unit variations of the same underlying requirement
+        (e.g., '128', '128GB', '128 GB' for storage) belong to a single group and award
+        at most one bonus unit per requirement, while distinct values (e.g., '128' vs '256')
+        remain in separate groups.
+        """
+        from src.dialog_manager.session_adapter import generate_attribute_unit_variations
+
+        groups: List[Dict[str, Any]] = []
+        for sp in soft_preferences:
+            raw_val = sp.get("value")
+            if raw_val is None or raw_val == "":
+                continue
+            val = str(raw_val).lower().strip()
+            if not val or val == "none":
+                continue
+            cat = str(sp.get("category", "") or "").lower().strip()
+            polarity = float(sp.get("polarity", 0.5))
+            pol_sign = -1 if polarity < 0 else 1
+            req_id = sp.get("requirement_id")
+
+            variations = {val}
+            for v in generate_attribute_unit_variations(cat, val):
+                variations.add(v.lower().strip())
+
+            matched_group = None
+            for g in groups:
+                if g["pol_sign"] != pol_sign:
+                    continue
+                if req_id is not None and g["req_id"] is not None:
+                    if req_id == g["req_id"]:
+                        matched_group = g
+                        break
+                    else:
+                        continue
+                if g["cat"] == cat and (val in g["variations"] or bool(variations & g["all_unit_forms"])):
+                    matched_group = g
+                    break
+
+            if matched_group is not None:
+                matched_group["entries"].append(sp)
+                matched_group["variations"].add(val)
+                matched_group["all_unit_forms"].update(variations)
+            else:
+                groups.append({
+                    "req_id": req_id,
+                    "cat": cat,
+                    "pol_sign": pol_sign,
+                    "variations": {val},
+                    "all_unit_forms": set(variations),
+                    "entries": [sp],
+                })
+
+        return [g["entries"] for g in groups]
+
     def search(self, 
                semantic_query: Optional[str] = "", 
                structured_filters: Optional[Dict[str, Any]] = None, 
@@ -69,7 +233,11 @@ class GraphSearchTool:
                # Legacy/Fallback arguments to avoid breaking existing calls if any
                query: Optional[str] = None,
                preferences: Optional[Dict[str, Any]] = None,
-               soft_preferences: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+               soft_preferences: Optional[List[Dict[str, Any]]] = None,
+               fusion_config: Optional[FusionConfig] = None,
+               mask_review_asins: Optional[Sequence[str]] = None,
+               hyde_product: Optional[str] = None,
+               hyde_review: Optional[str] = None) -> Dict[str, Any]:
         """
         Executes a search using one of three strategies:
         1. Hybrid (Semantic + Filters) - PREFERRED
@@ -83,20 +251,28 @@ class GraphSearchTool:
             query: Alias for semantic_query (legacy support).
             preferences: Alias for structured_filters (legacy support).
             soft_preferences: List of flexible desires for additive scoring.
+            fusion_config: Fusion arm for this call; defaults to the tool's configured arm.
+            mask_review_asins: Optional product ASINs whose reviews are hidden from the review channel at query time (R2b S1 cold-start simulation, G-9).
+            hyde_product: Optional hypothetical product catalog entry matching product_text_v1 for the product channel (RS-08a).
+            hyde_review: Optional hypothetical customer review matching review_text_v1 for the review channel (RS-08a).
         """
         # Handle aliases/legacy args
-        text = semantic_query or query
+        text = semantic_query or query or hyde_product or hyde_review
         raw_filters = structured_filters or preferences or {}
         filters = dict(raw_filters)
         soft_preferences = soft_preferences or []
+        config = fusion_config or self.fusion_config
+        masked_reviews = [str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()]
         
-        logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}")
+        logger.info(f"[GST] Input: text='{text}', raw_filters={raw_filters}, fusion='{config.name}'")
         
         # Normalize filters before searching
         if self._filters_present(filters):
             logger.info(f"[GST] Normalizing filters...")
-            filters = self._normalize_filters(filters)
+            filters = self._normalize_filters(filters, query_text=text)
             logger.info(f"[GST] Normalized filters: {filters}")
+        # Applied-filter telemetry (R2a, FR-016): the filters after normalisation, before MACS relaxation
+        normalized_filters = {k: v for k, v in filters.items() if not str(k).startswith("_")}
         
         if not self.db or not self.embedder:
              return {"status": "error", "message": "Database or Embedder not initialized.", "items": [], "metadata": {"cypher": "", "params": {}}}
@@ -106,7 +282,10 @@ class GraphSearchTool:
             # STRATEGY 1: HYBRID (Most common and desired)
             if text and self._filters_present(filters):
                 logger.info(f"[GST] Strategy: HYBRID (text + filters)")
-                result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                result = self._execute_hybrid_search(
+                    text, filters, raw_filters, limit, config,
+                    mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                )
                 
                 # MACS Progressive Relaxation
                 relaxed_constraints = []
@@ -125,14 +304,55 @@ class GraphSearchTool:
                         relaxed = True
                         
                     if relaxed:
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                        result = self._execute_hybrid_search(
+                            text, filters, raw_filters, limit, config,
+                            mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                        )
                     
-                    # Pass 2: Drop Category constraint if still failing
-                    if result.get("count", 0) < 3 and "category" in filters:
-                        logger.warning(f"[GST] MACS Triggered: Yield still < 3. Dropping category constraint.")
-                        del filters["category"]
+                    # Pass 2: Taxonomic step-up via BROADER before dropping category
+                    if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
+                        current_cat = filters.get("category")
+                        if isinstance(current_cat, (list, tuple)) and current_cat:
+                            current_cat = current_cat[0]
+                        parent_cat = None
+                        if current_cat:
+                            try:
+                                with self.db.session() as s:
+                                    p_rec = s.run(
+                                        "MATCH (child:Taxon)-[:BROADER]->(parent:Taxon) "
+                                        "WHERE toLower(child.name) = toLower($cat) "
+                                        "RETURN parent.name AS parent_name LIMIT 1",
+                                        {"cat": str(current_cat)}
+                                    ).single()
+                                    if p_rec and p_rec.get("parent_name"):
+                                        parent_cat = p_rec["parent_name"]
+                            except Exception as e:
+                                logger.warning(f"[GST] MACS Taxon step-up query failed: {e}")
+
+                        if parent_cat and parent_cat.lower() != str(current_cat).lower():
+                            logger.warning(f"[GST] MACS Triggered: Broadening category '{current_cat}' -> '{parent_cat}'")
+                            filters["category"] = parent_cat
+                            filters.pop("categories", None)
+                            filters.pop("_resolved_category_family", None)
+                            filters.pop("_resolved_taxon_paths", None)
+                            relaxed_constraints.append(f"Broadened category constraint from '{current_cat}' to parent category '{parent_cat}'")
+                            result = self._execute_hybrid_search(
+                                text, filters, raw_filters, limit, config,
+                                mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                            )
+
+                    # Pass 3: Drop Category constraint if still failing
+                    if result.get("count", 0) < 3 and ("category" in filters or "categories" in filters):
+                        logger.warning(f"[GST] MACS Triggered: Yield still < 3 after category broadening. Dropping category constraint.")
+                        filters.pop("category", None)
+                        filters.pop("categories", None)
+                        filters.pop("_resolved_category_family", None)
+                        filters.pop("_resolved_taxon_paths", None)
                         relaxed_constraints.append("Dropped explicit category constraint (relying purely on vector search)")
-                        result = self._execute_hybrid_search(text, filters, raw_filters, limit)
+                        result = self._execute_hybrid_search(
+                            text, filters, raw_filters, limit, config,
+                            mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                        )
                 
                 if relaxed_constraints:
                     result["relaxed_constraints"] = relaxed_constraints
@@ -140,7 +360,10 @@ class GraphSearchTool:
             # STRATEGY 2: VECTOR ONLY (No specific filters)
             elif text and not self._filters_present(filters):
                 logger.info(f"[GST] Strategy: VECTOR_ONLY (text only, no meaningful filters)")
-                result = self._execute_vector_search(text, limit)
+                result = self._execute_vector_search(
+                    text, limit, config,
+                    mask_review_asins=masked_reviews, hyde_product=hyde_product, hyde_review=hyde_review,
+                )
 
             # STRATEGY 3: FILTER ONLY (Parametric query)
             elif self._filters_present(filters) and not text:
@@ -151,7 +374,17 @@ class GraphSearchTool:
                 
             # ADDITIVE SCORING (Pillar 1/2)
             if soft_preferences and result.get("items"):
-                logger.info(f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences.")
+                # Bonus per matched preference is scaled to the fused-score range so it can reorder
+                # close candidates but not override fusion; legacy sum and filter-only scores keep 0.2
+                if config.method == "sum" or result.get("strategy") == "filter_only":
+                    bonus_unit = LEGACY_SOFT_BONUS_UNIT
+                else:
+                    bonus_unit = config.soft_bonus_unit()
+                sp_groups = self._group_soft_preferences(soft_preferences)
+                logger.info(
+                    f"[GST] Applying Additive Scoring for {len(soft_preferences)} soft preferences "
+                    f"({len(sp_groups)} distinct requirement groups, unit={bonus_unit:.4f})."
+                )
                 for item in result["items"]:
                     title_lower = (item.get("title") or "").lower()
                     brand_lower = (item.get("brand") or "").lower()
@@ -159,42 +392,568 @@ class GraphSearchTool:
                     
                     base_score = item.get("score", 0.0)
                     bonus = 0.0
-                    for sp in soft_preferences:
-                        val = str(sp.get("value", "")).lower()
-                        cat = str(sp.get("category", "")).lower()
-                        polarity = float(sp.get("polarity", 0.5))
-                        
-                        # Add heuristic bonus if value appears in title, brand or match reasons
-                        if val:
-                            if val.isdigit() and len(val) <= 2:
-                                # For short bare digits (e.g. 1, 2, 8), require whole word boundary
-                                # to prevent false positives on years (2021) or model numbers (Inspiron 15, S20)
-                                if re.search(r"\b" + re.escape(val) + r"\b", title_lower):
-                                    bonus += (polarity * 0.2)
+                    for group in sp_groups:
+                        matched_deltas: List[float] = []
+                        for sp in group:
+                            raw_val = sp.get("value")
+                            if raw_val is None or raw_val == "":
+                                continue
+                            val = str(raw_val).lower().strip()
+                            if not val or val == "none":
+                                continue
+                            cat = str(sp.get("category", "") or "").lower().strip()
+                            polarity = float(sp.get("polarity", 0.5))
+                            
+                            # Add heuristic bonus if value appears in title, brand or match reasons
+                            if val.isdigit():
+                                # Require digit boundaries so numbers (e.g. 128, 256, 1) do not match
+                                # as substrings of larger numbers (1280, 2560x1440, 2021)
+                                if re.search(r"(?<!\d)" + re.escape(val) + r"(?!\d)", title_lower):
+                                    matched_deltas.append(polarity * bonus_unit)
                             elif (val in title_lower or (val in brand_lower and cat == 'brand') or val in reasons_str):
-                                bonus += (polarity * 0.2)
+                                matched_deltas.append(polarity * bonus_unit)
+                        if matched_deltas:
+                            # Apply at most one bonus per requirement group (max magnitude among unit variations)
+                            bonus += max(matched_deltas, key=lambda d: abs(d))
                             
                     item["score"] = base_score + bonus
+                    item["soft_bonus"] = bonus
                 
                 # Re-sort after additive scoring
                 result["items"] = sorted(result["items"], key=lambda x: x.get("score", 0), reverse=True)
-                
+
+            if not isinstance(result.get("metadata"), dict):
+                result["metadata"] = {}
+            result["metadata"]["normalized_filters"] = normalized_filters
             return result
 
         except Exception as e:
             logger.error(f"[GST] Execution error: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "items": [], "metadata": {"cypher": "", "params": {}}}
 
-    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
+    def _build_channel_vectors(
+        self,
+        text: Optional[str],
+        hyde_product: Optional[str],
+        hyde_review: Optional[str],
+        config: FusionConfig,
+    ) -> Tuple[Dict[str, List[float]], Dict[str, Optional[str]]]:
+        """
+        Embeds optional HyDE texts for the 'product' and 'review' channels when config.use_hyde is True.
+        Channels without a HyDE vector fall back to the base query_vector (FR-HYDE-004, AC-HYDE-006).
+        """
+        hp = hyde_product.strip() if isinstance(hyde_product, str) and hyde_product.strip() else None
+        hr = hyde_review.strip() if isinstance(hyde_review, str) and hyde_review.strip() else None
+        channel_vectors: Dict[str, List[float]] = {}
+        if getattr(config, "use_hyde", False):
+            if hp and "product" in config.channels:
+                v_prod = self.embedder.embed_query(hp)
+                if v_prod:
+                    channel_vectors["product"] = v_prod
+            if hr and "review" in config.channels:
+                v_rev = self.embedder.embed_query(hr)
+                if v_rev:
+                    channel_vectors["review"] = v_rev
+        hyde_texts: Dict[str, Optional[str]] = {
+            "product": hp if "product" in channel_vectors else None,
+            "review": hr if "review" in channel_vectors else None,
+        }
+        return channel_vectors, hyde_texts
+
+    def _execute_hybrid_search(self, text: str, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int,
+                               config: Optional[FusionConfig] = None,
+                               mask_review_asins: Optional[Sequence[str]] = None,
+                               hyde_product: Optional[str] = None,
+                               hyde_review: Optional[str] = None) -> Dict[str, Any]:
+        """Vector retrieval over all enabled channels with hard filters applied before ranking."""
+        config = config or self.fusion_config
+
+        # RS-07: Adaptive Filter-First Order for small selective subtrees (product_count <= 500)
+        # Only activate when resolution maps to a single well-populated Taxon (avoiding partial/promotional subtrees)
+        if config.method != "sum":
+            cat_val = filters.get("category") or filters.get("categories")
+            resolved_family = filters.get("_resolved_category_family")
+            is_single_family = not resolved_family or len(resolved_family) <= 1
+            if isinstance(cat_val, (list, tuple)) and cat_val:
+                if len(cat_val) > 1:
+                    is_single_family = False
+                cat_val = cat_val[0]
+            if cat_val and is_single_family and hasattr(self, "resolver") and self.resolver:
+                try:
+                    cat_matches = self.resolver.resolve_category(str(cat_val), k=1)
+                    if cat_matches and "product_count" in cat_matches[0]:
+                        pc = cat_matches[0].get("product_count")
+                        t_name = str(cat_matches[0].get("name") or "")
+                        is_promo_subset = "bestselling" in t_name.lower() or "renewed" in t_name.lower() or "savings" in t_name.lower()
+                        if pc is not None and 1 <= pc <= 500 and not is_promo_subset:
+                            resolved_taxon = cat_matches[0]
+                            logger.info(f"[GST:Hybrid] Small selective Taxon '{resolved_taxon.get('name')}' (count={pc} <= 500). Activating filter-first search.")
+                            return self._execute_filter_first_search(
+                                text=text,
+                                filters=filters,
+                                raw_filters=raw_filters,
+                                limit=limit,
+                                config=config,
+                                resolved_taxon=resolved_taxon,
+                                mask_review_asins=mask_review_asins,
+                            )
+                except Exception as e:
+                    logger.debug(f"[GST:Hybrid] Filter-first check failed: {e}")
+
         query_vector = self.embedder.embed_query(text)
         logger.info(f"[GST:Hybrid] Embedded query (dim={len(query_vector)})")
 
         where_clauses, params = self._build_filters(filters, raw_filters)
-        params["vector"] = query_vector
-        params["k"] = limit * 30
-        
         where_str = " AND ".join(where_clauses) if where_clauses else "1=1"
         logger.info(f"[GST:Hybrid] WHERE clauses: {where_str}")
+
+        if config.method == "sum":
+            return self._execute_legacy_sum_search(
+                query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
+                mask_review_asins=mask_review_asins,
+            )
+        channel_vectors, hyde_texts = self._build_channel_vectors(text, hyde_product, hyde_review, config)
+        return self._execute_fused_search(
+            query_vector, where_str, params, limit, config, strategy="hybrid_multi_index",
+            mask_review_asins=mask_review_asins, text=text,
+            channel_vectors=channel_vectors, hyde_texts=hyde_texts,
+        )
+
+    def _execute_filter_first_search(
+        self,
+        text: str,
+        filters: Dict[str, Any],
+        raw_filters: Dict[str, Any],
+        limit: int,
+        config: FusionConfig,
+        resolved_taxon: Dict[str, Any],
+        mask_review_asins: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Adaptive Filter-First search (RS-07) for small selective subtrees (product_count <= 500).
+        Retrieves all candidates in the Taxon subtree satisfying non-category hard filters along with
+        their embeddings, computes cosine similarity and lexical match in Python, and ranks candidates
+        with 100% subtree recall (bypassing global ANN truncation).
+        """
+        target_cat = resolved_taxon.get("name") or filters.get("category")
+        target_path = resolved_taxon.get("path")
+
+        # Build hard constraint WHERE clauses excluding category
+        non_cat_filters = {k: v for k, v in filters.items() if k not in ("category", "categories")}
+        where_clauses, params = self._build_filters(non_cat_filters, raw_filters)
+        where_str = f"AND ({' AND '.join(where_clauses)})" if where_clauses else ""
+        params["category_filter"] = target_cat
+
+        cypher = f"""
+        MATCH (ancestor:Taxon)
+        WHERE toLower(ancestor.name) = toLower($category_filter)
+        MATCH (ancestor)<-[:BROADER*0..7]-(leaf:Taxon)<-[:IN_TAXON]-(node:ParentProduct)
+        WHERE 1=1 {where_str}
+        OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+        WITH DISTINCT node, b, collect(DISTINCT leaf.name) AS taxa, collect(DISTINCT leaf.path) AS taxon_paths
+        RETURN node.parent_asin AS asin, node.title AS title, node.price AS price, b.name AS brand,
+               taxa AS category,
+               head(taxon_paths) AS primary_taxon_path,
+               elementId(node) AS id,
+               node.features AS features, node.details_text AS details_text,
+               node.description AS description, node.avg_rating AS avg_rating,
+               node.embedding AS embedding
+        """
+
+        with self.db.session() as session:
+            rows = [dict(record) for record in session.run(cypher, params)]
+
+        if not rows:
+            logger.info(f"[GST:FilterFirst] Subtree '{target_cat}' returned 0 products satisfying filters.")
+            return {
+                "status": "success",
+                "items": [],
+                "count": 0,
+                "strategy": "filter_first_hybrid",
+                "metadata": {"cypher": cypher, "params": self._clean_params_for_metadata(params)},
+            }
+
+        import numpy as np
+        query_vector = self.embedder.embed_query(text)
+        q_vec = np.array(query_vector, dtype=np.float32)
+        q_norm = np.linalg.norm(q_vec)
+        if q_norm > 0:
+            q_vec /= q_norm
+
+        query_tokens = [w.lower() for w in re.findall(r"\w+", text) if len(w) > 2]
+
+        scored_candidates = []
+        for r in rows:
+            emb = r.get("embedding")
+            if emb is not None:
+                cand_vec = np.array(emb, dtype=np.float32)
+                c_norm = np.linalg.norm(cand_vec)
+                cos_sim = float(np.dot(q_vec, cand_vec) / c_norm) if c_norm > 0 else 0.0
+            else:
+                cos_sim = 0.0
+
+            title_lower = (r.get("title") or "").lower()
+            lex_matches = sum(1 for tok in query_tokens if tok in title_lower) if query_tokens else 0
+            lex_score = lex_matches / max(len(query_tokens), 1) if query_tokens else 0.0
+
+            combined_score = 0.85 * max(0.0, cos_sim) + 0.15 * lex_score
+
+            # Taxon distance multiplier
+            cand_path = r.get("primary_taxon_path")
+            dist = self._compute_taxon_distance(target_path, cand_path) if target_path else 0
+            mult = self._get_taxon_distance_multiplier(dist)
+            final_score = combined_score * mult
+
+            reason = f"Filter-First Subtree Match: {target_cat} (sim={cos_sim:.3f}, lex={lex_score:.2f})"
+            scored_candidates.append({
+                "title": r.get("title"),
+                "price": r.get("price"),
+                "brand": r.get("brand"),
+                "category": r.get("category") or [],
+                "primary_taxon_path": cand_path,
+                "features": r.get("features"),
+                "details_text": r.get("details_text"),
+                "description": r.get("description"),
+                "avg_rating": r.get("avg_rating"),
+                "score": final_score,
+                "fused_score": combined_score,
+                "soft_bonus": 0.0,
+                "id": r.get("id"),
+                "asin": r.get("asin"),
+                "match_reasons": [reason],
+                "fusion": {
+                    "method": "filter_first",
+                    "channels": {
+                        "product": {"rank": 1, "similarity": float(cos_sim), "reason": reason}
+                    },
+                    "taxon_proximity": {
+                        "distance": dist,
+                        "multiplier": mult,
+                    },
+                },
+            })
+
+        scored_candidates.sort(key=lambda x: (x["score"], -(x["price"] or 999999.0)), reverse=True)
+        for rank, item in enumerate(scored_candidates[:limit], 1):
+            item["fusion"]["channels"]["product"]["rank"] = rank
+
+        return {
+            "status": "success",
+            "items": scored_candidates[:limit],
+            "count": len(scored_candidates[:limit]),
+            "strategy": "filter_first_hybrid",
+            "metadata": {
+                "cypher": cypher,
+                "params": self._clean_params_for_metadata(params),
+                "target_taxon": target_cat,
+                "subtree_size": len(rows),
+                "channel_hits": {
+                    "product": [
+                        {"asin": item["asin"], "similarity": item["fusion"]["channels"]["product"]["similarity"], "reason": item["match_reasons"][0]}
+                        for item in scored_candidates
+                    ],
+                    "attribute": [],
+                    "review": [],
+                    "lexical": [],
+                },
+                "fusion": {"method": "filter_first"},
+            },
+        }
+
+    def _execute_vector_search(self, text: str, limit: int, config: Optional[FusionConfig] = None,
+                               mask_review_asins: Optional[Sequence[str]] = None,
+                               hyde_product: Optional[str] = None,
+                               hyde_review: Optional[str] = None) -> Dict[str, Any]:
+        """Vector retrieval over all enabled channels without filters."""
+        config = config or self.fusion_config
+        query_vector = self.embedder.embed_query(text)
+        logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
+
+        if config.method == "sum":
+            return self._execute_legacy_sum_search(
+                query_vector, None, {}, limit, config, strategy="vector_only",
+                mask_review_asins=mask_review_asins,
+            )
+        channel_vectors, hyde_texts = self._build_channel_vectors(text, hyde_product, hyde_review, config)
+        return self._execute_fused_search(
+            query_vector, None, {}, limit, config, strategy="vector_only",
+            mask_review_asins=mask_review_asins, text=text,
+            channel_vectors=channel_vectors, hyde_texts=hyde_texts,
+        )
+
+    @staticmethod
+    def _build_channel_query(channel: str, where_str: Optional[str]) -> str:
+        """
+        Builds one channel's MaxP query: each ParentProduct once, with its best similarity
+        in the channel and the reason text of that best match, filtered before ranking.
+        """
+        where_line = f"WHERE {where_str}" if where_str else ""
+        if channel == "product":
+            query = build_vector_search_query(
+                CHANNEL_INDEXES["product"],
+                "$k",
+                yield_alias="node",
+                score_alias="score",
+                return_clause=f"""WITH node, score, 'Product Title Match' AS reason
+{where_line}
+RETURN node.parent_asin AS asin, score AS similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth""",
+            )
+            return "\n".join(line for line in query.splitlines() if line.strip())
+        if channel == "attribute":
+            where_part = f"\n{where_line}" if where_line else ""
+            return_clause = f"""MATCH (node:ParentProduct)-[:HAS_ATTRIBUTE]->(hit){where_part}
+WITH node, hit, score, count {{ (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) }} AS deg
+WITH node,
+     score * (log(1.0 + 265307.0 / (1.0 + deg)) / log(265308.0)) AS score,
+     'Attribute Match: ' + coalesce(hit.attribute_name, '') + '=' + coalesce(hit.attribute_value, '') + ' [deg=' + toString(deg) + ']' AS reason
+ORDER BY score DESC, reason ASC
+WITH node, max(score) AS similarity, head(collect(reason)) AS reason
+RETURN node.parent_asin AS asin, similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth"""
+            query = build_vector_search_query(
+                CHANNEL_INDEXES["attribute"],
+                "$k",
+                yield_alias="hit",
+                score_alias="score",
+                return_clause=return_clause,
+            )
+            return "\n".join(line for line in query.splitlines() if line.strip())
+        elif channel == "review":
+            match_clause = "MATCH (hit)-[:ABOUT_PRODUCT]->(node:ParentProduct)"
+            reason_expr = "'Review Match: ' + coalesce(hit.review_title, '')"
+        elif channel == "lexical":
+            query = f"""CALL db.index.fulltext.queryNodes('{CHANNEL_INDEXES["lexical"]}', $query_text) YIELD node, score
+{where_line}
+WITH node, score, 'Fulltext Lexical Match' AS reason
+ORDER BY score DESC, reason ASC
+WITH node, max(score) AS similarity, head(collect(reason)) AS reason
+RETURN node.parent_asin AS asin, similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth"""
+            return "\n".join(line for line in query.splitlines() if line.strip())
+        else:
+            raise ValueError(f"Unknown retrieval channel '{channel}'. Valid channels: {list(CHANNELS)}")
+
+        query = build_vector_search_query(
+            CHANNEL_INDEXES[channel],
+            "$k",
+            yield_alias="hit",
+            score_alias="score",
+            return_clause=f"""{match_clause}
+{where_line}
+WITH node, score, {reason_expr} AS reason
+ORDER BY score DESC, reason ASC
+WITH node, max(score) AS similarity, head(collect(reason)) AS reason
+RETURN node.parent_asin AS asin, similarity, reason
+ORDER BY similarity DESC, asin ASC
+LIMIT $depth""",
+        )
+        return "\n".join(line for line in query.splitlines() if line.strip())
+
+    def _execute_fused_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
+                              limit: int, config: FusionConfig, strategy: str,
+                              mask_review_asins: Optional[Sequence[str]] = None,
+                              text: Optional[str] = None,
+                              channel_vectors: Optional[Mapping[str, List[float]]] = None,
+                              hyde_texts: Optional[Mapping[str, Optional[str]]] = None) -> Dict[str, Any]:
+        """
+        Runs one MaxP query per enabled channel, fuses the ranked lists (RRF or CC) and
+        fetches display details for the fused top `limit`. Every item carries its
+        per-channel rank, similarity and reason under `fusion`.
+        """
+        tag = "Hybrid" if where_str else "Vector"
+        params: Dict[str, Any] = dict(filter_params)
+        params["vector"] = query_vector
+        params["query_text"] = self._sanitize_lucene_query(text) if text else "*"
+
+        # GV2-09 & RS-24: Selectivity-based dynamic ANN oversampling and multi-path target family
+        ann_factor = config.ann_k_per_limit
+        cat_filter = filter_params.get("category_filter")
+        target_paths: List[List[str]] = [
+            list(p) for p in (filter_params.get("_resolved_taxon_paths") or [])
+            if isinstance(p, (list, tuple)) and p
+        ]
+        if cat_filter and hasattr(self, "resolver") and self.resolver:
+            try:
+                cat_matches = self.resolver.resolve_category(str(cat_filter), k=1)
+                if cat_matches and isinstance(cat_matches, list) and isinstance(cat_matches[0], dict):
+                    if "path" in cat_matches[0] and cat_matches[0]["path"]:
+                        primary_tp = list(cat_matches[0]["path"])
+                        if primary_tp not in target_paths:
+                            target_paths.insert(0, primary_tp)
+                    if "product_count" in cat_matches[0]:
+                        pc = cat_matches[0].get("product_count")
+                        if pc and pc < 5000:
+                            ann_factor = min(60, max(30, int(30 * (5000 / max(pc, 500)))))
+                            logger.info(f"[GST:{tag}] Selective Taxon '{cat_filter}' (count={pc}): scaling ann_k_per_limit {config.ann_k_per_limit} -> {ann_factor}")
+            except Exception as e:
+                logger.debug(f"[GST:{tag}] Could not evaluate Taxon subtree size: {e}")
+
+        # Strip internal metadata keys from Cypher params
+        params.pop("_resolved_taxon_paths", None)
+        escape_rx = params.get("head_noun_escape_regex")
+        excl_rx = params.get("accessory_exclusion_regex")
+
+        params["k"] = limit * ann_factor
+        params["depth"] = config.channel_depth
+        masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
+        if masked_set:
+            params["mask_review_asins"] = sorted(masked_set)
+
+        channel_queries: Dict[str, str] = {}
+        for channel in config.channels:
+            ch_where = where_str
+            if channel == "review" and masked_set:
+                mask_clause = "NOT node.parent_asin IN $mask_review_asins"
+                ch_where = f"({where_str}) AND {mask_clause}" if where_str else mask_clause
+            channel_queries[channel] = self._build_channel_query(channel, ch_where)
+        channel_hits: Dict[str, List[ChannelHit]] = {}
+
+        with self.db.session() as session:
+            for channel, cypher in channel_queries.items():
+                ch_params = dict(params)
+                if channel_vectors and channel in channel_vectors and channel_vectors[channel]:
+                    ch_params["vector"] = channel_vectors[channel]
+                rows = [dict(record) for record in session.run(cypher, ch_params)]
+                channel_hits[channel] = [
+                    ChannelHit(asin=row["asin"], similarity=float(row["similarity"]), reason=row.get("reason") or "")
+                    for row in rows
+                    if row.get("asin") and row.get("similarity") is not None
+                    and not (channel == "review" and row.get("asin") in masked_set)
+                ]
+                logger.info(f"[GST:{tag}] Channel '{channel}': {len(channel_hits[channel])} products")
+
+            fused: List[FusedCandidate] = fuse(channel_hits, config)
+            candidate_pool = fused[:max(limit * 3, 30)] if target_paths else fused[:limit]
+            details: Dict[str, Dict[str, Any]] = {}
+            if candidate_pool:
+                detail_rows = session.run(DETAIL_QUERY, {"asins": [fc.asin for fc in candidate_pool]})
+                details = {row["asin"]: row for row in (dict(record) for record in detail_rows)}
+
+        # RS-24 Pillar E: Bottom-Up Category Consensus among top-10 retrieved candidates
+        if target_paths and candidate_pool:
+            path_counts: Dict[Tuple[str, ...], int] = {}
+            for fc in candidate_pool[:10]:
+                d_row = details.get(fc.asin)
+                if d_row and d_row.get("primary_taxon_path"):
+                    pt = tuple(d_row["primary_taxon_path"])
+                    path_counts[pt] = path_counts.get(pt, 0) + 1
+            for pt, cnt in path_counts.items():
+                if cnt >= 4 and list(pt) not in target_paths:
+                    # Only include consensus path if its leaf is not an accessory trap
+                    from src.knowledge_graph.graphdb.resolver_service import decompose_type_phrase
+                    leaf_decomp = decompose_type_phrase(pt[-1])
+                    if not leaf_decomp["is_accessory_head"]:
+                        target_paths.append(list(pt))
+
+        items: List[Dict[str, Any]] = []
+        for fc in candidate_pool:
+            detail = details.get(fc.asin)
+            if detail is None:
+                logger.warning(f"[GST:{tag}] Fused candidate {fc.asin} missing from detail query; dropped.")
+                continue
+            ordered_channels = [c for c in config.channels if c in fc.channels]
+
+            # Taxon distance multiplier (RS-10 + RS-24 Multi-Path & Guarded Escape Hatch verification)
+            cand_path = detail.get("primary_taxon_path")
+            if target_paths:
+                dist = min(self._compute_taxon_distance(tp, cand_path) for tp in target_paths)
+                if dist >= 5 and escape_rx:
+                    title_low = str(detail.get("title") or "").lower()
+                    if re.match(escape_rx, title_low) and not (excl_rx and excl_rx != "^$" and re.match(excl_rx, title_low)):
+                        dist = 1
+                distance_multiplier = self._get_taxon_distance_multiplier(dist)
+            else:
+                dist = 0
+                distance_multiplier = 1.00
+
+            final_score = fc.score * distance_multiplier
+
+            items.append({
+                "title": detail.get("title"),
+                "price": detail.get("price"),
+                "brand": detail.get("brand"),
+                "category": detail.get("category") or [],
+                "primary_taxon_path": cand_path,
+                "features": detail.get("features"),
+                "details_text": detail.get("details_text"),
+                "description": detail.get("description"),
+                "avg_rating": detail.get("avg_rating"),
+                "score": final_score,
+                "fused_score": fc.score,
+                "soft_bonus": 0.0,
+                "id": detail.get("id"),
+                "asin": fc.asin,
+                "match_reasons": [fc.channels[c].reason for c in ordered_channels],
+                "fusion": {
+                    "method": config.name,
+                    "channels": {
+                        c: {"rank": fc.channels[c].rank, "similarity": fc.channels[c].similarity, "reason": fc.channels[c].reason}
+                        for c in ordered_channels
+                    },
+                    "taxon_proximity": {
+                        "distance": dist,
+                        "multiplier": distance_multiplier,
+                    },
+                },
+            })
+
+        if target_paths:
+            items.sort(key=lambda x: x["score"], reverse=True)
+            items = items[:limit]
+
+        logger.info(f"[GST:{tag}] Fused ({config.name}) results: {len(items)} items found")
+        for i, item in enumerate(items):
+            ranks = {c: ev["rank"] for c, ev in item["fusion"]["channels"].items()}
+            logger.info(f"  [{i+1}] score={item['score']:.4f} | ranks={ranks} | title={str(item.get('title', ''))[:50]}")
+
+        combined_cypher = "\n\n".join(f"// channel: {c}\n{q}" for c, q in channel_queries.items())
+        combined_cypher += f"\n\n// details\n{DETAIL_QUERY.strip()}"
+        clean_params = self._clean_params_for_metadata(params)
+        product_hyde_used = bool(channel_vectors and "product" in channel_vectors and channel_vectors["product"])
+        review_hyde_used = bool(channel_vectors and "review" in channel_vectors and channel_vectors["review"])
+        return {
+            "status": "success",
+            "items": items,
+            "count": len(items),
+            "strategy": strategy,
+            "metadata": {
+                "cypher": combined_cypher,
+                "params": clean_params,
+                "channel_queries": channel_queries,
+                "channel_counts": {c: len(h) for c, h in channel_hits.items()},
+                "channel_hits": {
+                    c: [{"asin": h.asin, "similarity": h.similarity, "reason": h.reason} for h in hits]
+                    for c, hits in channel_hits.items()
+                },
+                "fusion": config.to_dict(),
+                "hyde": {
+                    "enabled": bool(getattr(config, "use_hyde", False)),
+                    "product_used": product_hyde_used,
+                    "review_used": review_hyde_used,
+                    "hyde_product": hyde_texts.get("product") if (hyde_texts and product_hyde_used) else None,
+                    "hyde_review": hyde_texts.get("review") if (hyde_texts and review_hyde_used) else None,
+                },
+            },
+        }
+
+    def _execute_legacy_sum_search(self, query_vector: List[float], where_str: Optional[str], filter_params: Dict[str, Any],
+                                   limit: int, config: FusionConfig, strategy: str,
+                                   mask_review_asins: Optional[Sequence[str]] = None) -> Dict[str, Any]:
+        """
+        Pre-R1 ranking kept as the `sum_legacy` ablation arm: UNION of the three indexes and
+        sum(score) over every matching node (weights 1.0 / 0.8 / 0.9), filtered after aggregation.
+        """
+        tag = "Hybrid" if where_str else "Vector"
+        params: Dict[str, Any] = dict(filter_params)
+        params["vector"] = query_vector
+        params["k"] = limit * config.ann_k_per_limit
+        masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
+        if masked_set:
+            params["mask_review_asins"] = sorted(masked_set)
 
         # GAP-003 Compliance: Use central helper to generate the vector search fragments
         prod_vector = build_vector_search_query(
@@ -210,17 +969,19 @@ class GraphSearchTool:
             "$k", 
             yield_alias="node", 
             score_alias="score", 
-            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
+            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, '') AS match_reason"
         )
         
+        rev_where = "\nWHERE NOT p.parent_asin IN $mask_review_asins" if masked_set else ""
         rev_vector = build_vector_search_query(
             "review_embedding_index", 
             "$k", 
             yield_alias="node", 
             score_alias="score", 
-            return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
+            return_clause=f"MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct){rev_where}\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
         )
 
+        where_line = f"WHERE {where_str}" if where_str else ""
         cypher = f"""
         CALL {{
             WITH $vector AS vector
@@ -237,88 +998,34 @@ class GraphSearchTool:
             {rev_vector.replace('$vector', 'vector')}
         }}
         WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
-        WHERE {where_str}
+        {where_line}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+        OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
+        WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT c.name) AS cats, total_score, match_reasons
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
-               match_reasons
+               CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
+               match_reasons, node.features as features, node.details_text as details_text,
+               node.description as description, node.avg_rating as avg_rating
         ORDER BY score DESC
         LIMIT $limit
         """
         params["limit"] = limit
         
-        logger.info("[GST:Hybrid] Cypher:\n" + cypher)
+        logger.info(f"[GST:{tag}] Legacy sum(score) Cypher:\n" + cypher)
 
         with self.db.session() as session:
             result = session.run(cypher, params)
             items = [dict(record) for record in result]
         
-        logger.info(f"[GST:Hybrid] Results: {len(items)} items found")
+        logger.info(f"[GST:{tag}] Results: {len(items)} items found")
         clean_params = self._clean_params_for_metadata(params)
         return {
             "status": "success",
             "items": items,
             "count": len(items),
-            "strategy": "hybrid_multi_index",
-            "metadata": {"cypher": cypher, "params": clean_params},
-        }
-
-    def _execute_vector_search(self, text: str, limit: int) -> Dict[str, Any]:
-        query_vector = self.embedder.embed_query(text)
-        logger.info(f"[GST:Vector] Embedded query (dim={len(query_vector)}), searching top {limit}")
-        
-        prod_vector = build_vector_search_query(
-            "product_embedding_index", "$k", yield_alias="node", score_alias="score", 
-            return_clause="RETURN node AS p, score, 'Product Title Match' AS match_reason"
-        )
-        attr_vector = build_vector_search_query(
-            "attribute_embedding_index", "$k", yield_alias="node", score_alias="score", 
-            return_clause="MATCH (p:ParentProduct)-[:HAS_ATTRIBUTE]->(node)\nRETURN p, score * 0.8 AS score, 'Attribute Match: ' + node.attribute_name + '=' + coalesce(node.attribute_value, node.normalized_value, '') AS match_reason"
-        )
-        rev_vector = build_vector_search_query(
-            "review_embedding_index", "$k", yield_alias="node", score_alias="score", 
-            return_clause="MATCH (node)-[:ABOUT_PRODUCT]->(p:ParentProduct)\nRETURN p, score * 0.9 AS score, 'Review Match: ' + coalesce(node.review_title, '') AS match_reason"
-        )
-
-        cypher = f"""
-        CALL {{
-            WITH $vector AS vector
-            {prod_vector.replace('$vector', 'vector')}
-            UNION
-            WITH $vector AS vector
-            {attr_vector.replace('$vector', 'vector')}
-            UNION
-            WITH $vector AS vector
-            {rev_vector.replace('$vector', 'vector')}
-        }}
-        WITH p AS node, sum(score) AS total_score, collect(match_reason) AS match_reasons
-        OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
-        OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
-        RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, total_score as score, elementId(node) as id, node.parent_asin as asin,
-               match_reasons
-        ORDER BY score DESC
-        LIMIT $limit
-        """
-        
-        params = {"vector": query_vector, "k": limit * 30, "limit": limit}
-
-        with self.db.session() as session:
-            result = session.run(cypher, params)
-            items = [dict(record) for record in result]
-        
-        logger.info(f"[GST:Vector] Results: {len(items)} items found")
-        for i, item in enumerate(items):
-            logger.info(f"  [{i+1}] score={item.get('score', 0):.4f} | reasons={item.get('match_reasons', [])} | title={str(item.get('title', ''))[:50]}")
-            
-        clean_params = self._clean_params_for_metadata(params)
-        return {
-            "status": "success",
-            "items": items,
-            "count": len(items),
-            "strategy": "vector_only",
-            "metadata": {"cypher": cypher, "params": clean_params},
+            "strategy": strategy,
+            "metadata": {"cypher": cypher, "params": clean_params, "fusion": config.to_dict()},
         }
 
     def _execute_cypher_search(self, filters: Dict[str, Any], raw_filters: Dict[str, Any], limit: int) -> Dict[str, Any]:
@@ -329,18 +1036,23 @@ class GraphSearchTool:
         MATCH (node:ParentProduct)
         WHERE {where_str}
         OPTIONAL MATCH (node)-[:HAS_BRAND]->(b:Brand)
+        OPTIONAL MATCH (node)-[:IN_TAXON]->(t:Taxon)
         OPTIONAL MATCH (node)-[:BELONGS_TO_CATEGORY]->(c:Category)
-        WITH node, b, c,
+        WITH node, b, collect(DISTINCT t.name) AS taxa, collect(DISTINCT c.name) AS cats,
              coalesce(node.rating, node.avg_rating, 0.0) AS raw_rating,
              coalesce(node.rating_count, node.review_count, 0) AS raw_count,
              coalesce(node.price, 999999.0) AS sort_price
-        WITH node, b, c, sort_price,
+        WITH node, b,
+             (CASE WHEN size(taxa) > 0 THEN taxa ELSE cats END) AS category,
+             sort_price,
              ((10.0 * 4.0 + (toFloat(raw_count) * raw_rating)) / (10.0 + toFloat(raw_count))) AS bayes_rating,
              log(1.0 + CASE WHEN toFloat(raw_count) > 500.0 THEN 500.0 ELSE toFloat(raw_count) END) AS volume_factor
-        WITH node, b, c, sort_price,
+        WITH node, b, category, sort_price,
              (bayes_rating * volume_factor) AS relevance_score
         RETURN node.title as title, node.price as price, b.name as brand, 
-               collect(DISTINCT c.name) as category, relevance_score as score, elementId(node) as id, node.parent_asin as asin
+               category, relevance_score as score, elementId(node) as id, node.parent_asin as asin,
+               node.features as features, node.details_text as details_text,
+               node.description as description, node.avg_rating as avg_rating
         ORDER BY score DESC, coalesce(price, 999999.0) ASC
         LIMIT {limit}
         """
@@ -364,13 +1076,22 @@ class GraphSearchTool:
             "metadata": {"cypher": cypher, "params": clean_params},
         }
 
-    def fetch_product_attributes(self, asins: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    def fetch_product_attributes(
+        self,
+        asins: List[str],
+        mask_review_asins: Optional[Sequence[str]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Fetches unstructured attributes (e.g. pros/cons, opinions, reviews) for given products.
         Returns a dictionary mapping ASIN to a list of attributes and recent reviews.
+        When `mask_review_asins` is given (R2b S1 cold-start simulation, G-9), reviews for
+        those ASINs are excluded while structured attributes are retained.
         """
         if not self.db or not asins:
             return {}
+
+        masked_set = {str(a).strip() for a in (mask_review_asins or []) if a and str(a).strip()}
+        review_asins = [a for a in asins if a not in masked_set]
 
         # Query attributes
         cypher_attr = """
@@ -379,13 +1100,22 @@ class GraphSearchTool:
         RETURN p.parent_asin AS asin, a.attribute_name AS name, a.attribute_value AS value, a.source AS source
         """
         
-        # Query reviews (recent helpful ones)
+        # Query reviews per product (up to $reviews_per_product per ASIN, ordered by Graph v2 properties)
         cypher_rev = """
-        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
-        WHERE p.parent_asin IN $asins
-        RETURN p.parent_asin AS asin, r.review_title AS name, r.review_body AS value, 'user_review' AS source
-        ORDER BY r.helpful_votes DESC, r.timestamp_iso DESC
-        LIMIT 20
+        UNWIND $asins AS asin
+        CALL {
+            WITH asin
+            MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct {parent_asin: asin})
+            RETURN p.parent_asin AS prod_asin,
+                   r.review_title AS name,
+                   r.review_body AS value,
+                   'user_review' AS source
+            ORDER BY coalesce(r.helpful_vote, r.helpful_votes, 0) DESC,
+                     coalesce(r.verified, false) DESC,
+                     coalesce(r.timestamp, 0) DESC
+            LIMIT $reviews_per_product
+        }
+        RETURN prod_asin AS asin, name, value, source
         """
         
         logger.info(f"[GST:Attributes] Fetching attributes and reviews for {len(asins)} products...")
@@ -405,23 +1135,167 @@ class GraphSearchTool:
                             "source": record["source"]
                         })
                         
-                # 2. Fetch Reviews
-                result_rev = session.run(cypher_rev, asins=asins)
-                for record in result_rev:
-                    asin = record["asin"]
-                    # Optionally limit reviews per product to avoid context window explosion
-                    if asin in result_map and sum(1 for a in result_map[asin] if a["source"] == 'user_review') < 5:
-                        result_map[asin].append({
-                            "name": f"Review: {record['name']}",
-                            "value": str(record["value"])[:300], # truncate long reviews
-                            "source": record["source"]
-                        })
+                # 2. Fetch Reviews (bounded per product at query level and guarded in Python)
+                if review_asins:
+                    result_rev = session.run(cypher_rev, asins=review_asins, reviews_per_product=5)
+                    for record in result_rev:
+                        asin = record["asin"]
+                        if asin in result_map and asin not in masked_set and sum(1 for a in result_map[asin] if a["source"] == 'user_review') < 5:
+                            result_map[asin].append({
+                                "name": f"Review: {record['name']}",
+                                "value": str(record["value"])[:300], # truncate long reviews
+                                "source": record["source"]
+                            })
                         
             logger.info(f"[GST:Attributes] Fetched attributes and reviews for {len(result_map)} products.")
             return result_map
         except Exception as e:
             logger.error(f"[GST:Attributes] Error fetching attributes/reviews: {e}", exc_info=True)
             return {}
+
+    def match_category(self, asins: List[str], category: Any, raw_category: Optional[str] = None) -> Set[str]:
+        """
+        Returns the subset of `asins` that satisfies the `_build_filters` category predicate
+        (taxonomy traversal or title match). Used by the type-precision@K evaluation metric.
+
+        `category` is the (normalised) category value; `raw_category` is the value as requested,
+        which `_build_filters` uses for the title condition, exactly as `search` applies it
+        (target-admitting category rate, FR-015). Without it both use `category` (unchanged).
+        """
+        if isinstance(category, (list, tuple)):
+            category = category[0] if category else None
+        if isinstance(raw_category, (list, tuple)):
+            raw_category = raw_category[0] if raw_category else None
+        if not self.db or not asins or not category:
+            return set()
+
+        where_clauses, params = self._build_filters({"category": str(category)}, {"category": str(raw_category or category)})
+        params["asins"] = list(asins)
+        cypher = (
+            "MATCH (node:ParentProduct) WHERE node.parent_asin IN $asins AND "
+            + " AND ".join(where_clauses)
+            + " RETURN node.parent_asin AS asin"
+        )
+        try:
+            with self.db.session() as session:
+                return {dict(record)["asin"] for record in session.run(cypher, params)}
+        except Exception as e:
+            logger.error(f"[GST:Category] Category match failed for '{category}' over {len(asins)} products: {e}", exc_info=True)
+            return set()
+
+    def fetch_constraint_facts(self, asins: List[str], attribute_names: Optional[Sequence[str]] = None) -> Dict[str, Dict[str, Any]]:
+        """
+        Facts for constraint-satisfaction@K verdicts, fetched with one parameterised query.
+
+        Returns:
+            {asin: {"price": Optional[float], "title": str, "brands": List[str],
+                    "numeric_attributes": List[{"name": str, "value": float}]}};
+            ASINs missing from the graph are absent; {} on error (logged) or empty input.
+        """
+        unique_asins = [a for a in dict.fromkeys(asins or []) if a]
+        if not self.db or not unique_asins:
+            return {}
+        names = list(dict.fromkeys(str(n).strip().lower() for n in (attribute_names or []) if str(n).strip()))
+        try:
+            with self.db.session() as session:
+                rows = [dict(record) for record in session.run(CONSTRAINT_FACTS_QUERY, {"asins": unique_asins, "attribute_names": names})]
+        except Exception as e:
+            logger.error(f"[GST:Facts] Constraint fact fetch failed for {len(unique_asins)} products: {e}", exc_info=True)
+            return {}
+        facts: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            asin = row.get("asin")
+            if not asin:
+                continue
+            facts[asin] = {
+                "price": row.get("price"),
+                "title": row.get("title") or "",
+                "brands": [b for b in (row.get("brands") or []) if isinstance(b, str)],
+                "numeric_attributes": [
+                    {"name": str(a.get("name")), "value": a.get("value")}
+                    for a in (row.get("numeric_attributes") or []) if isinstance(a, dict)
+                ],
+            }
+        return facts
+
+    def fetch_review_embedded_asins(self) -> Set[str]:
+        """
+        Returns the products that have at least one embedded Review, i.e. the products the
+        review channel can retrieve. Used by the popularity-bias@K evaluation metric.
+        """
+        if not self.db:
+            return set()
+        cypher = """
+        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
+        WHERE r.embedding IS NOT NULL
+        RETURN DISTINCT p.parent_asin AS asin
+        """
+        try:
+            with self.db.session() as session:
+                return {dict(record)["asin"] for record in session.run(cypher) if dict(record).get("asin")}
+        except Exception as e:
+            logger.error(f"[GST] Failed to fetch review-embedded products: {e}", exc_info=True)
+            return set()
+
+    def fetch_review_cap_asins(self, min_reviews: int = 20) -> Set[str]:
+        """
+        Returns ParentProduct ASINs that have at least `min_reviews` reviews in the graph
+        (default 20 = the ingestion cap on Graph v2, titled base rate 0.519).
+        Used by `review_cap_bias@k` (R2b, FR-R2B-008) because binary review-embedding
+        coverage on Graph v2 is 99.995% across all products.
+        """
+        if not self.db:
+            return set()
+        cypher = """
+        MATCH (r:Review)-[:ABOUT_PRODUCT]->(p:ParentProduct)
+        WITH p, count(r) AS rev_cnt
+        WHERE rev_cnt >= $min_reviews
+        RETURN p.parent_asin AS asin
+        """
+        try:
+            with self.db.session() as session:
+                return {
+                    dict(record)["asin"]
+                    for record in session.run(cypher, {"min_reviews": int(min_reviews)})
+                    if dict(record).get("asin")
+                }
+        except Exception as e:
+            logger.error(f"[GST] Failed to fetch review-cap products: {e}", exc_info=True)
+            return set()
+
+    def fetch_head_popular_asins(self, percentile: float = 0.90) -> Tuple[Set[str], Optional[float]]:
+        """
+        Returns `(asins, threshold)` for the top `(1 - percentile)` head of titled products
+        by catalogue `p.review_count` (default P90 = 1,241 on Graph v2, base rate 0.100).
+        Used by `head_popularity_bias@k` (R2b, FR-R2B-008).
+        """
+        if not self.db:
+            return set(), None
+        cypher_thresh = """
+        MATCH (p:ParentProduct)
+        WHERE p.title IS NOT NULL AND trim(p.title) <> ''
+        RETURN percentileCont(coalesce(p.review_count, 0), $percentile) AS thresh
+        """
+        cypher_asins = """
+        MATCH (p:ParentProduct)
+        WHERE p.title IS NOT NULL AND trim(p.title) <> '' AND coalesce(p.review_count, 0) >= $thresh
+        RETURN p.parent_asin AS asin
+        """
+        try:
+            with self.db.session() as session:
+                row = session.run(cypher_thresh, {"percentile": float(percentile)}).single()
+                thresh = float(row["thresh"]) if row and row["thresh"] is not None else None
+                if thresh is None:
+                    return set(), None
+                asins = {
+                    dict(record)["asin"]
+                    for record in session.run(cypher_asins, {"thresh": thresh})
+                    if dict(record).get("asin")
+                }
+                return asins, thresh
+        except Exception as e:
+            logger.error(f"[GST] Failed to fetch head-popular products: {e}", exc_info=True)
+            return set(), None
 
     def _build_filters(self, filters: Dict[str, Any], raw_filters: Dict[str, Any] = None):
         """Build WHERE clauses for filters. Uses EXISTS subqueries for relationship-based filters."""
@@ -431,7 +1305,7 @@ class GraphSearchTool:
         raw_filters = raw_filters or {}
         
         for key, value in filters.items():
-            if value is None or value == "":
+            if value is None or value == "" or (isinstance(value, (list, tuple)) and not value):
                 logger.debug(f"[GST] Skipping empty filter key: {key}")
                 continue
             
@@ -444,8 +1318,13 @@ class GraphSearchTool:
             elif key == "excluded_asins" and isinstance(value, list) and value:
                 where_clauses.append("NOT node.parent_asin IN $excluded_asins")
                 params["excluded_asins"] = value
-            elif key == "brand":
+            elif key == "brand" and not isinstance(value, (list, tuple)):
+                if filters.get("brands"):
+                    # Handled together in the 'brands' OR-list predicate below
+                    continue
                 raw_brand = raw_filters.get("brand", value)
+                if isinstance(raw_brand, (list, tuple)):
+                    raw_brand = raw_brand[0] if raw_brand else value
                 where_clauses.append(
                     "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) "
                     "WHERE toLower(b.name) = toLower($brand_filter) "
@@ -455,8 +1334,30 @@ class GraphSearchTool:
                 )
                 params["brand_filter"] = value
                 params["raw_brand_filter"] = raw_brand
-            elif key == "exclude_brand":
+            elif key == "brands" or (key == "brand" and isinstance(value, (list, tuple))):
+                brand_list = [str(b).strip() for b in (value if isinstance(value, (list, tuple)) else [value]) if str(b).strip()]
+                if key == "brands" and isinstance(filters.get("brand"), str) and filters["brand"].strip():
+                    if filters["brand"].strip() not in brand_list:
+                        brand_list.append(filters["brand"].strip())
+                raw_source = raw_filters.get(key) or raw_filters.get("brands") or raw_filters.get("brand") or brand_list
+                raw_brand_list = [str(b).strip() for b in (raw_source if isinstance(raw_source, (list, tuple)) else [raw_source]) if str(b).strip()]
+                if not raw_brand_list:
+                    raw_brand_list = list(brand_list)
+                where_clauses.append(
+                    "(EXISTS { MATCH (node)-[:HAS_BRAND]->(b:Brand) "
+                    "WHERE ANY(bf IN $brands_filter WHERE toLower(b.name) = toLower(bf) "
+                    "   OR toLower(b.name) CONTAINS toLower(bf) "
+                    "   OR toLower(bf) CONTAINS toLower(b.name)) } "
+                    "OR ANY(rbf IN $raw_brands_filter WHERE toLower(node.title) CONTAINS toLower(rbf)))"
+                )
+                params["brands_filter"] = brand_list
+                params["raw_brands_filter"] = raw_brand_list
+            elif key == "exclude_brand" and not isinstance(value, (list, tuple)):
+                if filters.get("exclude_brands"):
+                    continue
                 raw_ex_brand = raw_filters.get("exclude_brand", value)
+                if isinstance(raw_ex_brand, (list, tuple)):
+                    raw_ex_brand = raw_ex_brand[0] if raw_ex_brand else value
                 where_clauses.append(
                     "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) "
                     "WHERE toLower(eb.name) = toLower($exclude_brand) "
@@ -466,8 +1367,33 @@ class GraphSearchTool:
                 )
                 params["exclude_brand"] = value
                 params["raw_ex_brand_filter"] = raw_ex_brand
-            elif key == "category":
+            elif key == "exclude_brands" or (key == "exclude_brand" and isinstance(value, (list, tuple))):
+                ex_brand_list = [str(b).strip() for b in (value if isinstance(value, (list, tuple)) else [value]) if str(b).strip()]
+                if key == "exclude_brands" and isinstance(filters.get("exclude_brand"), str) and filters["exclude_brand"].strip():
+                    if filters["exclude_brand"].strip() not in ex_brand_list:
+                        ex_brand_list.append(filters["exclude_brand"].strip())
+                raw_ex_source = raw_filters.get(key) or raw_filters.get("exclude_brands") or raw_filters.get("exclude_brand") or ex_brand_list
+                raw_ex_brand_list = [str(b).strip() for b in (raw_ex_source if isinstance(raw_ex_source, (list, tuple)) else [raw_ex_source]) if str(b).strip()]
+                if not raw_ex_brand_list:
+                    raw_ex_brand_list = list(ex_brand_list)
+                where_clauses.append(
+                    "NOT (EXISTS { MATCH (node)-[:HAS_BRAND]->(eb:Brand) "
+                    "WHERE ANY(ebf IN $exclude_brands_filter WHERE toLower(eb.name) = toLower(ebf) "
+                    "   OR toLower(eb.name) CONTAINS toLower(ebf) "
+                    "   OR toLower(ebf) CONTAINS toLower(eb.name)) } "
+                    "OR ANY(rebf IN $raw_exclude_brands_filter WHERE toLower(node.title) CONTAINS toLower(rebf)))"
+                )
+                params["exclude_brands_filter"] = ex_brand_list
+                params["raw_exclude_brands_filter"] = raw_ex_brand_list
+            elif str(key).startswith("_"):
+                continue
+            elif key == "category" and not isinstance(value, (list, tuple)):
+                if filters.get("categories"):
+                    continue
                 raw_cat = raw_filters.get("category", value)
+                if isinstance(raw_cat, (list, tuple)):
+                    raw_cat = raw_cat[0] if raw_cat else value
+                raw_cat = str(raw_cat)
                 tokens = [t.strip().lower() for t in raw_cat.split() if len(t.strip()) > 2]
 
                 # Construct conjunction of token matches to handle intervening modifiers in product titles
@@ -479,18 +1405,73 @@ class GraphSearchTool:
                     escaped_raw = re.escape(raw_cat).replace("'", "\\'")
                     title_condition = f"toLower(node.title) =~ '(?i).*(^|[^a-z]){escaped_raw}(s)?([^a-z]|$).*'"
 
+                family_names = filters.get("_resolved_category_family") or [value]
+                family_lower = list(dict.fromkeys([str(c).lower().strip() for c in family_names if c] + [str(value).lower().strip()]))
+                escape_rx, excl_rx = self._build_head_noun_escape_patterns(raw_cat)
+
                 where_clauses.append(f"""
                 (
                     EXISTS {{
-                        MATCH (node)-[:BELONGS_TO_CATEGORY]->(leaf:Category)-[:SUBCATEGORY_OF*0..3]->(c:Category)
-                        WHERE c.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
+                        MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)
+                        WHERE toLower(ancestor.name) = toLower($category_filter)
+                           OR toLower(leaf.name) = toLower($category_filter)
+                           OR toLower(ancestor.name) IN $category_family_filter
+                           OR toLower(leaf.name) IN $category_family_filter
+                           OR any(alt IN coalesce(ancestor.alt_labels, []) WHERE toLower(alt) = toLower($category_filter) OR toLower(alt) IN $category_family_filter)
+                           OR any(alt IN coalesce(leaf.alt_labels, []) WHERE toLower(alt) = toLower($category_filter) OR toLower(alt) IN $category_family_filter)
+                           OR ancestor.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
                            OR leaf.name =~ ('(?i).*(^|[^a-z])' + $category_filter + '(s)?([^a-z]|$).*')
                     }}
-                    OR {title_condition}
+                    OR (
+                        NOT EXISTS {{ MATCH (node)-[:IN_TAXON]->(:Taxon) }}
+                        AND {title_condition}
+                    )
+                    OR (
+                        toLower(node.title) =~ $head_noun_escape_regex
+                        AND NOT toLower(node.title) =~ $accessory_exclusion_regex
+                    )
                 )
                 """)
                 params["category_filter"] = value
                 params["raw_category_filter"] = raw_cat
+                params["category_family_filter"] = family_lower
+                params["head_noun_escape_regex"] = escape_rx
+                params["accessory_exclusion_regex"] = excl_rx
+                if filters.get("_resolved_taxon_paths"):
+                    params["_resolved_taxon_paths"] = filters["_resolved_taxon_paths"]
+            elif key == "categories" or (key == "category" and isinstance(value, (list, tuple))):
+                cat_list = [str(c).strip() for c in (value if isinstance(value, (list, tuple)) else [value]) if str(c).strip()]
+                if key == "categories" and isinstance(filters.get("category"), str) and filters["category"].strip():
+                    if filters["category"].strip() not in cat_list:
+                        cat_list.append(filters["category"].strip())
+                raw_cat_source = raw_filters.get(key) or raw_filters.get("categories") or raw_filters.get("category") or cat_list
+                raw_cat_list = [str(c).strip() for c in (raw_cat_source if isinstance(raw_cat_source, (list, tuple)) else [raw_cat_source]) if str(c).strip()]
+                if not raw_cat_list:
+                    raw_cat_list = list(cat_list)
+
+                cat_regexes = [f"(?i).*(^|[^a-z]){re.escape(c)}(s)?([^a-z]|$).*" for c in cat_list]
+                raw_cat_regexes = [f"(?i).*(^|[^a-z]){re.escape(rc)}(s)?([^a-z]|$).*" for rc in raw_cat_list]
+                escape_rx, excl_rx = self._build_head_noun_escape_patterns(raw_cat_list[0] if raw_cat_list else "")
+                where_clauses.append("""
+                (
+                    EXISTS {
+                        MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon)
+                        WHERE ANY(cat_rx IN $categories_filter WHERE ancestor.name =~ cat_rx OR leaf.name =~ cat_rx)
+                    }
+                    OR (
+                        NOT EXISTS { MATCH (node)-[:IN_TAXON]->(:Taxon) }
+                        AND ANY(raw_rx IN $raw_categories_filter WHERE toLower(node.title) =~ raw_rx)
+                    )
+                    OR (
+                        toLower(node.title) =~ $head_noun_escape_regex
+                        AND NOT toLower(node.title) =~ $accessory_exclusion_regex
+                    )
+                )
+                """)
+                params["categories_filter"] = cat_regexes
+                params["raw_categories_filter"] = raw_cat_regexes
+                params["head_noun_escape_regex"] = escape_rx
+                params["accessory_exclusion_regex"] = excl_rx
             # EAV Numeric filters dynamically intercepted with toFloat fallback for string attribute values
             elif key.endswith("_min") and key != "price_min":
                 attr_name = key.replace("_min", "")
@@ -541,113 +1522,210 @@ class GraphSearchTool:
                 """)
                 params[key] = float(value)
             else:
-                logger.debug(f"Ignoring unhandled filter key: '{key}' = {value}")
+                logger.warning(f"[GST] Ignoring unhandled filter key: '{key}' = {value}")
             
         return where_clauses, params
 
-    def _normalize_filters(self, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize filter values to canonical graph node names using ResolverService.
-        
-        Confidence thresholds:
-        - Brand: 0.85 (brand names are precise nouns, require high similarity to avoid Sennheiser -> Senso false positives)
-        - Category: 0.70 (recalibrated with candidate margin check >= 0.05 to reliably resolve plurals and inflections while blocking cross-domain drift)
-        
-        NOTE: If normalization fails or confidence is low, the filter is NO LONGER dropped.
-        Instead, it remains as the raw string so that the Cypher title fallback logic 
-        (e.g., `OR toLower(node.title) CONTAINS $raw`) can still attempt a textual match.
+    @staticmethod
+    def _build_head_noun_escape_patterns(raw_cat: str) -> Tuple[str, str]:
         """
+        RS-24 Pillar D: Builds a guarded lexical head-noun regex and an accessory-trap
+        exclusion regex so miscategorized genuine devices (e.g. Samsung Galaxy S20+ in
+        'samsung_tradein', Logitech C920 in 'Computers', MacBook Air with empty taxon)
+        pass the category filter while accessory traps ('Case for iPhone') are blocked.
+        """
+        from src.knowledge_graph.graphdb.resolver_service import (
+            decompose_type_phrase,
+            get_equivalent_head_lemmas,
+        )
+
+        decomp = decompose_type_phrase(raw_cat)
+        head_lemma = decomp["head_lemma"]
+        if not head_lemma:
+            escaped = re.escape(str(raw_cat).strip().lower())
+            return (f"(?i).*(^|[^a-z]){escaped}(s)?([^a-z]|$).*", "^$")
+
+        equivs = set(get_equivalent_head_lemmas(head_lemma))
+        if head_lemma == "mouse":
+            equivs.update({"mouse", "mice"})
+        elif head_lemma in ("phone", "smartphone", "cellphone", "iphone"):
+            equivs.update({"smartphone", "cellphone", "iphone", "galaxy s20", "galaxy s9", "cell phone", "mobile phone"})
+        elif head_lemma in ("laptop", "notebook", "chromebook", "macbook"):
+            equivs.update({"laptop", "notebook", "chromebook", "macbook"})
+        elif head_lemma in ("bundle", "system") and "security" in decomp["lemmas"]:
+            equivs.update({"bundle", "doorbell", "security"})
+
+        # Add parenthetical lemmas if any (e.g. 'macbook air', 'iphone')
+        for pl in decomp.get("parenthetical_lemmas") or ():
+            if len(pl) >= 3:
+                equivs.add(pl)
+
+        # Surface plural forms not covered by the regex `(s|es)?` suffix:
+        # irregular plurals ('mouse' -> 'mice', 'accessory' -> 'accessories') and consonant+y -> -ies.
+        from src.knowledge_graph.graphdb.resolver_service import IRREGULAR_PLURALS
+        for plural, lemma in IRREGULAR_PLURALS.items():
+            if lemma in equivs and plural != lemma:
+                equivs.add(plural)
+        for term in list(equivs):
+            if len(term) > 2 and term.endswith("y") and term[-2] not in "aeiou":
+                equivs.add(term[:-1] + "ies")
+
+        sorted_terms = [re.escape(t) for t in sorted(equivs) if t and len(t) >= 2]
+        if not sorted_terms:
+            sorted_terms = [re.escape(head_lemma)]
+        alt_group = "|".join(sorted_terms)
+        head_noun_escape_regex = f"(?i).*(^|[^a-z])({alt_group})(s|es)?([^a-z]|$).*"
+
+        if decomp["is_accessory_head"]:
+            accessory_exclusion_regex = "^$"
+        else:
+            trap_nouns = {
+                "case", "cover", "protector", "cable", "cord", "mount", "stand",
+                "holder", "bag", "sleeve", "skin", "strap", "replacement", "part",
+                "pouch", "holster", "bracket", "tripod", "adapter", "charger",
+            } - equivs
+            trap_group = "|".join(sorted(trap_nouns))
+            accessory_exclusion_regex = (
+                f"(?i).*(^|[^a-z])({trap_group})(s|es)?([^a-z].*|\\s+)"
+                f"(for|compatible with|fits|designed for)([^a-z]|$).*"
+            )
+        return head_noun_escape_regex, accessory_exclusion_regex
+
+    def _normalize_single_brand(self, raw_val: str, label: str = "brand") -> str:
+        """Resolve a single brand string via ResolverService, falling back to raw_val."""
         BRAND_CONFIDENCE = getattr(self, "BRAND_CONFIDENCE", 0.85)
+        try:
+            matches = self.resolver.resolve_brand(raw_val, k=1)
+            if matches and matches[0]["score"] >= BRAND_CONFIDENCE:
+                logger.info(f"[GST] ✓ Normalized {label} '{raw_val}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
+                return matches[0]["name"]
+            elif matches:
+                logger.warning(f"[GST] ✗ {label.capitalize()} '{raw_val}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {BRAND_CONFIDENCE}. Keeping raw value for title fallback.")
+            else:
+                logger.warning(f"[GST] ✗ No {label} match for '{raw_val}'. Keeping raw value for title fallback.")
+        except Exception as e:
+            logger.warning(f"[GST] {label.capitalize()} normalization failed: {e}")
+        return raw_val
+
+    def _normalize_single_category(self, raw_val: str) -> str:
+        """Resolve a single category string via ResolverService with margin check, falling back to raw_val."""
         CATEGORY_CONFIDENCE = getattr(self, "CATEGORY_CONFIDENCE", 0.70)
         CATEGORY_MARGIN = getattr(self, "CATEGORY_MARGIN", 0.05)
-        
+        try:
+            from src.knowledge_graph.graphdb.resolver_service import decompose_type_phrase
+            matches = self.resolver.resolve_category(raw_val, k=3)
+            if matches and matches[0]["score"] >= CATEGORY_CONFIDENCE:
+                # Check candidate margin against runner-up candidates to prevent cross-domain drift
+                has_margin = True
+                if matches[0]["score"] < 0.85 and len(matches) > 1:
+                    top = matches[0]
+                    top_name = top.get("name", "").lower()
+                    top_path = [p.lower() for p in (top.get("path") or [])]
+                    top_head = decompose_type_phrase(top_name)["head_lemma"]
+
+                    # Find the first runner-up candidate that is a true cross-domain competitor.
+                    # Candidates that contain the top candidate's name, share taxonomy lineage,
+                    # or share the same grammatical head noun belong to the same product family.
+                    comp_candidate = None
+                    for runner_up in matches[1:]:
+                        ru_name = runner_up.get("name", "").lower()
+                        ru_path = [p.lower() for p in (runner_up.get("path") or [])]
+                        ru_head = decompose_type_phrase(ru_name)["head_lemma"]
+                        if (
+                            top_name in ru_name
+                            or ru_name in top_name
+                            or ru_name in top_path
+                            or top_name in ru_path
+                            or (top_head and top_head == ru_head)
+                        ):
+                            continue
+                        comp_candidate = runner_up
+                        break
+
+                    if comp_candidate is not None:
+                        margin = top["score"] - comp_candidate["score"]
+                        if margin < CATEGORY_MARGIN:
+                            has_margin = False
+                            logger.warning(
+                                f"[GST] ✗ Category '{raw_val}' failed margin check: "
+                                f"top match '{top['name']}' ({top['score']:.3f}) vs "
+                                f"runner-up '{comp_candidate['name']}' ({comp_candidate['score']:.3f}), "
+                                f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
+                            )
+
+                if has_margin:
+                    logger.info(f"[GST] ✓ Normalized category '{raw_val}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
+                    return matches[0]["name"]
+            elif matches:
+                logger.warning(f"[GST] ✗ Category '{raw_val}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Keeping raw value for title fallback.")
+                candidates = [(m['name'], round(m['score'], 3)) for m in matches]
+                logger.info(f"[GST]   Top candidates: {candidates}")
+            else:
+                logger.warning(f"[GST] ✗ No category match for '{raw_val}'. Keeping raw value for title fallback.")
+        except Exception as e:
+            logger.warning(f"[GST] Category normalization failed: {e}")
+        return raw_val
+
+    def _normalize_filters(self, filters: Dict[str, Any], query_text: Optional[str] = None) -> Dict[str, Any]:
+        """Normalize filter values to canonical graph node names using ResolverService."""
         if not self.resolver:
             logger.warning("[GST] ResolverService not available. Skipping normalization.")
             return filters
         
         normalized = dict(filters)
 
-        # Normalize brand
+        # Normalize brand / brands
         if "brand" in normalized and normalized["brand"]:
-            try:
-                matches = self.resolver.resolve_brand(normalized["brand"], k=1)
-                if matches and matches[0]["score"] >= BRAND_CONFIDENCE:
-                    logger.info(f"[GST] ✓ Normalized brand '{normalized['brand']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
-                    normalized["brand"] = matches[0]["name"]
-                elif matches:
-                    logger.warning(f"[GST] ✗ Brand '{normalized['brand']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {BRAND_CONFIDENCE}. Keeping raw value for title fallback.")
-                else:
-                    logger.warning(f"[GST] ✗ No brand match for '{normalized['brand']}'. Keeping raw value for title fallback.")
-            except Exception as e:
-                logger.warning(f"[GST] Brand normalization failed: {e}")
+            if isinstance(normalized["brand"], (list, tuple)):
+                normalized["brand"] = [self._normalize_single_brand(str(b), "brand") for b in normalized["brand"] if b]
+            else:
+                normalized["brand"] = self._normalize_single_brand(str(normalized["brand"]), "brand")
 
-        # Normalize exclude_brand
+        if "brands" in normalized and normalized["brands"]:
+            if isinstance(normalized["brands"], (list, tuple)):
+                normalized["brands"] = [self._normalize_single_brand(str(b), "brands") for b in normalized["brands"] if b]
+            else:
+                normalized["brands"] = [self._normalize_single_brand(str(normalized["brands"]), "brands")]
+
+        # Normalize exclude_brand / exclude_brands
         if "exclude_brand" in normalized and normalized["exclude_brand"]:
-            try:
-                matches = self.resolver.resolve_brand(normalized["exclude_brand"], k=1)
-                if matches and matches[0]["score"] >= BRAND_CONFIDENCE:
-                    logger.info(f"[GST] ✓ Normalized exclude_brand '{normalized['exclude_brand']}' → '{matches[0]['name']}'")
-                    normalized["exclude_brand"] = matches[0]["name"]
-                else:
-                    logger.warning(f"[GST] ✗ Low confidence for exclude_brand. Keeping raw value for title fallback.")
-            except Exception as e:
-                logger.warning(f"[GST] Exclude brand normalization failed: {e}")
+            if isinstance(normalized["exclude_brand"], (list, tuple)):
+                normalized["exclude_brand"] = [self._normalize_single_brand(str(b), "exclude_brand") for b in normalized["exclude_brand"] if b]
+            else:
+                normalized["exclude_brand"] = self._normalize_single_brand(str(normalized["exclude_brand"]), "exclude_brand")
 
-        # Normalize category
+        if "exclude_brands" in normalized and normalized["exclude_brands"]:
+            if isinstance(normalized["exclude_brands"], (list, tuple)):
+                normalized["exclude_brands"] = [self._normalize_single_brand(str(b), "exclude_brands") for b in normalized["exclude_brands"] if b]
+            else:
+                normalized["exclude_brands"] = [self._normalize_single_brand(str(normalized["exclude_brands"]), "exclude_brands")]
+
+        # Normalize category / categories and expand Multi-Taxon Family (RS-24)
         if "category" in normalized and normalized["category"]:
-            try:
-                matches = self.resolver.resolve_category(normalized["category"], k=3)
-                if matches and matches[0]["score"] >= CATEGORY_CONFIDENCE:
-                    # Check candidate margin against runner-up candidates to prevent cross-domain drift
-                    has_margin = True
-                    if matches[0]["score"] < 0.85 and len(matches) > 1:
-                        top = matches[0]
-                        top_name = top.get("name", "").lower()
-                        top_path = [p.lower() for p in (top.get("path") or [])]
+            raw_cat_val = normalized["category"]
+            if isinstance(raw_cat_val, (list, tuple)):
+                normalized["category"] = [self._normalize_single_category(str(c)) for c in raw_cat_val if c]
+            else:
+                raw_cat_str = str(raw_cat_val)
+                normalized["category"] = self._normalize_single_category(raw_cat_str)
+                if hasattr(self.resolver, "resolve_category_family"):
+                    try:
+                        fam = self.resolver.resolve_category_family(raw_cat_str, query_text=query_text)
+                        if isinstance(fam, list) and fam and all(isinstance(m, dict) for m in fam):
+                            fam_names = [m["name"] for m in fam if m.get("name")]
+                            fam_paths = [list(m["path"]) for m in fam if isinstance(m.get("path"), (list, tuple)) and m.get("path")]
+                            if fam_names:
+                                normalized["_resolved_category_family"] = fam_names
+                            if fam_paths:
+                                normalized["_resolved_taxon_paths"] = fam_paths
+                    except Exception as e:
+                        logger.debug(f"[GST] Category family expansion skipped: {e}")
 
-                        # Find the first runner-up candidate that is a true cross-domain competitor.
-                        # Candidates that contain the top candidate's name or share taxonomy lineage
-                        # belong to the same taxonomic branch and are not cross-domain competitors.
-                        comp_candidate = None
-                        for runner_up in matches[1:]:
-                            ru_name = runner_up.get("name", "").lower()
-                            ru_path = [p.lower() for p in (runner_up.get("path") or [])]
-                            if top_name in ru_name or ru_name in top_name or ru_name in top_path or top_name in ru_path:
-                                continue
-                            comp_candidate = runner_up
-                            break
-
-                        if comp_candidate is not None:
-                            margin = top["score"] - comp_candidate["score"]
-                            if margin < CATEGORY_MARGIN:
-                                has_margin = False
-                                logger.warning(
-                                    f"[GST] ✗ Category '{normalized['category']}' failed margin check: "
-                                    f"top match '{top['name']}' ({top['score']:.3f}) vs "
-                                    f"runner-up '{comp_candidate['name']}' ({comp_candidate['score']:.3f}), "
-                                    f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
-                                )
-                        elif len(matches) > 1 and not (top_name in matches[1].get("name", "").lower() or matches[1].get("name", "").lower() in top_name):
-                            margin = top["score"] - matches[1]["score"]
-                            if margin < CATEGORY_MARGIN:
-                                has_margin = False
-                                logger.warning(
-                                    f"[GST] ✗ Category '{normalized['category']}' failed margin check: "
-                                    f"top match '{top['name']}' ({top['score']:.3f}) vs "
-                                    f"runner-up '{matches[1]['name']}' ({matches[1]['score']:.3f}), "
-                                    f"diff={margin:.3f} < {CATEGORY_MARGIN}. Keeping raw value for title fallback."
-                                )
-
-                    if has_margin:
-                        logger.info(f"[GST] ✓ Normalized category '{normalized['category']}' → '{matches[0]['name']}' (score: {matches[0]['score']:.3f})")
-                        normalized["category"] = matches[0]["name"]
-                elif matches:
-                    logger.warning(f"[GST] ✗ Category '{normalized['category']}' best match '{matches[0]['name']}' score={matches[0]['score']:.3f} < {CATEGORY_CONFIDENCE}. Keeping raw value for title fallback.")
-                    candidates = [(m['name'], round(m['score'], 3)) for m in matches]
-                    logger.info(f"[GST]   Top candidates: {candidates}")
-                else:
-                    logger.warning(f"[GST] ✗ No category match for '{normalized['category']}'. Keeping raw value for title fallback.")
-            except Exception as e:
-                logger.warning(f"[GST] Category normalization failed: {e}")
+        if "categories" in normalized and normalized["categories"]:
+            if isinstance(normalized["categories"], (list, tuple)):
+                normalized["categories"] = [self._normalize_single_category(str(c)) for c in normalized["categories"] if c]
+            else:
+                normalized["categories"] = [self._normalize_single_category(str(normalized["categories"]))]
 
         return normalized
 

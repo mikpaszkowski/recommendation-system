@@ -89,3 +89,20 @@ pytest tests/test_prompt_constructor.py -v
   1. Strict RAG grounding causes conversational amnesia in recommendation settings; Synthesized Grounding solves this by fusing conversational state with graph structure.
   2. Post-retrieval LLM verification (CriticAgent) acts as an essential firewall against vector search semantic betrayals.
 * **Suggested Baseline Comparisons**: Standard RAG (Graph evidence only) vs. Synthesized Grounding (Graph evidence + User preferences).
+
+---
+
+## 6. Implementation Hardening & Graph v2 Wiring (2026-10-20, GV2-01 & GV2-05)
+
+Following the Graph v2 rebuild, an audit of the live pipeline revealed four discrepancies between the theoretical claims in §3 and the codebase:
+1. **Blind Evaluation Defect (`GV2-01`)**: `CriticAgent` was passed only `Price | Brand | Category`, omitting product features, technical details, and descriptions. This caused Critic to reject 100% of candidates on technical queries (8/21 queries in the benchmark had `rejected_all`).
+2. **Fail-Open Exception Leak (`GV2-05`)**: When `CriticAgent` encountered an LLM timeout or parsing error, it set `is_recommended = True` (fail-open), violating the verification firewall premise.
+3. **MACS Relaxation Disclosure Gap (`GV2-05`)**: `PromptConstructor` did not accept `relaxed_constraints`, meaning budget/category relaxations were not communicated to the generator.
+4. **All-Rejected Starvation (`GV2-05`)**: When Critic rejected all 20 candidates, the pipeline starved without fallback.
+
+**Corrections Implemented (2026-10-20)**:
+- `DETAIL_QUERY` now extracts `node.features`, `node.details_text`, `node.description`, and `node.avg_rating`, passing them to `CriticAgent` and `PromptConstructor`.
+- `CriticAgent` fails closed on error (`is_recommended = False`, `semantic_score = 0`, `eval_error = True`).
+- When Critic rejects all candidates, the orchestrator falls back to the top-3 RRF candidates marked as `partial_match = True` and annotated with Critic's rejection reasoning, while preserving `eval_trace["critic_reranked"] = []` and `status = "rejected_all"` for evaluation integrity.
+- `relaxed_constraints` is forwarded to `PromptConstructor` to render a dedicated `[RELAXED CONSTRAINTS]` section, forcing transparent trade-off disclosure in generation.
+- Verified by 9 new regression tests in `tests/test_stage0_graph_v2_wiring.py`.

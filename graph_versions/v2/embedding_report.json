@@ -1,0 +1,69 @@
+{
+  "created_at": "2026-10-20T02:07:31Z",
+  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "sentence_transformers_version": "5.2.0",
+  "torch_version": "2.9.1",
+  "device": "mps:0",
+  "batch_size": 256,
+  "labels": {
+    "Attribute": {
+      "template_id": "attribute_v1",
+      "eligible": 36187,
+      "embedded": 36187,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 1,
+      "seconds": 1.411,
+      "texts_per_s": 1.42
+    },
+    "Brand": {
+      "template_id": "brand_v1",
+      "eligible": 49663,
+      "embedded": 49663,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 194,
+      "seconds": 57.095,
+      "texts_per_s": 869.83
+    },
+    "Category": {
+      "template_id": "category_v1",
+      "eligible": 38,
+      "embedded": 38,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 1,
+      "seconds": 8.071,
+      "texts_per_s": 4.71
+    },
+    "ParentProduct": {
+      "template_id": "product_v1",
+      "eligible": 265303,
+      "embedded": 265303,
+      "skipped_empty": 4,
+      "skipped_keys_sample": [
+        "B01DNTWIA4",
+        "B01FQO0APY",
+        "B06XTF14PR",
+        "B07H2XFK3Q"
+      ],
+      "batches": 1037,
+      "seconds": 1233.815,
+      "texts_per_s": 215.03
+    },
+    "Review": {
+      "template_id": "review_v1",
+      "eligible": 1081137,
+      "embedded": 1081137,
+      "skipped_empty": 0,
+      "skipped_keys_sample": [],
+      "batches": 4224,
+      "seconds": 7679.495,
+      "texts_per_s": 140.78
+    }
+  },
+  "embed_batch_size": 32,
+  "effective_embed_batch_size": 32,
+  "oom_events": 0,
+  "cpu_fallback_batches": 0
+}

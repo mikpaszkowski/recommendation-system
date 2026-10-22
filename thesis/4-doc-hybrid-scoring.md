@@ -8,6 +8,20 @@
 
 ---
 
+## Correction Note (2026-10-19, Thesis Evaluator)
+
+The text below is kept as written on 2026-09-29. It was not rewritten. Sources: Vision decisions 2026-10-19-018 and 2026-10-19-021 (items 1 and 4), `production_artifacts/Research_Report_Graph_Rebuild.md` (Problem Statement), and `13-doc-graph-integrity.md`.
+
+**C-1. Numeric soft and hard specifications never ran on live data.** No `Attribute` node carries `numeric_value`, and attributes hold only Material, Color, Style and Size (Vision 2026-10-19-021 item 4). The "EAV Unit Trap" probes in §4.2 therefore exercise parsing code in unit tests only. On the live graph, the $\sum w_i S_{attr_i}$ term of §3.2 can match only colour, material, style and size values, not "target technical specs". Constraint relaxation widening of numeric constraints is effective for price only, because price is the only numeric field the graph holds.
+
+**C-2. The NaN protection admitted ghost products.** The hard boundary `price IS NULL OR price <= $price_max` is satisfied by all 104,281 v1 ghost products (no title, price or category), and also by titled products without a price. Whether ghosts reached a reported top-K was not measured. Category filtering excludes them, because ghosts have no category, but any path without a category filter does not. Graph v2 removes ghosts at construction (Vision 2026-10-19-018). The deliberate NaN protection for titled products without a price is unchanged.
+
+**C-3. Graph version.** No retrieval figure is reported in this document. Any later figure for this mechanism must state whether it was measured on graph v1 or v2.
+
+**C-4. Honest Nomenclature: Constraint Relaxation vs. MACS/MACR (Review E.5, 2026-10-22).** The relaxation mechanism in `GraphSearchTool` was previously labeled with pseudo-acronyms like "MACS" or "MACR" and cited with placeholder references. In reality, it is a deterministic heuristic constraint relaxation cascade (relaksacja ograniczeń: budget widening by 15% $\to$ taxonomic generalization via `Taxon [:BROADER]` $\to$ category drop), not a formal external algorithm.
+
+---
+
 ## 1. Formal Research Context
 
 ### 1.1 Academic Problem Statement
@@ -17,7 +31,7 @@ In Conversational Recommender Systems (CRS) backed by Knowledge Graphs, translat
 $$\mathbf{RQ_4}: \text{"To what extent does decoupling natural language preferences into 'hard boundaries' (Boolean) and 'soft preferences' (additive scoring), combined with progressive constraint relaxation, improve candidate yield and Recall@K compared to monolithic Boolean Cypher filtering?"}$$
 
 ### 1.3 Hypotheses
-* **$\mathbf{H_1}$ (Alternative Hypothesis)**: Implementing an explicit constraint taxonomy with in-memory additive soft-scoring and MACS (Multi-Agent Constraint Solving) progressive relaxation significantly reduces zero-candidate retrieval failures and increases overall $HitRate@K$ without compromising preference groundedness.
+* **$\mathbf{H_1}$ (Alternative Hypothesis)**: Implementing an explicit constraint taxonomy with in-memory additive soft-scoring and hierarchical constraint relaxation (relaksacja ograniczeń) significantly reduces zero-candidate retrieval failures and increases overall $HitRate@K$ without compromising preference groundedness.
 * **$\mathbf{H_0}$ (Null Hypothesis)**: Progressive relaxation and soft scoring do not yield a statistically significant improvement in retrieval success rates compared to strict Boolean graph constraints.
 
 ---
@@ -25,11 +39,11 @@ $$\mathbf{RQ_4}: \text{"To what extent does decoupling natural language preferen
 ## 2. State-of-the-Art Gap Analysis
 
 ### 2.1 Limitations of Current Literature
-Current frameworks for GraphRAG and LLM-driven recommendation often adopt monolithic Text-to-Cypher translations or inject all constraints into a single SQL/Cypher filter. This results in the over-constraining of candidate pools. While recent SOTA literature (such as MACS, DualAgent-Rec, and G-CRS) highlights the necessity of constraint relaxation and dual-agent feedback, many open-source implementations still rely on rigid intersection of vector candidates and Boolean graph predicates, leading to brittle, non-recoverable search states.
+Current frameworks for GraphRAG and LLM-driven recommendation often adopt monolithic Text-to-Cypher translations or inject all constraints into a single SQL/Cypher filter. This results in the over-constraining of candidate pools. While recent SOTA literature (such as DualAgent-Rec and G-CRS) highlights the necessity of constraint relaxation and dual-agent feedback, many open-source implementations still rely on rigid intersection of vector candidates and Boolean graph predicates, leading to brittle, non-recoverable search states.
 
 ### 2.2 Red Flag Defense (Novelty Justification)
 * **Why this is NOT tutorial/boilerplate code**: Moving away from standard LangChain Cypher-QA chains, this contribution implements a bespoke **4-Pillar Remediation Blueprint**. It explicitly shifts negotiable dimensions out of the graph query engine and into a custom Python-based continuous additive scoring algorithm, supplemented by a deterministic constraint relaxation waterfall.
-* **Core Scientific Contribution**: A robust hybrid retrieval architecture that enforces non-negotiable boundaries at the database layer while optimizing for maximum semantic recall via additive scoring and programmatic relaxation (MACS) at the application layer.
+* **Core Scientific Contribution**: A robust hybrid retrieval architecture that enforces non-negotiable boundaries at the database layer while optimizing for maximum semantic recall via additive scoring and programmatic hierarchical constraint relaxation at the application layer.
 
 ---
 
@@ -45,7 +59,7 @@ flowchart TD
     E --> F["Additive Scoring Function"]
     D --> F
     F --> G{"Candidate Yield < 3?"}
-    G -- YES --> H["MACS Progressive Relaxation Waterfall"]
+    G -- YES --> H["Hierarchical Constraint Relaxation Waterfall"]
     H --> C
     G -- NO --> I["CriticAgent Semantic Arbitration"]
     I --> J["Final Grounded Top-K Selection"]
@@ -57,7 +71,7 @@ The architecture enforces a strict **Constraint Taxonomy**:
     *   *NaN Protection*: `WHERE (node.price IS NULL OR node.price <= $price_max)`
 2.  **Negotiable Soft Preferences ($\mathcal{S}$)**: E.g., target technical specs, preferred brands. Evaluated via Additive Scoring:
     *   $\mathbf{S} = S_{vec} + w_{brand} S_{brand} + w_{cat} S_{category} + \sum w_i S_{attr_i}$
-3.  **MACS Progressive Relaxation**: If the candidate pool size $N < 3$, a cascading function $R(\mathcal{H}, \mathcal{S})$ progressively widens numerical constraints (e.g., $price\_max \times 1.15$) and drops low-confidence soft specifications, logging the `relaxed_constraints` state for conversational transparency.
+3.  **Hierarchical Constraint Relaxation (relaksacja ograniczeń)**: If the candidate pool size $N < 3$, a cascading function $R(\mathcal{H}, \mathcal{S})$ progressively widens numerical constraints (e.g., $price\_max \times 1.15$), steps up the Taxon hierarchy via `[:BROADER]`, and drops unfulfilled constraints, logging the `relaxed_constraints` state for conversational transparency.
 
 ### 3.3 Key Implemented Classes & Interfaces
 * `GraphSearchTool`: Refactored to separate Cypher string compilation (hard constraints) from the post-hoc additive scoring algorithm (soft constraints). Implements the relaxation recursion loop.
@@ -84,7 +98,7 @@ The system includes a suite of adversarial test queries in `tests/test_graph_sea
 Instructions for an independent researcher to replicate the experiment:
 ```bash
 # Execute empirical vulnerability test suite
-pytest tests/test_graph_search_tool.py -k "test_macs_relaxation or test_soft_scoring" -v
+pytest tests/test_graph_search_tool.py -k "test_relaxation or test_soft_scoring" -v
 
 # Run end-to-end evaluation benchmark
 python scripts/evaluate_retrieval.py --baseline boolean_cypher --target soft_scoring
@@ -100,6 +114,5 @@ python scripts/evaluate_retrieval.py --baseline boolean_cypher --target soft_sco
   2. A decoupled architecture (Cypher for Hard Boundaries, Additive Python Scoring for Soft Preferences) combined with Progressive Relaxation mathematically ensures candidate yield without sacrificing interpretability.
 * **Suggested Baseline Comparisons**: Evaluating the new 4-Pillar architecture against a traditional Text-to-Cypher RAG baseline.
 * **Related Academic Citations**: 
-  - MACS (arXiv:2608.14068)
   - DualAgent-Rec (WWW 2026 / arXiv:2601.19121)
   - G-CRS (PAKDD 2025 / arXiv:2503.06430)

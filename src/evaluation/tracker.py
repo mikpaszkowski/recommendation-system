@@ -6,13 +6,14 @@ Responsible for creating timestamped directories under evaluations/ and persisti
 - retrieval_metrics.json / generative_metrics.json: detailed raw scoring outputs
 - retrieval_metrics.csv / generative_metrics.csv: tabular flattened outputs
 - summary.json: high-level aggregate scorecards
+- per_query.jsonl: compact per-query records (R2a)
 """
 from __future__ import annotations
 
 import csv
 import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 import json
 import pandas as pd
 
@@ -150,3 +151,20 @@ def save_run_artifacts(
     saved_paths["summary_json"] = str(summary_path)
 
     return saved_paths
+
+
+def write_per_query_jsonl(run_dir: Union[str, Path], records: Sequence[Mapping[str, Any]]) -> str:
+    """
+    Writes per_query.jsonl (R2a, FR-032): one compact JSON object per benchmark query
+    (action, clarify_reason, category attribution, target rank and CS verdicts per strategy).
+
+    Returns:
+        The absolute path of the written file as a string.
+    """
+    path = Path(run_dir) / "per_query.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        for record in records:
+            f.write(json.dumps(dict(record), separators=(",", ":"), ensure_ascii=False, default=str))
+            f.write("\n")
+    return str(path.resolve())

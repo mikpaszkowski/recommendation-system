@@ -1,0 +1,5774 @@
+{
+  "schema_version": 1,
+  "graph_version": "v2",
+  "created_at": "2026-10-20T02:22:44Z",
+  "pilot": false,
+  "seed": 20261019,
+  "lineage_sha256": "3f98595288de52e58d1960fc5ef026ffc45dba2fc99d368b646505ac5e0886ec",
+  "build_params_sha256": "ce16e65dced873f888f9c11aafbdbd455df357b974054e888d244b21dc4eee2e",
+  "embedding_report_sha256": "4cc1a24c9d50fe152dd464a07ed6988382bc486eb9e89f08c2935f14fc136f2d",
+  "graph_counts": {
+    "ParentProduct": 265307,
+    "Review": 3382248
+  },
+  "passed": true,
+  "hard_gates": [
+    {
+      "id": "H-01",
+      "name": "product count",
+      "expected": {
+        "products_written": 265307,
+        "catalogue_minus_accepted_missing": 265307
+      },
+      "observed": 265307,
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-02",
+      "name": "catalogue membership",
+      "expected": {
+        "null": 0,
+        "outside_catalogue": 0
+      },
+      "observed": {
+        "checked": 265307,
+        "null": 0,
+        "outside_catalogue": 0
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-03",
+      "name": "untitled products",
+      "expected": {
+        "lineage_title_empty": 8,
+        "max": 8
+      },
+      "observed": 8,
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-04",
+      "name": "no ghost signature",
+      "expected": 0,
+      "observed": 0,
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-05",
+      "name": "review integrity",
+      "expected": {
+        "bad_reviews": 0,
+        "users_without_wrote": 0
+      },
+      "observed": {
+        "bad_reviews": 0,
+        "users_without_wrote": 0
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-06",
+      "name": "split exclusion",
+      "expected": {
+        "excluded_hits": 0,
+        "in_train_split_mismatches": 0
+      },
+      "observed": {
+        "excluded_hits": 0,
+        "sampled": 10000,
+        "in_train_split_mismatches": 0
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-07",
+      "name": "cap",
+      "expected": {
+        "max_reviews_per_product": "<= 20",
+        "bad_cap_ranks": 0
+      },
+      "observed": {
+        "max_reviews_per_product": 20,
+        "bad_cap_ranks": 0
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-08",
+      "name": "review count",
+      "expected": {
+        "lineage_kept": 3382248,
+        "expected_review_count": 3382248
+      },
+      "observed": 3382248,
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-09",
+      "name": "constraints",
+      "expected": [
+        "product_id",
+        "review_id",
+        "user_id",
+        "brand_id",
+        "category_id",
+        "taxon_id",
+        "attribute_key",
+        "graph_version_id"
+      ],
+      "observed": [
+        "attribute_key",
+        "brand_id",
+        "category_id",
+        "graph_version_id",
+        "product_id",
+        "review_id",
+        "taxon_id",
+        "user_id"
+      ],
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-10",
+      "name": "embedding coverage",
+      "expected": "embedded = report = eligible per label",
+      "observed": {
+        "Attribute": {
+          "embedded": 36187,
+          "eligible": 36187,
+          "wrong_dimension": 0
+        },
+        "Brand": {
+          "embedded": 49663,
+          "eligible": 49663,
+          "wrong_dimension": 0
+        },
+        "Category": {
+          "embedded": 38,
+          "eligible": 38,
+          "wrong_dimension": 0
+        },
+        "ParentProduct": {
+          "embedded": 265303,
+          "eligible": 265303,
+          "wrong_dimension": 0
+        },
+        "Review": {
+          "embedded": 1081137,
+          "eligible": 1081137,
+          "wrong_dimension": 0
+        }
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-11",
+      "name": "no blank embeddings",
+      "expected": {
+        "empty_products_embedded": 0,
+        "blank_reviews_embedded": 0,
+        "max_probe_score": "< 0.9999"
+      },
+      "observed": {
+        "empty_products_embedded": 0,
+        "blank_reviews_embedded": 0,
+        "probes": 40,
+        "max_probe_score": 0.9954624176025391
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-12",
+      "name": "indexes online",
+      "expected": "ONLINE at 100.0",
+      "observed": {
+        "attribute_embedding_index": [
+          "ONLINE",
+          100.0
+        ],
+        "attribute_key": [
+          "ONLINE",
+          100.0
+        ],
+        "brand_embedding_index": [
+          "ONLINE",
+          100.0
+        ],
+        "brand_id": [
+          "ONLINE",
+          100.0
+        ],
+        "category_embedding_index": [
+          "ONLINE",
+          100.0
+        ],
+        "category_id": [
+          "ONLINE",
+          100.0
+        ],
+        "graph_version_id": [
+          "ONLINE",
+          100.0
+        ],
+        "index_343aff4e": [
+          "ONLINE",
+          100.0
+        ],
+        "index_f7700477": [
+          "ONLINE",
+          100.0
+        ],
+        "product_embedding_index": [
+          "ONLINE",
+          100.0
+        ],
+        "product_fulltext_index": [
+          "ONLINE",
+          100.0
+        ],
+        "product_id": [
+          "ONLINE",
+          100.0
+        ],
+        "review_embedding_index": [
+          "ONLINE",
+          100.0
+        ],
+        "review_id": [
+          "ONLINE",
+          100.0
+        ],
+        "taxon_id": [
+          "ONLINE",
+          100.0
+        ],
+        "user_id": [
+          "ONLINE",
+          100.0
+        ]
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-13",
+      "name": "full-text smoke test",
+      "expected": "product found by a features-only token",
+      "observed": {
+        "found": true,
+        "token": "\"Corner\\-loading optimization provides maximum bass performance\"",
+        "parent_asin": "B00006HC8Q",
+        "fields": [
+          "title",
+          "description",
+          "features",
+          "details_text"
+        ]
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-14",
+      "name": "import fidelity",
+      "expected": {
+        "mismatches": 0
+      },
+      "observed": {
+        "compared": 4203,
+        "mismatches": 0
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-15",
+      "name": "benchmark grounding",
+      "expected": "no grounding violation",
+      "observed": {
+        "checked": 21
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-16",
+      "name": "no legacy schema",
+      "expected": 0,
+      "observed": 0,
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-17",
+      "name": "taxon integrity",
+      "expected": {
+        "bad_broader": 0,
+        "multi_taxon_products": 0,
+        "in_taxon": 248053,
+        "product_count_mismatches": 0
+      },
+      "observed": {
+        "bad_broader": 0,
+        "multi_taxon_products": 0,
+        "in_taxon": 248053,
+        "sampled": 200,
+        "product_count_mismatches": 0
+      },
+      "passed": true,
+      "detail": null
+    },
+    {
+      "id": "H-18",
+      "name": "counts match lineage",
+      "expected": {
+        "nodes": {
+          "ParentProduct": 265307,
+          "Review": 3382248,
+          "User": 2594661,
+          "Brand": 49663,
+          "Category": 38,
+          "Attribute": 36187,
+          "Taxon": 1183
+        },
+        "relationships": {
+          "HAS_BRAND": 264274,
+          "BELONGS_TO_CATEGORY": 261664,
+          "HAS_ATTRIBUTE": 190043,
+          "IN_TAXON": 248053,
+          "BROADER": 1180,
+          "ABOUT_PRODUCT": 3382248,
+          "WROTE": 3382248
+        }
+      },
+      "observed": {
+        "nodes": {
+          "Attribute": 36187,
+          "Brand": 49663,
+          "Category": 38,
+          "GraphVersion": 0,
+          "ParentProduct": 265307,
+          "Review": 3382248,
+          "Taxon": 1183,
+          "User": 2594661
+        },
+        "relationships": {
+          "ABOUT_PRODUCT": 3382248,
+          "BELONGS_TO_CATEGORY": 261664,
+          "BROADER": 1180,
+          "HAS_ATTRIBUTE": 190043,
+          "HAS_BRAND": 264274,
+          "IN_TAXON": 248053,
+          "WROTE": 3382248
+        },
+        "duplicate_attribute_pairs": 0
+      },
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "report_only": {
+    "R-01": {
+      "by_main_category": {
+        "": {
+          "products": 3643,
+          "with_title": 1.0,
+          "with_price": 0.4181,
+          "with_brand": 0.9844,
+          "with_features": 0.854,
+          "with_description": 0.5479,
+          "details_ge1": 0.992,
+          "details_ge5": 0.8762,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7486
+        },
+        "AMAZON FASHION": {
+          "products": 3129,
+          "with_title": 1.0,
+          "with_price": 0.4174,
+          "with_brand": 0.9834,
+          "with_features": 0.7996,
+          "with_description": 0.3663,
+          "details_ge1": 0.9936,
+          "details_ge5": 0.4286,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6453
+        },
+        "All Beauty": {
+          "products": 248,
+          "with_title": 1.0,
+          "with_price": 0.2137,
+          "with_brand": 0.9758,
+          "with_features": 0.6895,
+          "with_description": 0.6452,
+          "details_ge1": 0.9879,
+          "details_ge5": 0.7702,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.496
+        },
+        "All Electronics": {
+          "products": 70430,
+          "with_title": 1.0,
+          "with_price": 0.4801,
+          "with_brand": 0.9976,
+          "with_features": 0.8172,
+          "with_description": 0.525,
+          "details_ge1": 0.9973,
+          "details_ge5": 0.9523,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.726
+        },
+        "Amazon Devices": {
+          "products": 2669,
+          "with_title": 1.0,
+          "with_price": 0.2533,
+          "with_brand": 0.9854,
+          "with_features": 0.8374,
+          "with_description": 0.3372,
+          "details_ge1": 0.619,
+          "details_ge5": 0.3368,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8962
+        },
+        "Amazon Fire TV": {
+          "products": 73,
+          "with_title": 1.0,
+          "with_price": 0.3562,
+          "with_brand": 1.0,
+          "with_features": 0.6849,
+          "with_description": 0.3699,
+          "details_ge1": 0.9726,
+          "details_ge5": 0.5068,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.863
+        },
+        "Amazon Home": {
+          "products": 3431,
+          "with_title": 1.0,
+          "with_price": 0.4745,
+          "with_brand": 0.9942,
+          "with_features": 0.7945,
+          "with_description": 0.5156,
+          "details_ge1": 0.9889,
+          "details_ge5": 0.8951,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6345
+        },
+        "Apple Products": {
+          "products": 480,
+          "with_title": 1.0,
+          "with_price": 0.425,
+          "with_brand": 1.0,
+          "with_features": 0.9854,
+          "with_description": 0.025,
+          "details_ge1": 0.9167,
+          "details_ge5": 0.9125,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9521
+        },
+        "Appliances": {
+          "products": 47,
+          "with_title": 1.0,
+          "with_price": 0.4468,
+          "with_brand": 1.0,
+          "with_features": 0.6596,
+          "with_description": 0.6809,
+          "details_ge1": 0.9574,
+          "details_ge5": 0.4681,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7872
+        },
+        "Arts, Crafts & Sewing": {
+          "products": 217,
+          "with_title": 1.0,
+          "with_price": 0.5115,
+          "with_brand": 0.9862,
+          "with_features": 0.8756,
+          "with_description": 0.7558,
+          "details_ge1": 0.9954,
+          "details_ge5": 0.8756,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.53
+        },
+        "Audible Audiobooks": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 0.0,
+          "with_features": 0.0,
+          "with_description": 0.0,
+          "details_ge1": 0.0,
+          "details_ge5": 0.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Automotive": {
+          "products": 1881,
+          "with_title": 1.0,
+          "with_price": 0.6241,
+          "with_brand": 0.9942,
+          "with_features": 0.8921,
+          "with_description": 0.6874,
+          "details_ge1": 0.9979,
+          "details_ge5": 0.975,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6427
+        },
+        "Baby": {
+          "products": 107,
+          "with_title": 1.0,
+          "with_price": 0.3458,
+          "with_brand": 0.9813,
+          "with_features": 0.8037,
+          "with_description": 0.5607,
+          "details_ge1": 0.9813,
+          "details_ge5": 0.8318,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6542
+        },
+        "Books": {
+          "products": 106,
+          "with_title": 1.0,
+          "with_price": 0.566,
+          "with_brand": 0.7264,
+          "with_features": 0.7925,
+          "with_description": 0.3962,
+          "details_ge1": 0.8962,
+          "details_ge5": 0.6981,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6132
+        },
+        "Buy a Kindle": {
+          "products": 8,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 0.875,
+          "with_description": 0.625,
+          "details_ge1": 0.875,
+          "details_ge5": 0.875,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.875
+        },
+        "Camera & Photo": {
+          "products": 33743,
+          "with_title": 1.0,
+          "with_price": 0.4284,
+          "with_brand": 0.9975,
+          "with_features": 0.8061,
+          "with_description": 0.5981,
+          "details_ge1": 0.9959,
+          "details_ge5": 0.9326,
+          "reviews_ge1": 0.9999,
+          "reviews_ge5": 0.667
+        },
+        "Car Electronics": {
+          "products": 4094,
+          "with_title": 1.0,
+          "with_price": 0.4377,
+          "with_brand": 0.9985,
+          "with_features": 0.8608,
+          "with_description": 0.7753,
+          "details_ge1": 0.9956,
+          "details_ge5": 0.8955,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6659
+        },
+        "Cell Phones & Accessories": {
+          "products": 25796,
+          "with_title": 0.9999,
+          "with_price": 0.4083,
+          "with_brand": 0.9972,
+          "with_features": 0.8211,
+          "with_description": 0.5296,
+          "details_ge1": 0.9967,
+          "details_ge5": 0.9774,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7243
+        },
+        "Computers": {
+          "products": 73206,
+          "with_title": 1.0,
+          "with_price": 0.3861,
+          "with_brand": 0.9952,
+          "with_features": 0.7809,
+          "with_description": 0.5965,
+          "details_ge1": 0.9973,
+          "details_ge5": 0.9559,
+          "reviews_ge1": 0.9999,
+          "reviews_ge5": 0.6758
+        },
+        "Fire Phone": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 0.5,
+          "with_description": 0.25,
+          "details_ge1": 1.0,
+          "details_ge5": 0.75,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "GPS & Navigation": {
+          "products": 1033,
+          "with_title": 1.0,
+          "with_price": 0.4308,
+          "with_brand": 0.999,
+          "with_features": 0.7841,
+          "with_description": 0.5653,
+          "details_ge1": 0.9981,
+          "details_ge5": 0.8509,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.515
+        },
+        "Gift Cards": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.5,
+          "details_ge1": 1.0,
+          "details_ge5": 0.5,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Grocery": {
+          "products": 29,
+          "with_title": 1.0,
+          "with_price": 0.1724,
+          "with_brand": 1.0,
+          "with_features": 0.6552,
+          "with_description": 0.6552,
+          "details_ge1": 0.9655,
+          "details_ge5": 0.6897,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.5172
+        },
+        "Handmade": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.6667,
+          "with_brand": 1.0,
+          "with_features": 0.6667,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 0.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6667
+        },
+        "Health & Personal Care": {
+          "products": 541,
+          "with_title": 0.9982,
+          "with_price": 0.4067,
+          "with_brand": 0.9982,
+          "with_features": 0.7597,
+          "with_description": 0.6839,
+          "details_ge1": 0.9908,
+          "details_ge5": 0.7745,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.658
+        },
+        "Home Audio & Theater": {
+          "products": 19478,
+          "with_title": 0.9999,
+          "with_price": 0.3492,
+          "with_brand": 0.9984,
+          "with_features": 0.847,
+          "with_description": 0.761,
+          "details_ge1": 0.9959,
+          "details_ge5": 0.9447,
+          "reviews_ge1": 0.9999,
+          "reviews_ge5": 0.722
+        },
+        "Industrial & Scientific": {
+          "products": 7561,
+          "with_title": 1.0,
+          "with_price": 0.6414,
+          "with_brand": 0.9984,
+          "with_features": 0.823,
+          "with_description": 0.4704,
+          "details_ge1": 0.9983,
+          "details_ge5": 0.9257,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.643
+        },
+        "Magazine Subscriptions": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Movies & TV": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Musical Instruments": {
+          "products": 1227,
+          "with_title": 1.0,
+          "with_price": 0.4874,
+          "with_brand": 0.9976,
+          "with_features": 0.8924,
+          "with_description": 0.7278,
+          "details_ge1": 0.9984,
+          "details_ge5": 0.9324,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7457
+        },
+        "Office Products": {
+          "products": 3740,
+          "with_title": 1.0,
+          "with_price": 0.4703,
+          "with_brand": 0.9981,
+          "with_features": 0.8412,
+          "with_description": 0.4973,
+          "details_ge1": 0.9976,
+          "details_ge5": 0.9829,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7171
+        },
+        "Pet Supplies": {
+          "products": 75,
+          "with_title": 1.0,
+          "with_price": 0.4133,
+          "with_brand": 1.0,
+          "with_features": 0.8667,
+          "with_description": 0.72,
+          "details_ge1": 1.0,
+          "details_ge5": 0.84,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7067
+        },
+        "Portable Audio & Accessories": {
+          "products": 908,
+          "with_title": 1.0,
+          "with_price": 0.1773,
+          "with_brand": 0.9868,
+          "with_features": 0.6311,
+          "with_description": 0.5958,
+          "details_ge1": 0.989,
+          "details_ge5": 0.8535,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.4912
+        },
+        "Premium Beauty": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 0.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Software": {
+          "products": 72,
+          "with_title": 1.0,
+          "with_price": 0.1944,
+          "with_brand": 1.0,
+          "with_features": 0.7083,
+          "with_description": 0.7639,
+          "details_ge1": 0.9722,
+          "details_ge5": 0.5417,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6806
+        },
+        "Sports & Outdoors": {
+          "products": 2372,
+          "with_title": 1.0,
+          "with_price": 0.3419,
+          "with_brand": 0.9857,
+          "with_features": 0.793,
+          "with_description": 0.6244,
+          "details_ge1": 0.9945,
+          "details_ge5": 0.9515,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6699
+        },
+        "Tools & Home Improvement": {
+          "products": 4117,
+          "with_title": 1.0,
+          "with_price": 0.5618,
+          "with_brand": 0.9944,
+          "with_features": 0.8807,
+          "with_description": 0.5961,
+          "details_ge1": 0.9961,
+          "details_ge5": 0.9789,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6901
+        },
+        "Toys & Games": {
+          "products": 605,
+          "with_title": 1.0,
+          "with_price": 0.4314,
+          "with_brand": 1.0,
+          "with_features": 0.8099,
+          "with_description": 0.6413,
+          "details_ge1": 0.9884,
+          "details_ge5": 0.876,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6479
+        },
+        "Video Games": {
+          "products": 227,
+          "with_title": 1.0,
+          "with_price": 0.3172,
+          "with_brand": 0.9824,
+          "with_features": 0.7445,
+          "with_description": 0.7401,
+          "details_ge1": 0.9912,
+          "details_ge5": 0.8811,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7357
+        }
+      }
+    },
+    "R-02": {
+      "depth_1": {
+        "Amazon Devices & Accessories": {
+          "products": 129,
+          "with_title": 1.0,
+          "with_price": 0.4341,
+          "with_brand": 1.0,
+          "with_features": 0.9535,
+          "with_description": 0.3876,
+          "details_ge1": 0.9845,
+          "details_ge5": 0.3876,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9612
+        },
+        "Car & Vehicle Electronics": {
+          "products": 298,
+          "with_title": 1.0,
+          "with_price": 0.6745,
+          "with_brand": 1.0,
+          "with_features": 0.9295,
+          "with_description": 0.6745,
+          "details_ge1": 0.9966,
+          "details_ge5": 0.9195,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7315
+        },
+        "Electronics": {
+          "products": 247626,
+          "with_title": 1.0,
+          "with_price": 0.4467,
+          "with_brand": 0.9967,
+          "with_features": 0.8433,
+          "with_description": 0.5983,
+          "details_ge1": 0.9965,
+          "details_ge5": 0.9438,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7077
+        }
+      },
+      "depth_2": {
+        "Amazon Devices & Accessories > Amazon Device Accessories": {
+          "products": 107,
+          "with_title": 1.0,
+          "with_price": 0.4486,
+          "with_brand": 1.0,
+          "with_features": 0.972,
+          "with_description": 0.3832,
+          "details_ge1": 0.9813,
+          "details_ge5": 0.3271,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.972
+        },
+        "Amazon Devices & Accessories > Amazon Device Accessories under $20": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 0.0,
+          "details_ge1": 1.0,
+          "details_ge5": 0.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Amazon Devices & Accessories > Amazon Devices": {
+          "products": 14,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.2857,
+          "details_ge1": 1.0,
+          "details_ge5": 0.6429,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8571
+        },
+        "Amazon Devices & Accessories > Amazon Pro Portal": {
+          "products": 6,
+          "with_title": 1.0,
+          "with_price": 0.1667,
+          "with_brand": 1.0,
+          "with_features": 0.8333,
+          "with_description": 0.8333,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Car & Vehicle Electronics > Vehicle Electronics Accessories": {
+          "products": 298,
+          "with_title": 1.0,
+          "with_price": 0.6745,
+          "with_brand": 1.0,
+          "with_features": 0.9295,
+          "with_description": 0.6745,
+          "details_ge1": 0.9966,
+          "details_ge5": 0.9195,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7315
+        },
+        "Electronics > 12-Month Financing on Computers": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > 2 in 1 PCs": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > 2014 Samsung Holiday TV Deals": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > 3P ASINs 1400": {
+          "products": 25,
+          "with_title": 1.0,
+          "with_price": 0.2,
+          "with_brand": 0.96,
+          "with_features": 0.48,
+          "with_description": 0.48,
+          "details_ge1": 1.0,
+          "details_ge5": 0.72,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.64
+        },
+        "Electronics > 3P ASINs 1500": {
+          "products": 38,
+          "with_title": 1.0,
+          "with_price": 0.1053,
+          "with_brand": 0.9737,
+          "with_features": 0.5263,
+          "with_description": 0.4737,
+          "details_ge1": 0.9737,
+          "details_ge5": 0.7632,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9474
+        },
+        "Electronics > 4th of July Deals 2013-Electronics On the Go": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > 6 Month Financing": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > ASUS PC": {
+          "products": 16,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > ASUS Transformer Tablet Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Accessories & Supplies": {
+          "products": 8190,
+          "with_title": 1.0,
+          "with_price": 0.5606,
+          "with_brand": 0.9983,
+          "with_features": 0.8882,
+          "with_description": 0.5282,
+          "details_ge1": 0.9963,
+          "details_ge5": 0.9626,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7762
+        },
+        "Electronics > Acer Laptops & Desktops Event": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Adzinia CE Node": {
+          "products": 17,
+          "with_title": 1.0,
+          "with_price": 0.0588,
+          "with_brand": 1.0,
+          "with_features": 0.8824,
+          "with_description": 0.9412,
+          "details_ge1": 1.0,
+          "details_ge5": 0.8235,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.5294
+        },
+        "Electronics > Amazon Cloud Drive T&C Offer": {
+          "products": 17,
+          "with_title": 1.0,
+          "with_price": 0.1765,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8824
+        },
+        "Electronics > Amazon Locker Eligible Camera Products": {
+          "products": 10,
+          "with_title": 1.0,
+          "with_price": 0.3,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.9,
+          "details_ge1": 0.9,
+          "details_ge5": 0.9,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8
+        },
+        "Electronics > Amazon Unlimited Storage + Laptop Promotion": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.3333,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.6667,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.3333
+        },
+        "Electronics > AmazonBasics Accessories": {
+          "products": 38,
+          "with_title": 1.0,
+          "with_price": 0.0789,
+          "with_brand": 1.0,
+          "with_features": 0.8684,
+          "with_description": 0.8421,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Apple Bands": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Audio Deal": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Back to School Tech Accessories": {
+          "products": 7,
+          "with_title": 1.0,
+          "with_price": 0.2857,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Back to School-Electronics On the Go": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Bazooka Dynamic Coop": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Belkin Dynamic Coop": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Bestselling Renewed Home Entertainment": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Bestselling Renewed Smartphones": {
+          "products": 8,
+          "with_title": 1.0,
+          "with_price": 0.875,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Big Markdowns in TV, Video & Audio": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.6667,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.3333
+        },
+        "Electronics > Big Savings in Home Audio & Headphones": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Bluetooth": {
+          "products": 39,
+          "with_title": 1.0,
+          "with_price": 0.0256,
+          "with_brand": 1.0,
+          "with_features": 0.9744,
+          "with_description": 0.9744,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8974
+        },
+        "Electronics > Bose Store": {
+          "products": 9,
+          "with_title": 1.0,
+          "with_price": 0.3333,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Boss Audio Dynamic Coop": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Buy Samsung at as low as 0% APR": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Camera & Photo": {
+          "products": 37004,
+          "with_title": 1.0,
+          "with_price": 0.4522,
+          "with_brand": 0.9968,
+          "with_features": 0.8194,
+          "with_description": 0.5937,
+          "details_ge1": 0.9964,
+          "details_ge5": 0.9404,
+          "reviews_ge1": 0.9999,
+          "reviews_ge5": 0.6501
+        },
+        "Electronics > Canon": {
+          "products": 34,
+          "with_title": 1.0,
+          "with_price": 0.5882,
+          "with_brand": 1.0,
+          "with_features": 0.9706,
+          "with_description": 0.9412,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8824
+        },
+        "Electronics > Car & Vehicle Electronics": {
+          "products": 9873,
+          "with_title": 1.0,
+          "with_price": 0.4951,
+          "with_brand": 0.9984,
+          "with_features": 0.885,
+          "with_description": 0.6758,
+          "details_ge1": 0.9971,
+          "details_ge5": 0.9446,
+          "reviews_ge1": 0.9999,
+          "reviews_ge5": 0.6858
+        },
+        "Electronics > Car Electronics for College": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Celestron": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Cell Phones & Accessories": {
+          "products": 12,
+          "with_title": 0.9167,
+          "with_price": 0.1667,
+          "with_brand": 1.0,
+          "with_features": 0.8333,
+          "with_description": 0.5833,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Chromebook Savings": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Computer Accessories & Peripherals Deal of the Day": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Computers & Accessories": {
+          "products": 107752,
+          "with_title": 1.0,
+          "with_price": 0.4299,
+          "with_brand": 0.9959,
+          "with_features": 0.8377,
+          "with_description": 0.586,
+          "details_ge1": 0.9972,
+          "details_ge5": 0.9579,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7005
+        },
+        "Electronics > Computers & Accessories Overstock Event": {
+          "products": 9,
+          "with_title": 1.0,
+          "with_price": 0.4444,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8889,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Computers Low Return Rate Alert": {
+          "products": 14,
+          "with_title": 1.0,
+          "with_price": 0.3571,
+          "with_brand": 1.0,
+          "with_features": 0.4286,
+          "with_description": 0.2857,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9286
+        },
+        "Electronics > Computers and Accessories Quantity Pricing": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Contour": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Cool & Quirky Tech Accessories": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Deal of the Day | New Year, New Tech Gear": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Deal of the Day: Up to 50% Off Select Tech Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Deep Discounts in Camera, Photo & Video": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.6,
+          "with_description": 0.6,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8
+        },
+        "Electronics > Deep Discounts in Car Electronics and GPS & Navigation": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Deep Discounts in Portable Audio & Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Dell Accessories": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.5
+        },
+        "Electronics > Dell Monitor Promotion": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Devices with Enhanced Amazon Instant Video Viewing Experience": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Discover Holiday - MP3 & Media Players": {
+          "products": 12,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8333,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.75
+        },
+        "Electronics > Discover Holiday - TV & Video": {
+          "products": 9,
+          "with_title": 1.0,
+          "with_price": 0.1111,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.5556
+        },
+        "Electronics > Drone Store | Accessories": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.2,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Echo Holiday Skins": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.0,
+          "details_ge1": 1.0,
+          "details_ge5": 0.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Electronics $5 Store": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 0.5,
+          "with_description": 0.5,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Electronics & Wireless Outlet": {
+          "products": 25,
+          "with_title": 1.0,
+          "with_price": 0.72,
+          "with_brand": 1.0,
+          "with_features": 0.84,
+          "with_description": 0.72,
+          "details_ge1": 1.0,
+          "details_ge5": 0.96,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.72
+        },
+        "Electronics > Electronics Emergency Preparedness": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Electronics Gift Guide - Top Tech for Gifting": {
+          "products": 45,
+          "with_title": 1.0,
+          "with_price": 0.2222,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.9556,
+          "details_ge1": 0.9778,
+          "details_ge5": 0.9778,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Electronics Holiday Shopping": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Electronics International Versions": {
+          "products": 14,
+          "with_title": 1.0,
+          "with_price": 0.0714,
+          "with_brand": 1.0,
+          "with_features": 0.7857,
+          "with_description": 0.5714,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8571
+        },
+        "Electronics > Electronics Top Holiday Deals": {
+          "products": 15,
+          "with_title": 1.0,
+          "with_price": 0.3333,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8667
+        },
+        "Electronics > Electronics Warranties": {
+          "products": 1739,
+          "with_title": 1.0,
+          "with_price": 0.3795,
+          "with_brand": 0.9994,
+          "with_features": 0.6159,
+          "with_description": 0.4508,
+          "details_ge1": 0.9603,
+          "details_ge5": 0.1001,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8902
+        },
+        "Electronics > Emerging Technologies": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Entertainment Networking": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.6,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > FREE One Day Shipping with Citi-Electronics On the Go": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > FREE One-Day Shipping in TV, Video & Audio with your Citi Card": {
+          "products": 24,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.7917,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9583
+        },
+        "Electronics > FREE One-Day Shipping on Select Electronics with your Discover Card": {
+          "products": 8,
+          "with_title": 1.0,
+          "with_price": 0.625,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > FREE Two-Day Shipping in Camera, Photo & Video": {
+          "products": 8,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.75,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 0.875,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.625
+        },
+        "Electronics > Fall Outlet Event in Computers & Accessories": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Featured Overstock in Mobile Electronics": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Featured iPad Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Fitness Headphones": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Free One Day Shipping | Mobile Electronics": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Fujifilm": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > GPS, Finders & Accessories": {
+          "products": 3656,
+          "with_title": 0.9997,
+          "with_price": 0.5016,
+          "with_brand": 0.9978,
+          "with_features": 0.9032,
+          "with_description": 0.6775,
+          "details_ge1": 0.9984,
+          "details_ge5": 0.9573,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7412
+        },
+        "Electronics > Gaming Accessories": {
+          "products": 53,
+          "with_title": 1.0,
+          "with_price": 0.3019,
+          "with_brand": 1.0,
+          "with_features": 0.9811,
+          "with_description": 0.8868,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9623
+        },
+        "Electronics > Gaming PC": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Gear for the Urban Commuter": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Get up to 3 free game codes": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Gift Ideas": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8
+        },
+        "Electronics > Gifts": {
+          "products": 13,
+          "with_title": 1.0,
+          "with_price": 0.0769,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8462
+        },
+        "Electronics > Gifts for Dads & Grads in Electronics": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > GoPro Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > HP": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.6,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6
+        },
+        "Electronics > Hands-Free Action Cameras": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Headphones & Components": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Headphones, Earbuds & Accessories": {
+          "products": 19287,
+          "with_title": 1.0,
+          "with_price": 0.3995,
+          "with_brand": 0.9985,
+          "with_features": 0.8302,
+          "with_description": 0.5345,
+          "details_ge1": 0.9978,
+          "details_ge5": 0.9815,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.765
+        },
+        "Electronics > Heavy Items": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Hero Quick Promotion": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > High-Tech Stocking Stuffers": {
+          "products": 8,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Home Audio": {
+          "products": 11291,
+          "with_title": 1.0,
+          "with_price": 0.5125,
+          "with_brand": 0.9988,
+          "with_features": 0.878,
+          "with_description": 0.6742,
+          "details_ge1": 0.9965,
+          "details_ge5": 0.9524,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7247
+        },
+        "Electronics > Home Audio Outlet": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Home Theater Projectors": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.5
+        },
+        "Electronics > Household Batteries, Chargers & Accessories": {
+          "products": 992,
+          "with_title": 1.0,
+          "with_price": 0.5806,
+          "with_brand": 0.996,
+          "with_features": 0.872,
+          "with_description": 0.5373,
+          "details_ge1": 0.995,
+          "details_ge5": 0.9345,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7833
+        },
+        "Electronics > JVC": {
+          "products": 6,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8333,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6667
+        },
+        "Electronics > June Audio Month Featured Deals": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Kids Character Cameras": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Kodak": {
+          "products": 13,
+          "with_title": 1.0,
+          "with_price": 0.3077,
+          "with_brand": 1.0,
+          "with_features": 0.7692,
+          "with_description": 0.8462,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8462
+        },
+        "Electronics > LG": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Laptop Travel Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Leica": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Logitech Universal Remotes": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > MP3 Players with Android": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Meet Windows 8": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.5
+        },
+        "Electronics > Metra Dynamic Coop": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Midland Dynamic Coop": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Midland Two-Way & Emergency Radios": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Mother's Day Gifts in Electronics Accessories": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Must-Have Gadgets for Summer Travel": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > New Arrivals - Electronics": {
+          "products": 28,
+          "with_title": 1.0,
+          "with_price": 0.7857,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.9643,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8571
+        },
+        "Electronics > New LG Prepaid Phones": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > New Year, New Tech Gear Electronics On the Go": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > New iPod Accessories": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6667
+        },
+        "Electronics > New in Electronics": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Nexus Tablet Accessories": {
+          "products": 14,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.7143,
+          "with_description": 0.2857,
+          "details_ge1": 1.0,
+          "details_ge5": 0.8571,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6429
+        },
+        "Electronics > Nikon": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.3333
+        },
+        "Electronics > Nokia Lumia 635 DOTD": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > OnePlus": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Optoma Projectors": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > PC & Camera Outlet": {
+          "products": 5,
+          "with_title": 1.0,
+          "with_price": 0.8,
+          "with_brand": 1.0,
+          "with_features": 0.6,
+          "with_description": 0.2,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.4
+        },
+        "Electronics > PC Gaming": {
+          "products": 50,
+          "with_title": 1.0,
+          "with_price": 0.26,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.94,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.98
+        },
+        "Electronics > PC Gaming & Accessories": {
+          "products": 9,
+          "with_title": 1.0,
+          "with_price": 0.1111,
+          "with_brand": 1.0,
+          "with_features": 0.6667,
+          "with_description": 0.6667,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > PC Part Finder": {
+          "products": 13,
+          "with_title": 1.0,
+          "with_price": 0.4615,
+          "with_brand": 1.0,
+          "with_features": 0.2308,
+          "with_description": 0.4615,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.3846
+        },
+        "Electronics > Popular Electronics": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Portable Audio & Video": {
+          "products": 11487,
+          "with_title": 0.9999,
+          "with_price": 0.3642,
+          "with_brand": 0.997,
+          "with_features": 0.8708,
+          "with_description": 0.6596,
+          "details_ge1": 0.9952,
+          "details_ge5": 0.9646,
+          "reviews_ge1": 0.9999,
+          "reviews_ge5": 0.7616
+        },
+        "Electronics > Portable Audio Spring Outlet": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Portable Electronics for Mother's Day": {
+          "products": 24,
+          "with_title": 1.0,
+          "with_price": 0.2917,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9583
+        },
+        "Electronics > Power Accessories": {
+          "products": 3424,
+          "with_title": 1.0,
+          "with_price": 0.7298,
+          "with_brand": 0.9982,
+          "with_features": 0.8975,
+          "with_description": 0.7266,
+          "details_ge1": 0.9988,
+          "details_ge5": 0.9568,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.533
+        },
+        "Electronics > Presidents Day Deals Electronics On the Go": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Protective Tablet Accessories": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.6667,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Pyle": {
+          "products": 11,
+          "with_title": 1.0,
+          "with_price": 0.0909,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7273
+        },
+        "Electronics > Qualifying Audible Devices": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.5,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Radio & Clock Stocking Stuffers": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Router & Cable Modem Bundles on Sale": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 0.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Samsung": {
+          "products": 12,
+          "with_title": 1.0,
+          "with_price": 0.1667,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Samsung Gift Ideas": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Samsung Tablet Accessories": {
+          "products": 7,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.5714,
+          "with_description": 0.5714,
+          "details_ge1": 1.0,
+          "details_ge5": 0.7143,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7143
+        },
+        "Electronics > Samsung Tablet Accessory Starter Kit": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Sandisk Dynamic Coop": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Scosche": {
+          "products": 6,
+          "with_title": 1.0,
+          "with_price": 0.1667,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6667
+        },
+        "Electronics > Security & Surveillance": {
+          "products": 3727,
+          "with_title": 1.0,
+          "with_price": 0.4492,
+          "with_brand": 0.9973,
+          "with_features": 0.8393,
+          "with_description": 0.5326,
+          "details_ge1": 0.9952,
+          "details_ge5": 0.9493,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.718
+        },
+        "Electronics > Security & Surveillance Product Finder": {
+          "products": 16,
+          "with_title": 1.0,
+          "with_price": 0.0625,
+          "with_brand": 1.0,
+          "with_features": 0.9375,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.75
+        },
+        "Electronics > Select Favorites in Computer Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Sennheiser Mics & Instrument Sets": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Service Contracts": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 0.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > Service Plans": {
+          "products": 66,
+          "with_title": 1.0,
+          "with_price": 0.0303,
+          "with_brand": 1.0,
+          "with_features": 0.4091,
+          "with_description": 0.9242,
+          "details_ge1": 0.9394,
+          "details_ge5": 0.1212,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9394
+        },
+        "Electronics > Social Photography": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.75,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Sony PC": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Spring Cleaning in Electronics Accessories": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Star Wars Day Tech Gadgets": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Summer Colors for Tech Accessories": {
+          "products": 8,
+          "with_title": 1.0,
+          "with_price": 0.375,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.75,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Summer Road Trip-Electronics On the Go": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Summer is Coming in Tech Accessories": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.75
+        },
+        "Electronics > Tablet Keyboards, Stands, & Styluses": {
+          "products": 7,
+          "with_title": 1.0,
+          "with_price": 0.1429,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.7143,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Tablet PCs": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.6667,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Tech Accessories": {
+          "products": 9,
+          "with_title": 1.0,
+          "with_price": 0.1111,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.6667,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Tech Accessories for Dads & Grads": {
+          "products": 28,
+          "with_title": 1.0,
+          "with_price": 0.25,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9643
+        },
+        "Electronics > Television & Video": {
+          "products": 20104,
+          "with_title": 1.0,
+          "with_price": 0.5016,
+          "with_brand": 0.9981,
+          "with_features": 0.8856,
+          "with_description": 0.6943,
+          "details_ge1": 0.9958,
+          "details_ge5": 0.9651,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7256
+        },
+        "Electronics > TomTom Dynamic Coop": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Toshiba": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Touchscreen Laptops": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Traditional Audio": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Truck & RV Electronics Store": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 0.5,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > V4 Customers Keep It - 30%": {
+          "products": 10,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.6,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > V4 Customers Keep It - 50%": {
+          "products": 11,
+          "with_title": 1.0,
+          "with_price": 0.5455,
+          "with_brand": 1.0,
+          "with_features": 0.8182,
+          "with_description": 0.3636,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9091
+        },
+        "Electronics > V4 Customers Keep It - 70%": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.25,
+          "details_ge1": 1.0,
+          "details_ge5": 0.75,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Valentine's Day": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Video Game Consoles & Accessories": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.5,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Video Projectors": {
+          "products": 1097,
+          "with_title": 1.0,
+          "with_price": 0.4512,
+          "with_brand": 1.0,
+          "with_features": 0.8888,
+          "with_description": 0.515,
+          "details_ge1": 0.9982,
+          "details_ge5": 0.9909,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.8086
+        },
+        "Electronics > Wearable Technology": {
+          "products": 5101,
+          "with_title": 1.0,
+          "with_price": 0.3537,
+          "with_brand": 0.9873,
+          "with_features": 0.7301,
+          "with_description": 0.3411,
+          "details_ge1": 0.9924,
+          "details_ge5": 0.6522,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7065
+        },
+        "Electronics > Wearable Technology 1.0": {
+          "products": 3,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Wearable Technology: Family, Kids & Pets": {
+          "products": 2,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Wearable Technology: Fitness & Wellness": {
+          "products": 4,
+          "with_title": 1.0,
+          "with_price": 0.5,
+          "with_brand": 1.0,
+          "with_features": 0.75,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.75
+        },
+        "Electronics > Wearable Technology: Kids & Pets": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 1.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Wearable Technology: Running Watches & Devices": {
+          "products": 12,
+          "with_title": 0.9167,
+          "with_price": 0.0833,
+          "with_brand": 1.0,
+          "with_features": 0.8333,
+          "with_description": 0.8333,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.9167
+        },
+        "Electronics > Wearable Technology: Smart Tracking": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > Western Digital": {
+          "products": 6,
+          "with_title": 1.0,
+          "with_price": 0.3333,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8333,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > eBook Readers & Accessories": {
+          "products": 1422,
+          "with_title": 1.0,
+          "with_price": 0.2658,
+          "with_brand": 0.9916,
+          "with_features": 0.7581,
+          "with_description": 0.5345,
+          "details_ge1": 0.993,
+          "details_ge5": 0.782,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.7082
+        },
+        "Electronics > iPad Accessories": {
+          "products": 18,
+          "with_title": 1.0,
+          "with_price": 0.1667,
+          "with_brand": 1.0,
+          "with_features": 0.8889,
+          "with_description": 0.8889,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.6667
+        },
+        "Electronics > iPad Accessory Starter Kit": {
+          "products": 6,
+          "with_title": 1.0,
+          "with_price": 0.6667,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.8333,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > iPad Air 2 & iPad mini 3 Accessories": {
+          "products": 6,
+          "with_title": 1.0,
+          "with_price": 0.1667,
+          "with_brand": 1.0,
+          "with_features": 0.8333,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > iPad Air Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 0.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.0
+        },
+        "Electronics > iPad Pro Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 0.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > iPad mini Accessories": {
+          "products": 1,
+          "with_title": 1.0,
+          "with_price": 0.0,
+          "with_brand": 1.0,
+          "with_features": 1.0,
+          "with_description": 1.0,
+          "details_ge1": 1.0,
+          "details_ge5": 1.0,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 1.0
+        },
+        "Electronics > samsung_tradein": {
+          "products": 338,
+          "with_title": 1.0,
+          "with_price": 0.3018,
+          "with_brand": 1.0,
+          "with_features": 0.8432,
+          "with_description": 0.858,
+          "details_ge1": 0.997,
+          "details_ge5": 0.9734,
+          "reviews_ge1": 1.0,
+          "reviews_ge5": 0.787
+        }
+      }
+    },
+    "R-03": {
+      "depth_distribution": {
+        "1": 3,
+        "2": 192,
+        "3": 203,
+        "4": 344,
+        "5": 337,
+        "6": 98,
+        "7": 6
+      },
+      "roots": 3,
+      "max_depth": 7,
+      "inner_node_assignments": 22684,
+      "products_without_taxon_by_main_category": {
+        "All Electronics": 7832,
+        "Amazon Devices": 1156,
+        "Amazon Fire TV": 13,
+        "Apple Products": 466,
+        "Camera & Photo": 685,
+        "Car Electronics": 336,
+        "Computers": 5351,
+        "GPS & Navigation": 109,
+        "Home Audio & Theater": 1190,
+        "Portable Audio & Accessories": 116
+      }
+    },
+    "R-04": {
+      "sampled": 5000,
+      "identical_with_different_text": [
+        {
+          "asin": "B007TCLK8S",
+          "other": "B0046HK6IE",
+          "score": 1.0
+        },
+        {
+          "asin": "B01NBYP217",
+          "other": "B00OS2NUT4",
+          "score": 1.0
+        },
+        {
+          "asin": "B000UWHZOC",
+          "other": "B003VRFP4K",
+          "score": 1.0
+        }
+      ],
+      "count": 3
+    },
+    "R-05": {
+      "groups": [
+        [
+          {
+            "name": "1Mii",
+            "products": 6
+          },
+          {
+            "name": "1mii",
+            "products": 26
+          }
+        ],
+        [
+          {
+            "name": "3PLUS",
+            "products": 1
+          },
+          {
+            "name": "3Plus",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "8Wireless",
+            "products": 23
+          },
+          {
+            "name": "8wireless",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ABCPOW",
+            "products": 4
+          },
+          {
+            "name": "AbcPow",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ABLY",
+            "products": 3
+          },
+          {
+            "name": "Ably",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ACE Seller",
+            "products": 1
+          },
+          {
+            "name": "Ace Seller",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "ACEGUARDER",
+            "products": 58
+          },
+          {
+            "name": "Aceguarder",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ACEGUARDER TECH",
+            "products": 2
+          },
+          {
+            "name": "Aceguarder TECH",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ACMAXX",
+            "products": 1
+          },
+          {
+            "name": "Acmaxx",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ACOMPATIBLE",
+            "products": 21
+          },
+          {
+            "name": "acompatible",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ACOODE",
+            "products": 1
+          },
+          {
+            "name": "Acoode",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ADATA",
+            "products": 86
+          },
+          {
+            "name": "Adata",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AEAPYAR",
+            "products": 5
+          },
+          {
+            "name": "AeapYar",
+            "products": 36
+          }
+        ],
+        [
+          {
+            "name": "AGOUNOD",
+            "products": 1
+          },
+          {
+            "name": "agounod",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AILI",
+            "products": 1
+          },
+          {
+            "name": "AiLi",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AINOPE",
+            "products": 52
+          },
+          {
+            "name": "Ainope",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AKAI",
+            "products": 11
+          },
+          {
+            "name": "Akai",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AKALE",
+            "products": 3
+          },
+          {
+            "name": "Akale",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "AKEN TECH",
+            "products": 1
+          },
+          {
+            "name": "Aken Tech",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AKWOR",
+            "products": 9
+          },
+          {
+            "name": "AKwor",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AKWOX",
+            "products": 44
+          },
+          {
+            "name": "Akwox",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ALFA",
+            "products": 11
+          },
+          {
+            "name": "Alfa",
+            "products": 5
+          }
+        ],
+        [
+          {
+            "name": "ALPINE",
+            "products": 3
+          },
+          {
+            "name": "Alpine",
+            "products": 109
+          }
+        ],
+        [
+          {
+            "name": "ALPTOP",
+            "products": 1
+          },
+          {
+            "name": "Alptop",
+            "products": 9
+          }
+        ],
+        [
+          {
+            "name": "ANDERSON POWER PRODUCTS",
+            "products": 1
+          },
+          {
+            "name": "Anderson Power Products",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ANDHOT",
+            "products": 2
+          },
+          {
+            "name": "AndHot",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ANDREA",
+            "products": 2
+          },
+          {
+            "name": "Andrea",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "ANGIEHAIE",
+            "products": 3
+          },
+          {
+            "name": "Angiehaie",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "ANGROX",
+            "products": 1
+          },
+          {
+            "name": "Angrox",
+            "products": 13
+          }
+        ],
+        [
+          {
+            "name": "ANTIER",
+            "products": 7
+          },
+          {
+            "name": "antier",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ANTOBLE",
+            "products": 44
+          },
+          {
+            "name": "antoble",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ANTOP ANTENNA",
+            "products": 16
+          },
+          {
+            "name": "ANTOP Antenna",
+            "products": 122
+          }
+        ],
+        [
+          {
+            "name": "APOGEE",
+            "products": 1
+          },
+          {
+            "name": "Apogee",
+            "products": 6
+          }
+        ],
+        [
+          {
+            "name": "ARCHEER",
+            "products": 8
+          },
+          {
+            "name": "Archeer",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "ARION",
+            "products": 1
+          },
+          {
+            "name": "Arion",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ARKON",
+            "products": 107
+          },
+          {
+            "name": "Arkon",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ARMOR",
+            "products": 1
+          },
+          {
+            "name": "Armor",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ARRIS",
+            "products": 46
+          },
+          {
+            "name": "Arris",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ART",
+            "products": 6
+          },
+          {
+            "name": "Art",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ARTIX",
+            "products": 18
+          },
+          {
+            "name": "Artix",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ASIAHORSE",
+            "products": 14
+          },
+          {
+            "name": "AsiaHorse",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "ASUS",
+            "products": 1549
+          },
+          {
+            "name": "Asus",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "ATC",
+            "products": 7
+          },
+          {
+            "name": "Atc",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "ATHENA POWER",
+            "products": 1
+          },
+          {
+            "name": "Athena Power",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ATIVA",
+            "products": 6
+          },
+          {
+            "name": "Ativa",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AU Optronics",
+            "products": 9
+          },
+          {
+            "name": "au optronics",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AUAUA",
+            "products": 1
+          },
+          {
+            "name": "auaua",
+            "products": 9
+          }
+        ],
+        [
+          {
+            "name": "AUDIOTEK",
+            "products": 6
+          },
+          {
+            "name": "Audiotek",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AURUM CABLES",
+            "products": 17
+          },
+          {
+            "name": "Aurum Cables",
+            "products": 104
+          }
+        ],
+        [
+          {
+            "name": "AVITAL",
+            "products": 1
+          },
+          {
+            "name": "Avital",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AXION",
+            "products": 5
+          },
+          {
+            "name": "Axion",
+            "products": 6
+          },
+          {
+            "name": "axion",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AXIS",
+            "products": 14
+          },
+          {
+            "name": "Axis",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AYANGYANG",
+            "products": 1
+          },
+          {
+            "name": "ayangyang",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Abode",
+            "products": 5
+          },
+          {
+            "name": "abode",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Acer",
+            "products": 544
+          },
+          {
+            "name": "acer",
+            "products": 220
+          }
+        ],
+        [
+          {
+            "name": "Aiworth",
+            "products": 4
+          },
+          {
+            "name": "aiworth",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AllSmartLife",
+            "products": 1
+          },
+          {
+            "name": "Allsmartlife",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "Allytech",
+            "products": 14
+          },
+          {
+            "name": "allytech",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Amar",
+            "products": 1
+          },
+          {
+            "name": "amar",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Amasing",
+            "products": 2
+          },
+          {
+            "name": "amasing",
+            "products": 15
+          }
+        ],
+        [
+          {
+            "name": "AngLink",
+            "products": 1
+          },
+          {
+            "name": "Anglink",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "Angeloken",
+            "products": 1
+          },
+          {
+            "name": "angeloken",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AnoKe",
+            "products": 11
+          },
+          {
+            "name": "anoke",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Anrain",
+            "products": 5
+          },
+          {
+            "name": "anrain",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Anttrades",
+            "products": 3
+          },
+          {
+            "name": "anttrades",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "Archgon",
+            "products": 3
+          },
+          {
+            "name": "archgon",
+            "products": 5
+          }
+        ],
+        [
+          {
+            "name": "Aurosports",
+            "products": 3
+          },
+          {
+            "name": "aurosports",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "AutumnFall",
+            "products": 2
+          },
+          {
+            "name": "autumnfall",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "AwesomeToner",
+            "products": 1
+          },
+          {
+            "name": "Awesometoner",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "Axiom",
+            "products": 21
+          },
+          {
+            "name": "axiom",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BBInfinite",
+            "products": 8
+          },
+          {
+            "name": "BBinfinite",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "BBeegod",
+            "products": 1
+          },
+          {
+            "name": "Bbeegod",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "BEBEBAO",
+            "products": 6
+          },
+          {
+            "name": "bebebao",
+            "products": 25
+          }
+        ],
+        [
+          {
+            "name": "BEPACK",
+            "products": 1
+          },
+          {
+            "name": "Bepack",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BEST",
+            "products": 1
+          },
+          {
+            "name": "Best",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BEST DEAL",
+            "products": 1
+          },
+          {
+            "name": "Best Deal",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BEST4ONE",
+            "products": 1
+          },
+          {
+            "name": "best4one",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BESTTRENDY",
+            "products": 1
+          },
+          {
+            "name": "BestTrendy",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BITDEFENDER",
+            "products": 1
+          },
+          {
+            "name": "Bitdefender",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "BLACK DIAMOND",
+            "products": 3
+          },
+          {
+            "name": "Black Diamond",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "BLOODY",
+            "products": 2
+          },
+          {
+            "name": "Bloody",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BLUE PANDA",
+            "products": 2
+          },
+          {
+            "name": "Blue Panda",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BLUREX",
+            "products": 1
+          },
+          {
+            "name": "Blurex",
+            "products": 5
+          },
+          {
+            "name": "blurex",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "BNBKFD",
+            "products": 1
+          },
+          {
+            "name": "bnbkfd",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "BOBLOV",
+            "products": 18
+          },
+          {
+            "name": "Boblov",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BOE",
+            "products": 1
+          },
+          {
+            "name": "Boe",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BONAMART",
+            "products": 2
+          },
+          {
+            "name": "Bonamart",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "BOPAI",
+            "products": 4
+          },
+          {
+            "name": "BOPai",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BORIYUAN",
+            "products": 28
+          },
+          {
+            "name": "Boriyuan",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BOSE",
+            "products": 2
+          },
+          {
+            "name": "Bose",
+            "products": 337
+          }
+        ],
+        [
+          {
+            "name": "BOWER",
+            "products": 66
+          },
+          {
+            "name": "Bower",
+            "products": 9
+          }
+        ],
+        [
+          {
+            "name": "BOYISEN",
+            "products": 1
+          },
+          {
+            "name": "Boyisen",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "BRADY",
+            "products": 1
+          },
+          {
+            "name": "Brady",
+            "products": 20
+          }
+        ],
+        [
+          {
+            "name": "BRIDGECOM SYSTEMS",
+            "products": 2
+          },
+          {
+            "name": "BridgeCom Systems",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "BROOKSTONE",
+            "products": 1
+          },
+          {
+            "name": "Brookstone",
+            "products": 34
+          }
+        ],
+        [
+          {
+            "name": "BTC",
+            "products": 1
+          },
+          {
+            "name": "btc",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BUFFALO",
+            "products": 92
+          },
+          {
+            "name": "Buffalo",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "BUSlink",
+            "products": 8
+          },
+          {
+            "name": "Buslink",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "Banshee",
+            "products": 6
+          },
+          {
+            "name": "banshee",
+            "products": 12
+          }
+        ],
+        [
+          {
+            "name": "BargainCell",
+            "products": 1
+          },
+          {
+            "name": "Bargaincell",
+            "products": 25
+          }
+        ],
+        [
+          {
+            "name": "BattPit™",
+            "products": 1
+          },
+          {
+            "name": "battpit™",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Besiva",
+            "products": 2
+          },
+          {
+            "name": "besiva",
+            "products": 24
+          }
+        ],
+        [
+          {
+            "name": "BestPriceCenter",
+            "products": 1
+          },
+          {
+            "name": "Bestpricecenter",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Bestfavor",
+            "products": 1
+          },
+          {
+            "name": "bestfavor",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Bestkong",
+            "products": 1
+          },
+          {
+            "name": "bestkong",
+            "products": 7
+          }
+        ],
+        [
+          {
+            "name": "BigFish",
+            "products": 1
+          },
+          {
+            "name": "Bigfish",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BingoBuy",
+            "products": 40
+          },
+          {
+            "name": "bingobuy",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Birgus",
+            "products": 3
+          },
+          {
+            "name": "birgus",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Blackweb",
+            "products": 1
+          },
+          {
+            "name": "blackweb",
+            "products": 7
+          }
+        ],
+        [
+          {
+            "name": "BlueFinger",
+            "products": 7
+          },
+          {
+            "name": "Bluefinger",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BlueLark",
+            "products": 2
+          },
+          {
+            "name": "Bluelark",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BlueMall",
+            "products": 4
+          },
+          {
+            "name": "Bluemall",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BlueTech",
+            "products": 1
+          },
+          {
+            "name": "Bluetech",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "Blurams",
+            "products": 4
+          },
+          {
+            "name": "blurams",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "BoomBa",
+            "products": 3
+          },
+          {
+            "name": "Boomba",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BoxWave",
+            "products": 5
+          },
+          {
+            "name": "Boxwave",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "BrainyDeal",
+            "products": 5
+          },
+          {
+            "name": "Brainydeal",
+            "products": 21
+          }
+        ],
+        [
+          {
+            "name": "Brave troops",
+            "products": 4
+          },
+          {
+            "name": "brave troops",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Bright Stone",
+            "products": 2
+          },
+          {
+            "name": "bright stone",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Buyonline",
+            "products": 1
+          },
+          {
+            "name": "buyonline",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "C-Zone",
+            "products": 2
+          },
+          {
+            "name": "C-zone",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "CAI",
+            "products": 1
+          },
+          {
+            "name": "Cai",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CAR ROVER",
+            "products": 4
+          },
+          {
+            "name": "Car Rover",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CASE STAR",
+            "products": 2
+          },
+          {
+            "name": "Case Star",
+            "products": 48
+          },
+          {
+            "name": "case star",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "CASEKEY",
+            "products": 2
+          },
+          {
+            "name": "Casekey",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CBoner",
+            "products": 4
+          },
+          {
+            "name": "Cboner",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "CCT",
+            "products": 1
+          },
+          {
+            "name": "Cct",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CELLBELL",
+            "products": 6
+          },
+          {
+            "name": "Cellbell",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CENSI",
+            "products": 1
+          },
+          {
+            "name": "Censi",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "CESS",
+            "products": 35
+          },
+          {
+            "name": "cess",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CHENDUOMI",
+            "products": 1
+          },
+          {
+            "name": "Chenduomi",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "CHERRY",
+            "products": 1
+          },
+          {
+            "name": "Cherry",
+            "products": 18
+          }
+        ],
+        [
+          {
+            "name": "CHILL pILL auDIO",
+            "products": 1
+          },
+          {
+            "name": "Chill Pill Audio",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CHINA",
+            "products": 1
+          },
+          {
+            "name": "China",
+            "products": 12
+          }
+        ],
+        [
+          {
+            "name": "CHIULOIAN",
+            "products": 4
+          },
+          {
+            "name": "chiuloian",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CHUANGDI",
+            "products": 1
+          },
+          {
+            "name": "Chuangdi",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "CISOO",
+            "products": 9
+          },
+          {
+            "name": "CiSoo",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "CLANMOU",
+            "products": 2
+          },
+          {
+            "name": "Clanmou",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CLEAR",
+            "products": 3
+          },
+          {
+            "name": "Clear",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "COACH",
+            "products": 5
+          },
+          {
+            "name": "Coach",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CODi",
+            "products": 6
+          },
+          {
+            "name": "Codi",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "COLEMAN",
+            "products": 5
+          },
+          {
+            "name": "Coleman",
+            "products": 21
+          }
+        ],
+        [
+          {
+            "name": "COMPLY",
+            "products": 44
+          },
+          {
+            "name": "Comply",
+            "products": 16
+          }
+        ],
+        [
+          {
+            "name": "COMSUN",
+            "products": 1
+          },
+          {
+            "name": "Comsun",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "COMTREND",
+            "products": 1
+          },
+          {
+            "name": "Comtrend",
+            "products": 5
+          }
+        ],
+        [
+          {
+            "name": "COOLMAX",
+            "products": 4
+          },
+          {
+            "name": "Coolmax",
+            "products": 11
+          }
+        ],
+        [
+          {
+            "name": "COOPERS",
+            "products": 1
+          },
+          {
+            "name": "Coopers",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "COPARTNER",
+            "products": 1
+          },
+          {
+            "name": "Copartner",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CORNMI",
+            "products": 2
+          },
+          {
+            "name": "Cornmi",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "COROS",
+            "products": 1
+          },
+          {
+            "name": "Coros",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "COSMOS",
+            "products": 9
+          },
+          {
+            "name": "Cosmos",
+            "products": 70
+          }
+        ],
+        [
+          {
+            "name": "COSTIN",
+            "products": 1
+          },
+          {
+            "name": "Costin",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "COUGAR",
+            "products": 2
+          },
+          {
+            "name": "Cougar",
+            "products": 19
+          }
+        ],
+        [
+          {
+            "name": "CRAIG",
+            "products": 1
+          },
+          {
+            "name": "Craig",
+            "products": 31
+          }
+        ],
+        [
+          {
+            "name": "CRUCIAL TECHNOLOGY",
+            "products": 5
+          },
+          {
+            "name": "Crucial Technology",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CS Battery",
+            "products": 1
+          },
+          {
+            "name": "cs battery",
+            "products": 9
+          }
+        ],
+        [
+          {
+            "name": "CURTIS",
+            "products": 22
+          },
+          {
+            "name": "Curtis",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "CUSTOM",
+            "products": 1
+          },
+          {
+            "name": "Custom",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CYPHER.V",
+            "products": 2
+          },
+          {
+            "name": "Cypher.V",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "Cable",
+            "products": 1
+          },
+          {
+            "name": "cable",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "CablesFrLess (TM)",
+            "products": 2
+          },
+          {
+            "name": "Cablesfrless (Tm)",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Calvas",
+            "products": 5
+          },
+          {
+            "name": "calvas",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Canvaslife",
+            "products": 2
+          },
+          {
+            "name": "canvaslife",
+            "products": 18
+          }
+        ],
+        [
+          {
+            "name": "CarXtc",
+            "products": 1
+          },
+          {
+            "name": "Carxtc",
+            "products": 69
+          }
+        ],
+        [
+          {
+            "name": "Caseable",
+            "products": 1
+          },
+          {
+            "name": "caseable",
+            "products": 5
+          }
+        ],
+        [
+          {
+            "name": "Caseling",
+            "products": 2
+          },
+          {
+            "name": "caseling",
+            "products": 43
+          }
+        ],
+        [
+          {
+            "name": "Changeshopping",
+            "products": 1
+          },
+          {
+            "name": "changeshopping",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Chenyang",
+            "products": 1
+          },
+          {
+            "name": "chenyang",
+            "products": 56
+          }
+        ],
+        [
+          {
+            "name": "Cherrry",
+            "products": 13
+          },
+          {
+            "name": "cherrry",
+            "products": 12
+          }
+        ],
+        [
+          {
+            "name": "Chromo Inc",
+            "products": 14
+          },
+          {
+            "name": "chromo inc",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CiNgK",
+            "products": 9
+          },
+          {
+            "name": "Cingk",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Cimo",
+            "products": 4
+          },
+          {
+            "name": "cimo",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Climberer",
+            "products": 1
+          },
+          {
+            "name": "climberer",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CoCube+",
+            "products": 5
+          },
+          {
+            "name": "Cocube+",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "ColorCase",
+            "products": 1
+          },
+          {
+            "name": "Colorcase",
+            "products": 7
+          }
+        ],
+        [
+          {
+            "name": "ColorfulCase",
+            "products": 8
+          },
+          {
+            "name": "colorfulcase",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CompuLab",
+            "products": 9
+          },
+          {
+            "name": "Compulab",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Coms",
+            "products": 1
+          },
+          {
+            "name": "coms",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Coodio",
+            "products": 31
+          },
+          {
+            "name": "coodio",
+            "products": 7
+          }
+        ],
+        [
+          {
+            "name": "CoolBELL",
+            "products": 49
+          },
+          {
+            "name": "CoolBell",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "Coolgear",
+            "products": 3
+          },
+          {
+            "name": "coolgear",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "Cotsoco",
+            "products": 1
+          },
+          {
+            "name": "cotsoco",
+            "products": 4
+          }
+        ],
+        [
+          {
+            "name": "Crazy Cart",
+            "products": 28
+          },
+          {
+            "name": "Crazy cart",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "CrazyOnDigital",
+            "products": 56
+          },
+          {
+            "name": "Crazyondigital",
+            "products": 2
+          },
+          {
+            "name": "crazyondigital",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "Custom House Trading",
+            "products": 1
+          },
+          {
+            "name": "Custom house trading",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "DAHUA",
+            "products": 4
+          },
+          {
+            "name": "Dahua",
+            "products": 5
+          }
+        ],
+        [
+          {
+            "name": "DAISEN",
+            "products": 2
+          },
+          {
+            "name": "daisen",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "DAVIS & SANFORD",
+            "products": 1
+          },
+          {
+            "name": "Davis & Sanford",
+            "products": 12
+          }
+        ],
+        [
+          {
+            "name": "DB ROTH",
+            "products": 6
+          },
+          {
+            "name": "db roth",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "DBillionDa",
+            "products": 1
+          },
+          {
+            "name": "DbillionDa",
+            "products": 8
+          }
+        ],
+        [
+          {
+            "name": "DCO",
+            "products": 3
+          },
+          {
+            "name": "dco",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "DEEGO",
+            "products": 24
+          },
+          {
+            "name": "Deego",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "DELL",
+            "products": 2
+          },
+          {
+            "name": "Dell",
+            "products": 1140
+          }
+        ],
+        [
+          {
+            "name": "DEMACIA",
+            "products": 1
+          },
+          {
+            "name": "Demacia",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "DENPETEC",
+            "products": 3
+          },
+          {
+            "name": "Denpetec",
+            "products": 2
+          }
+        ],
+        [
+          {
+            "name": "DERUI",
+            "products": 2
+          },
+          {
+            "name": "Derui",
+            "products": 3
+          }
+        ],
+        [
+          {
+            "name": "DIABLOTEK",
+            "products": 1
+          },
+          {
+            "name": "Diablotek",
+            "products": 5
+          }
+        ],
+        [
+          {
+            "name": "DIAOTEC",
+            "products": 1
+          },
+          {
+            "name": "Diaotec",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "DICAPAC",
+            "products": 13
+          },
+          {
+            "name": "DiCAPac",
+            "products": 3
+          },
+          {
+            "name": "Dicapac",
+            "products": 1
+          }
+        ],
+        [
+          {
+            "name": "DICE",
+            "products": 1
+          },
+          {
+            "name": "dICE",
+            "products": 1
+          }
+        ]
+      ],
+      "count": 925
+    },
+    "R-06": {
+      "count": 213,
+      "asins": [
+        "0011300000",
+        "0060897082",
+        "0062970704",
+        "007329506X",
+        "0140194614",
+        "0205291252",
+        "0312171048",
+        "0312929420",
+        "0314185550",
+        "0345803507",
+        "0511189877",
+        "0525566651",
+        "0528013475",
+        "0528881469",
+        "0544005031",
+        "0547152469",
+        "059400232X",
+        "0594033926",
+        "0594296420",
+        "0594450268",
+        "0594451647",
+        "0594459451",
+        "0594481813",
+        "0594481902",
+        "0594515157",
+        "0594515939",
+        "0594549531",
+        "0618184163",
+        "067167949X",
+        "068112749X",
+        "0684873176",
+        "0739062581",
+        "0743406176",
+        "0743611039",
+        "0749941847",
+        "0761169334",
+        "0761169377",
+        "0786296151",
+        "0789743035",
+        "0789743965",
+        "078975102X",
+        "0789751828",
+        "079443794X",
+        "0840017677",
+        "0865714843",
+        "0899332897",
+        "0899333257",
+        "0972683275",
+        "0974008664",
+        "097587005X",
+        "0990696561",
+        "0998636789",
+        "1060241412",
+        "106043394X",
+        "1061512711",
+        "106171327X",
+        "1091922721",
+        "1254875778",
+        "1319149588",
+        "1323549889",
+        "1400069181",
+        "1400501466",
+        "1400532655",
+        "140053271X",
+        "1400532736",
+        "1400599997",
+        "1400666937",
+        "1400699169",
+        "1409144488",
+        "1416593535",
+        "1426320965",
+        "1432756958",
+        "1441314075",
+        "1446301850",
+        "1449410243",
+        "1450559883",
+        "1450874371",
+        "1451529082",
+        "1461072131",
+        "1463553943",
+        "1464120153",
+        "1503716821",
+        "1524746029",
+        "1567120709",
+        "1580176453",
+        "1589615891",
+        "1591962749",
+        "1592576346",
+        "1593272111",
+        "1593278551",
+        "159668013X",
+        "160747722X",
+        "1607740370",
+        "1607860015",
+        "1612233163",
+        "1615513353",
+        "1615527613",
+        "1615640037",
+        "1616813830",
+        "1616825375",
+        "161685572X",
+        "1618541110",
+        "1618542605",
+        "162209641X",
+        "1681983389",
+        "1733456007",
+        "1741045401",
+        "1772761486",
+        "178524423X",
+        "1888992778",
+        "1891396722",
+        "1908424036",
+        "1908497661",
+        "1931177007",
+        "1931498121",
+        "1931567395",
+        "1933622709",
+        "1933622725",
+        "1933622733",
+        "1933622741",
+        "193362275X",
+        "1935009028",
+        "1935009036",
+        "1935009184",
+        "1935009303",
+        "1935009311",
+        "193500932X",
+        "1935009338",
+        "1935009346",
+        "1935009362",
+        "1937702073",
+        "1944288023",
+        "1946494186",
+        "1947758527",
+        "1947997017",
+        "303819459X",
+        "3744295478",
+        "3744295508",
+        "3979050483",
+        "6000008775",
+        "6300215695",
+        "6302453356",
+        "7521658035",
+        "7799813393",
+        "8496106705",
+        "8862931379",
+        "8866136042",
+        "8867322621",
+        "8918010656",
+        "9573212919",
+        "9574811018",
+        "9587570790",
+        "9625993428",
+        "9714961297",
+        "979139721X",
+        "980035977X",
+        "9803751263",
+        "9806010728",
+        "983137861X",
+        "9861022007",
+        "9867853121",
+        "9875971812",
+        "987598180X",
+        "9875981818",
+        "9876040456",
+        "9876050621",
+        "9876096443",
+        "9876128515",
+        "9876349341",
+        "9876349546",
+        "9888002198",
+        "9966271953",
+        "9966279946",
+        "9966287728",
+        "9966288953",
+        "9966288996",
+        "9966292020",
+        "9966299211",
+        "9966308237",
+        "9966326561",
+        "9966371877",
+        "9966569863",
+        "9966573445",
+        "9966643389",
+        "9966694544",
+        "9966695680",
+        "9973243277",
+        "9973399986",
+        "9981737593",
+        "9983039281",
+        "9983721104",
+        "9983765012",
+        "9983891212",
+        "9983902842",
+        "9984272494",
+        "9984910482",
+        "9984984354",
+        "9985018036",
+        "998504780X",
+        "9985502825"
+      ]
+    },
+    "R-07": {
+      "differences": [
+        {
+          "query_id": "live_eval_camera_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 79,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_camera_02",
+          "changes": {
+            "review_nodes": {
+              "v1": 160,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_camera_03",
+          "changes": {
+            "review_nodes": {
+              "v1": 164,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_phone_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 69,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_phone_02",
+          "changes": {
+            "review_nodes": {
+              "v1": 116,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_phone_03",
+          "changes": {
+            "review_nodes": {
+              "v1": 116,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_charger_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 12,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_charger_02",
+          "changes": {
+            "categories": {
+              "v1": [],
+              "v2": [
+                "Apple Products"
+              ]
+            },
+            "review_nodes": {
+              "v1": 53,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_charger_03",
+          "changes": {
+            "review_nodes": {
+              "v1": 81,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_mouse_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 360,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_mouse_02",
+          "changes": {
+            "review_nodes": {
+              "v1": 27,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_mouse_03",
+          "changes": {
+            "review_nodes": {
+              "v1": 83,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_headphone_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 98,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_headphone_02",
+          "changes": {
+            "review_nodes": {
+              "v1": 60,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_headphone_03",
+          "changes": {
+            "review_nodes": {
+              "v1": 472,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_laptop_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 85,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_laptop_02",
+          "changes": {
+            "review_nodes": {
+              "v1": 33,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_keyboard_01",
+          "changes": {
+            "review_nodes": {
+              "v1": 60,
+              "v2": 20
+            }
+          }
+        },
+        {
+          "query_id": "live_eval_keyboard_02",
+          "changes": {
+            "review_nodes": {
+              "v1": 40,
+              "v2": 20
+            }
+          }
+        }
+      ]
+    },
+    "R-08": {
+      "nodes": {
+        "Aspect": {
+          "v1": 0,
+          "v2": null
+        },
+        "Attribute": {
+          "v1": 47335,
+          "v2": 36187
+        },
+        "Brand": {
+          "v1": 40998,
+          "v2": 49663
+        },
+        "Category": {
+          "v1": 71,
+          "v2": 38
+        },
+        "CoPurchaseSet": {
+          "v1": 0,
+          "v2": null
+        },
+        "GraphVersion": {
+          "v1": null,
+          "v2": 0
+        },
+        "ParentProduct": {
+          "v1": 265307,
+          "v2": 265307
+        },
+        "PriceRange": {
+          "v1": 3,
+          "v2": null
+        },
+        "Product": {
+          "v1": 25,
+          "v2": null
+        },
+        "Review": {
+          "v1": 1629426,
+          "v2": 3382248
+        },
+        "Taxon": {
+          "v1": null,
+          "v2": 1183
+        },
+        "User": {
+          "v1": 471474,
+          "v2": 2594661
+        },
+        "Variant": {
+          "v1": 31,
+          "v2": null
+        }
+      },
+      "relationships": {
+        "ABOUT_PRODUCT": {
+          "v1": 1634273,
+          "v2": 3382248
+        },
+        "BELONGS_TO_CATEGORY": {
+          "v1": 159475,
+          "v2": 261664
+        },
+        "BROADER": {
+          "v1": null,
+          "v2": 1180
+        },
+        "HAS_ATTRIBUTE": {
+          "v1": 111015,
+          "v2": 190043
+        },
+        "HAS_BRAND": {
+          "v1": 160135,
+          "v2": 264274
+        },
+        "IN_PRICE_RANGE": {
+          "v1": 38,
+          "v2": null
+        },
+        "IN_TAXON": {
+          "v1": null,
+          "v2": 248053
+        },
+        "IS_VARIANT_OF": {
+          "v1": 6,
+          "v2": null
+        },
+        "RATED": {
+          "v1": 16,
+          "v2": null
+        },
+        "REVIEWS": {
+          "v1": 4847,
+          "v2": null
+        },
+        "SUBCATEGORY_OF": {
+          "v1": 33,
+          "v2": null
+        },
+        "WROTE": {
+          "v1": 1624586,
+          "v2": 3382248
+        }
+      },
+      "untitled_share": {
+        "v1": 0.393058,
+        "v2": 3e-05
+      },
+      "review_embedded_product_coverage": {
+        "v1": 0.021541,
+        "v2": 0.999951
+      }
+    }
+  }
+}

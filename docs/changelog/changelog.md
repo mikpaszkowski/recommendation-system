@@ -5,6 +5,848 @@
 
 ---
 
+## 📅 2026-10-22 (Release R3.2: Hybrydowe Dopasowanie Typu Produktu Niezależne od Domeny oraz Indukcja W3C SKOS altLabels [RS-24])
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-21 dot. Release R3.1)
+
+> **Kontekst**: W audycie po Release R3.1 zidentyfikowano, że 13 ze 105 zapytań zbioru tuningowego (`evaluations/benchmarks/benchmark_v2.json`) cierpiało na całkowite odrzucenie produktu docelowego przez filtr kategoryczny (Target Admission wynosił $87.6\%$). Analiza wykazała cztery kluczowe źródła problemu:
+> 1. **Morfologiczne przejęcie taksonomii przez kontenery akcesoriów (Taxonomic Hijacking)**: Zapytania o urządzenia w liczbie pojedynczej (`Laptop`, `Tablet`, `Mouse`, `Phone`, `microphone`) nie trafiały w dokładną nazwę węzła w Tier 1 (gdzie kategorie urządzeń są w l. mn.: `Laptops`, `Tablets`, `Mice`, `Microphones`), przez co spadały do Tier 2 regex i były przejmowane przez liczniejsze kategorie akcesoriów (`Laptop Accessories`, `Tablet Accessories`, `Keyboard & Mouse Combos`).
+> 2. **Błędy kategoryzacji w katalogu źródłowym (Catalog Misclassification)**: Prawdziwe urządzenia zaklasyfikowane pod węzłami promocyjnymi lub zastępczymi (np. smartfon `Samsung Galaxy S20+` pod `samsung_tradein`).
+> 3. **Brakujące relacje taksonomiczne (Empty Taxa)**: Urządzenia bez przypisanego węzła taksonu w grafie (np. `MacBook Air M2` z `taxa = []`).
+> 4. **Rozszczepienie kategorii na rozłączne gałęzie taksonomiczne (Cross-Subtree Splits)**: Pytania o typ produktu, którego asortyment jest podzielony pomiędzy odległe gałęzie (np. `Charger` rozbity na `Chargers & Adapters` oraz `Batteries & Chargers`; `Camera` z kontekstem kamery internetowej rozbity na `Digital Cameras` oraz `Webcams`).
+>
+> Zrealizowano kompleksowy pakiet **Release R3.2 (`RS-24`)** wdrażający 5-filarową architekturę hybrydową opartą na standardzie W3C SKOS (*Simple Knowledge Organization System*) oraz czysto pythonowej normalizacji morfologicznej (Zasada P-9), zgodnie ze specyfikacją techniczną `production_artifacts/Technical_Specification_R3_2.md` (v1.1.0) oraz raportem badawczym `production_artifacts/Research_Report.md` (§10).
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-22-026**.
+> **Wynik empiryczny**: **100.0% Target Admission (105 / 105 zapytań)** na zbiorze tuningowym (0 odrzuceń przez filtr kategoryczny). Zestaw 71 testów jednostkowych i regresyjnych zakończył się wynikiem **PASS**.
+
+#### 🔴 Nowe komponenty
+
+1. **Wzbogacenie całego grafu Neo4j o synonimy W3C SKOS `alt_labels` (`scripts/enrich_taxons_skos.py` — Critical, RS-24):**
+   * Zaimplementowano narzędzie `SKOSTaxonEnricher` dokonujące indukcji leksykalnej na wszystkich 1,183 węzłach `:Taxon` w Neo4j.
+   * Ekstrakcja łączy kontekst ścieżki taksonomicznej (`path`), tytuły powiązanych produktów katalogowych oraz kuratorowane synonimy potoczne.
+   * Gwarancja integralności rzeczownika głównego (*Head-Noun Integrity*): kategorie akcesoriów nigdy nie otrzymują nagich etykiet urządzeń (np. `Laptop Accessories` nigdy nie otrzyma synonimu `'laptop'`).
+   * Eliminacja zduplikowanych tokenów (`'webcam webcam'`) oraz fragmentów złożeń (`ear`, `bay`, `way`, `via`, `port`).
+   * Zapisano właściwości `t.alt_labels` do bazy Neo4j i wyeksportowano zrzut do `graph_versions/v2/taxon_skos_alt_labels.json`.
+   * Weryfikacja bezpośrednio w Cypherze potwierdziła 100% poprawność zapytań testowych (`streaming camera` $\to$ `Webcams`, `notebook` $\to$ `Laptops`, `digicam` $\to$ `Digital Cameras`, `wall charger` $\to$ `Chargers & Adapters`).
+
+2. **Zestaw testów jednostkowych i integracyjnych R3.2 (`tests/test_r3_2_hybrid_product_type.py` — Critical):**
+   * 55 testów weryfikujących kryteria akceptacyjne `AC-R3.2-00` .. `AC-R3.2-04`:
+     * `test_ac_r3_2_00_*`: kompletność artefaktu SKOS (1,183 węzły), brak szumu reduplikacji, brak fragmentów złożeń, ochrona integralności akcesoriów.
+     * `test_ac_r3_2_01_*`: reguły normalizacji lematów `normalize_lemma` (nieregularne, przyrostkowe, niezmienne), dekompozycja `decompose_type_phrase`, usuwanie dopisków w nawiasach (`laptop (MacBook Air)` $\to$ `clean_text='laptop'`).
+     * `test_ac_r3_2_02_*`: rezolucja SKOS i zapobieganie przejmowaniu taksonomii przez akcesoria (`Mouse` $\to$ `Mice`, `Tablet` $\to$ `Tablets`, `Laptop` $\to$ `Laptops`, `Phone` $\to$ `Bestselling Renewed Smartphones`).
+     * `test_ac_r3_2_03_*`: rozwijanie rodzin taksonów dla zapytań przekrojowych (`Charger`, `Camera` + webcam, `Phone`).
+     * `test_ac_r3_2_04_*`: dopuszczanie poprawnych urządzeń przez strzeżoną furtkę leksykalną oraz blokowanie pułapek akcesoriów (`Case for iPhone`).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Dwustronna lematyzacja morfologiczna i dekompozycja składniowa (`src/knowledge_graph/graphdb/resolver_service.py` — Critical, P-9):**
+   * Dodano czysto pythonowe funkcje `normalize_lemma(token)` oraz `decompose_type_phrase(phrase)`, działające deterministycznie bez potrzeby pobierania zewnętrznych korpusów NLTK WordNet w środowisku produkcyjnym.
+   * Obsługa form nieregularnych (`mice` $\to$ `mouse`, `batteries` $\to$ `battery`, `lenses` $\to$ `lens`), form niezmiennych w l. mnogiej (`headphones`, `earbuds`, `glasses`, `jeans`, `series`) oraz odrzucanie wtrąceń markowych w nawiasach.
+   * Wykrywanie pojemników akcesoriów (`ACCESSORY_HEAD_LEMMAS`) zapobiegające ich fałszywemu dopasowaniu jako główny typ produktu.
+   * Dodano metodę `resolve_category_family(text, query_text)` rozwijającą zapytanie kategoryczne w spójną rodzinę pokrewnych taksonów.
+
+2. **Hybrydowa klauzula Cypher i strzeżona furtka bezpieczeństwa w `GraphSearchTool` (`src/tools/graph_search_tool.py` — Critical):**
+   * W `_normalize_filters` zintegrowano rozwijanie rodziny kategorii `resolve_category_family`, przekazując `_resolved_category_family` oraz `_resolved_taxon_paths`.
+   * W `_build_filters` klauzula kategoryczna Cypher łączy weryfikację strukturalną (`IN_TAXON -> BROADER*0..7` z uwzględnieniem `t.name`, `t.alt_labels` oraz `category_family_filter`) ze strzeżoną furtką leksykalną (`head_noun_escape_regex` oraz wykluczeniem `accessory_exclusion_regex`).
+   * Poprawne urządzenia bez taksonu lub ze złym taksonem są dopuszczane, podczas gdy akcesoria (`Case for...`, `Stand for...`) są bezwzględnie odrzucane.
+   * W `_execute_fused_search` zaimplementowano ważenie bliskości taksonomicznej na zbiorze wielu ścieżek rodziny (`_resolved_taxon_paths`), stosując podejście *best-path consensus*.
+
+3. **Plany i audyt projektu (`production_artifacts/Implementation_Plan.md`, `production_artifacts/Audit_Report.md`):**
+   * Zadanie `RS-24` oznaczone jako ukończone `[x]`.
+   * Dodano szczegółowy raport audytu specyfikacji R3.2 z metryką dopuszczenia celów $105/105$ ($100.0\%$).
+
+---
+
+## 📅 2026-10-21 (Release R3.1: Precyzja Atrybutów i Hierarchii — Ważenie Rzadkości IDF [RS-03], Stopniowana Bliskość Taksonomiczna LCP [RS-10], Adaptacyjny Porządek Filter-First [RS-07])
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. Stage 1 [GV2-07..GV2-09])
+
+> **Kontekst**: Po wdrożeniu Stage 1 (`GV2-07` .. `GV2-09`) uzyskano skokowy wzrost recallu ($HR@20$ wzrósł z $0.2286$ do $0.3333$, $p = 0.0010$). Jednakże szczegółowa analiza błędów ujawniła trzy wąskie gardła w warstwie wyszukiwania:
+> 1. Dominacja popularnych atrybutów o wysokim stopniu (np. `Color=Black` powiązany z 44,265 produktami, 16.68% katalogu) tworząca bloki remisów w Reciprocal Rank Fusion i tłumiąca rzadkie atrybuty techniczne (np. `Style=Ergonomic Split Keyboard`).
+> 2. Zero-jedynkowa przepaść kategorii (Binary Category Cliff), traktująca bliskie kategorie rodzeństwa (np. `Floorstanding Speakers` vs `Bookshelf Speakers`) identycznie z odległymi pułapkami akcesoriów z innych domen (np. `Camera Cases`).
+> 3. Zjawisko obcinania kandydatów (candidate starvation) w małych, selektywnych poddrzewach taksonomicznych ($product\_count \le 500$), gdzie globalny wektorowy ANN odrzucał produkty przed filtracją grafową Cypher.
+>
+> Zrealizowano pakiet **Release R3.1 (`RS-03` + `RS-10` + `RS-07`)** zgodnie ze specyfikacją techniczną `production_artifacts/Technical_Specification_R3_1.md` oraz raportem badawczym `production_artifacts/Research_Report.md` (§9).
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-21-025**. Wszystkie 65 testów jednostkowych i regresyjnych zakończyło się wynikiem PASS.
+
+#### 🔴 Nowe komponenty
+
+1. **Zestaw testów jednostkowych i weryfikacyjnych R3.1 (`tests/test_r3_1_retrieval_refinements.py` — Critical):**
+   * 7 kompleksowych testów weryfikujących kryteria akceptacyjne `AC-R3.1-01` .. `AC-R3.1-05`:
+     * `test_ac_r3_1_01_attribute_idf_weighting_query_structure`: weryfikacja struktury zapytania MaxP kanału atrybutów z obliczaniem stopnia `count { (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) } AS deg` oraz formułą znormalizowanego IDF w Cypher.
+     * `test_ac_r3_1_01_attribute_idf_weighting_math`: matematyczna weryfikacja współczynników rzadkości — atrybut masowy `Color=Black` tłumiony do $\approx 0.155$ (spadek o 84.5%), atrybut unikalny `deg=1` zachowuje $0.944$ (stosunek wag $5.8\times$).
+     * `test_ac_r3_1_02_compute_taxon_distance`: precyzyjne wyliczanie odległości w drzewie taksonomii przez Longest Common Prefix (LCP): 0 dla liścia/potomka, 1 dla rodzica, 2 dla rodzeństwa, 3–4 dla kuzynów, $\ge 5$ dla odległych gałęzi.
+     * `test_ac_r3_1_02_taxon_distance_multipliers`: odwzorowanie odległości na mnożniki kary: $1.00 \to 0.85 \to 0.70 \to 0.20$.
+     * `test_ac_r3_1_03_fused_search_applies_taxon_distance_rescaling_and_telemetry`: przeskalowanie wyników fuzji i re-ranking kandydatów; produkt z kategorii docelowej wyprzedza produkt z innej domeny mimo wyższego surowego podobieństwa wektorowego; telemetria w `fusion.taxon_proximity`.
+     * `test_ac_r3_1_04_adaptive_filter_first_activation_and_scoring`: aktywacja strategii filter-first dla kategorii $\le 500$ produktów (`Bookshelf Speakers`), obliczanie wektorowego podobieństwa kosinusowego i dopasowania leksykalnego w Pythonie z $100\%$ pokryciem poddrzewa.
+     * `test_ac_r3_1_04_broad_taxon_bypasses_filter_first`: kategorie szerokie ($> 500$) omijają filter-first i kontynuują standardowe wyszukiwanie wieloindeksowe z nadsamplingiem.
+
+2. **Rozdział 17 pracy magisterskiej (`thesis/17-doc-attribute-rarity-taxonomic-distance.md` — High):**
+   * Sformalizowano wkład naukowy: *Attribute Rarity Weighting, Graded Taxonomic Proximity, and Adaptive Filter-First Routing*.
+   * Udokumentowano modele matematyczne: znormalizowane ważenie rzadkości atrybutów $\omega_{\text{IDF}}$, topologiczną odległość LCP $\Delta_{\text{tax}}$, przedziałową funkcję kary $\mu(\Delta_{\text{tax}})$ oraz algorytm selektywnego routingu z gwarancją recallu poddrzewa. Zarejestrowano w `thesis/README.md`.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Ważenie rzadkości atrybutów w `GraphSearchTool._build_channel_query` (`src/tools/graph_search_tool.py` — Critical, RS-03):**
+   * W kanale `attribute` zapytanie MaxP liczy dynamicznie liczbę produktów powiązanych z węzłem atrybutu: `count { (:ParentProduct)-[:HAS_ATTRIBUTE]->(hit) } AS deg`.
+   * Surowe podobieństwo wektorowe jest ważone przez znormalizowany IDF: `score * (log(1.0 + 265307.0 / (1.0 + deg)) / log(265308.0))`.
+   * Uzasadnienie trafienia wzbogacono o stopień: `[deg=...]`, zapewniając pełną przejrzystość i wyjaśnialność rankingu.
+
+2. **Stopniowana bliskość taksonomiczna w `GraphSearchTool` (`src/tools/graph_search_tool.py` — Critical, RS-10):**
+   * W `DETAIL_QUERY` dodano pobieranie `head(taxon_paths) AS primary_taxon_path`.
+   * Dodano metody statyczne `_compute_taxon_distance(target_path, cand_path)` oraz `_get_taxon_distance_multiplier(distance)`.
+   * W `_execute_fused_search` przy aktywnym filtrze kategorii obliczana jest odległość taksonomiczna kandydatów do ścieżki docelowej, a wynik fuzji jest skalowany przez mnożnik kary ($1.00 \to 0.85 \to 0.70 \to 0.20$).
+   * Zapisano pełną telemetrię odległości w `item["fusion"]["taxon_proximity"] = {"distance": dist, "multiplier": multiplier}`.
+
+3. **Adaptacyjny porządek wyszukiwania Filter-First (`src/tools/graph_search_tool.py` — Critical, RS-07):**
+   * W `_execute_hybrid_search` sprawdzana jest wielkość poddrzewa docelowego taksonu: jeżeli `1 <= product_count <= 500`, wywoływana jest dedykowana metoda `_execute_filter_first_search`.
+   * Zapytanie Cypher pobiera bezpośrednio od węzła nadrzędnego `:Taxon` wszystkie produkty z poddrzewa spełniające twarde filtry pozakategoryczne (cena, marka) wraz z ich osadzeniami `node.embedding` (czas wykonania $232.4\text{ ms}$ dla 237 produktów).
+   * Podobieństwo kosinusowe i dopasowanie leksykalne tokenów tytułu liczone są w pamięci w Pythonie (`numpy`), gwarantując brak ucinania kandydatów przez globalny ANN indeksu.
+
+---
+
+## 📅 2026-10-20 (Stage 1: Konsumpcja strukturalna i leksykalna Graph v2 — filtracja poddrzew Taxon, relaksacja MACS BROADER, 4-kanałowy RRF z pełnotekstowym BM25 [GV2-07..GV2-09])
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. Release R2b)
+
+> **Kontekst**: Po wdrożeniu stratyfikowanego benchmarku v2 w Release R2b ujawniono krytyczny spadek recallu na zapytaniach $S_0$–$S_4$ ($HR@20$ na poziomie $9.52\%$ vs $90.5\%$ na zapytaniach legacy). Śledztwo w logach Cypher wykazało, że silnik `GraphSearchTool` odpytywał nieistniejące w grafie v2 relacje `BELONGS_TO_CATEGORY` oraz `Category.SUBCATEGORY_OF` (`GQLSTATUS 01N42`), przez co 100% zapytań z filtrem kategorii trafiało do awaryjnego dopasowania słów kluczowych w tytule, odrzucając ślepe na tytuł produkty ze zbioru ewaluacyjnego. Zrealizowano pakiet **Stage 1 (`GV2-07` .. `GV2-09`)** zgodnie z zatwierdzoną specyfikacją techniczną `production_artifacts/Technical_Specification_Stage1.md` oraz raportem badawczym `production_artifacts/Research_Report.md` (§8).
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-20-024**. Potwierdzone pełnym sukcesem testów regresyjnych (`83 passed` w `tests/`) oraz statystycznie istotną poprawą recallu na zbiorze `tuning` ($n = 105$).
+
+#### 🔴 Nowe komponenty
+
+1. **Zestaw testów jednostkowych Stage 1 (`tests/test_stage1_taxon_and_lexical.py` — Critical):**
+   * 9 kompleksowych testów weryfikujących:
+     * `test_gv2_07_resolver_service_resolves_taxon_tier1_exact`: weryfikuje dopasowanie dokładne do węzłów `:Taxon` z sortowaniem po `product_count DESC`.
+     * `test_gv2_07_resolver_service_resolves_taxon_tier3_in_memory_vector`: testuje semantyczne dopasowanie wektorowe w pamięci podręcznej taksonów.
+     * `test_gv2_07_build_filters_generates_taxon_subtree_cypher`: weryfikuje generowanie zapytania Cypher z tranzytywnym przejściem `[:IN_TAXON]->(:Taxon)-[:BROADER*0..7]->(:Taxon)` dla pojedynczej kategorii oraz kwarantannę reguły tytułowej wyłącznie dla produktów bez przypisanego taksonu.
+     * `test_gv2_07_build_filters_categories_list_generates_taxon_subtree_cypher`: weryfikuje wielowartościowe filtry `categories`.
+     * `test_gv2_07_macs_relaxation_steps_up_broader_hierarchy`: sprawdza uogólnianie taksonomiczne w relaksacji MACS (przejście do węzła nadrzędnego przez krawędź `[:BROADER]` przed całkowitym porzuceniem filtru).
+     * `test_gv2_08_sanitize_lucene_query`: sanityzacja zapytań Lucene (obsługa znaków specjalnych, walut, myślników).
+     * `test_gv2_08_build_channel_query_lexical`: generowanie zapytania kanału leksykalnego przez indeks pełnotekstowy `product_fulltext_index`.
+     * `test_gv2_08_score_fusion_rrf4_and_wrrf4_presets`: integracja 4 kanałów w `score_fusion.py` i ramię `rrf4`/`wrrf4`.
+     * `test_gv2_09_dynamic_ann_oversampling_for_small_subtrees`: skalowanie `ann_k_per_limit` dla wybiórczych poddrzew taksonomicznych ($< 5000$ produktów).
+
+2. **Rozdział 15 pracy magisterskiej (`thesis/15-doc-taxonomic-lexical-fusion.md` — High):**
+   * Sformalizowano wkład naukowy: *Taxonomic Hierarchy Traversal and Multi-Channel Lexical-Structural Fusion*.
+   * Udokumentowano matematyczny model domknięcia tranzytywnego $\mathcal{S}(T)$, relaksację topologiczną MACS, 4-kanałową fuzję $RRF_4$ oraz dowody statystyczne z testów randomizacyjnych i bootstrapowych na $n = 105$ zapytaniach. Zarejestrowano w `thesis/README.md`.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Przejście na taksonomię `Taxon` w `ResolverService` (`src/knowledge_graph/graphdb/resolver_service.py` — Critical):**
+   * Przekierowano `resolve_category` oraz dodano `resolve_taxon` do odpytywania węzłów `:Taxon` zamiast dawnych 38 węzłów `:Category`.
+   * **Poziom 1 (Exact)**: `MATCH (node:Taxon) WHERE toLower(node.name) = toLower($text)` z sortowaniem po `product_count DESC`.
+   * **Poziom 2 (Regex / Word-Boundary)**: `node.name =~ $pattern` dopasowujący całe tokeny z tolerancją na liczbę mnogą i odmiany, z priorytetyzacją węzłów o wyższej liczbie produktów.
+   * **Poziom 3 (Wektorowy Fallback w pamięci)**: `_ensure_taxon_cache()` i `_resolve_taxon_vector()` ładują 1,183 nazwy taksonów i ich wektory osadzeń do znormalizowanej macierzy `(1183, 384)`, wykonując iloczyn skalarny w czasie $< 8\text{ ms}$ na CPU, eliminując konieczność kosztownych skanów grafu czy zapisu do bazy.
+
+2. **Cypher Subtree Filtering & MACS `BROADER` Relaxation w `GraphSearchTool` (`src/tools/graph_search_tool.py` — Critical):**
+   * Zastąpiono niespójny filtr `BELONGS_TO_CATEGORY` / `SUBCATEGORY_OF` klauzulą tranzytywnego dopasowania poddrzewa taksonomicznego:
+     `MATCH (node)-[:IN_TAXON]->(leaf:Taxon)-[:BROADER*0..7]->(ancestor:Taxon) WHERE toLower(ancestor.name) = toLower($category_filter) OR toLower(leaf.name) = toLower($category_filter) ...`
+   * Dopasowanie po tytule zostało ograniczone wyłącznie do produktów niemających relacji `IN_TAXON` (`NOT EXISTS { MATCH (node)-[:IN_TAXON]->(:Taxon) }`), całkowicie eliminując zjawisko zanieczyszczenia i odrzucania poprawnych produktów.
+   * W relaksacji MACS wprowadzono uogólnianie taksonomiczne: w przypadku gdy liczba kandydatów $< 3$, system wykonuje zapytanie `MATCH (child:Taxon)-[:BROADER]->(parent:Taxon)` i rozszerza filtr kategorii o 1 poziom wyżej w hierarchii przed ewentualnym usunięciem filtru.
+   * Dodano sanityzator zapytań pełnotekstowych Lucene `_sanitize_lucene_query` czyszczący operatory `+ - && || ! ( ) { } [ ] ^ " ~ * ? : \ / $`.
+   * Podłączono 4. kanał wyszukiwania `lexical` oparty o `CALL db.index.fulltext.queryNodes('product_fulltext_index', $query_text)`.
+   * Wdrożono dynamiczne skalowanie nadsamplingu ANN (`ann_k_per_limit` skalowane z 30 do nawet 60 w zależności od wielkości poddrzewa `Taxon.product_count < 5000`), zapobiegając ucinaniu niszowych kategorii przez globalny ANN przed filtracją Cypher.
+   * Zaktualizowano `DETAIL_QUERY`, `_execute_legacy_sum_search` oraz `_execute_cypher_search`, aby zwracały listę taksonów `taxa` w polu `category`.
+
+3. **Rozszerzenie fuzji rangowej o kanał leksykalny (`src/tools/score_fusion.py` — High):**
+   * Rozszerzono krotkę kanałów: `CHANNELS: Tuple[str, ...] = ("product", "attribute", "review", "lexical")`.
+   * Zachowano pełną zgodność wsteczną dla domyślnego ramienia `DEFAULT_ARM = "rrf3"` oraz `rrf2`, `wrrf3`, `cc3`, `sum_legacy`.
+   * Wprowadzono nowe predefiniowane ramiona: `rrf4` (równe wagi 1.0 dla 4 kanałów), `wrrf4` (`0.35 product, 0.20 attribute, 0.15 review, 0.30 lexical`), `cc4` (kombinacja wypukła 4 kanałów) oraz `lexical_only`.
+
+4. **Aktualizacja skryptu strojenia `tune_fusion_r2b.py` (`scripts/tune_fusion_r2b.py` — Medium):**
+   * Zaktualizowano rejestrację trafień kanałowych, aby obejmowała kanał `lexical` zwracany przez `GraphSearchTool` przy konfiguracji `rrf4`.
+
+---
+
+### Wyniki empiryczne i weryfikacja na zbiorze `tuning` ($n = 105$ zapytań)
+
+Wykonano pełne strojenie i porównanie ramion na zamrożonym zbiorze `tuning` (`evaluations/benchmarks/r2b_tuning_report.json`):
+
+| Ramię fuzji | Kanały | Ogólny $HR@20$ ($n=105$) | $S_0$–$S_4$ $HR@20$ ($n=84$) | $NDCG@10$ | $MRR$ | $\text{RevCapBias}@5$ | $\text{HeadPopBias}@5$ |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `rrf3` (Stage 0 bazowy) | `prod`, `attr`, `rev` | `0.2286` | `0.1548` | `0.1477` | `0.1269` | `0.6616` | `0.1696` |
+| `rrf2` | `prod`, `attr` | `0.2476` | `0.2143` | `0.1155` | `0.1109` | `0.5982` | `0.1380` |
+| `wrrf3` | `0.60 / 0.25 / 0.15` | `0.2381` | `0.1667` | `0.1421` | `0.1236` | `0.6145` | `0.1461` |
+| `cc3` | Wypukła $(3\text{ ch})$ | `0.2381` | `0.1667` | `0.1290` | `0.1157` | `0.6557` | `0.1696` |
+| **`rrf4` (Stage 1)** | `prod`, `attr`, `rev`, `lex` | **`0.3238`** | **`0.2738`** | **`0.1760`** | **`0.1552`** | `0.6459` | `0.1517` |
+| **`wrrf4` (Stage 1)** | `0.35 / 0.20 / 0.15 / 0.30` | **`0.3238`** | **`0.2738`** | **`0.1647`** | **`0.1470`** | `0.6135` | `0.1422` |
+| **`cc4` (Stage 1)** | Wypukła $(4\text{ ch})$ | **`0.3333`** | **`0.2976`** | **`0.1614`** | **`0.1466`** | `0.6363` | `0.1460` |
+| `lexical_only` | Czysty BM25 | `0.3238` | `0.2976` | `0.1725` | `0.1580` | `0.6211` | `0.1422` |
+| **Optymalna siatka (`1:0.5:1:1`, $k=60$)** | Wagi optymalne | **`0.3333`** | **`0.2857`** | **`0.1737`** | **`0.1561`** | `0.6580` | `0.1405` |
+
+**Istotność statystyczna (Najlepsza konfiguracja 4-kanałowa vs `rrf3`, $n=105$):**
+- $\Delta\text{Strict-Hit@20}$: **`+0.1048`** (+10.48 pp, **+45.8% relatywnie**), **95% CI `[+0.0476, +0.1619]`**, **$p = 0.0010$** (bardzo silna istotność statystyczna, przedział całkowicie wyklucza zero).
+- $\Delta\text{Strict-Hit@5}$: **`+0.0571`** (+5.71 pp), **95% CI `[+0.0190, +0.1048]`**, **$p = 0.0312$**.
+- $\Delta\text{NDCG@10}$: **`+0.0260`** (+2.60 pp), **95% CI `[+0.0055, +0.0493]`**, **$p = 0.0213$**.
+- $\Delta\text{MRR}$: **`+0.0292`** (+2.92 pp), **95% CI `[+0.0143, +0.0471]`**, **$p = 0.0002$**.
+- **Odzyskanie recallu w warstwach $S_0$–$S_4$**: $HR@20$ wzrosło z **`9.52%`** (przed usunięciem błędu rozłączenia kategorii) do **`27.38%`** w `rrf4` i **`29.76%`** w `cc4` (prawie **trzykrotny wzrost** skuteczności wyszukiwania na zapytaniach bez wycieku słów kluczowych z tytułów).
+
+---
+
+## 📅 2026-10-20 (Release R2b: Stratyfikowany Benchmark v2 [RS-21], maskowanie recenzji S1 [G-9], redefinicja metryk obciążenia oraz strojenie fuzji RS-02 / RS-25; czyszczenie martwych benchmarków)
+
+### Changelog (względem wcześniejszego wpisu z 2026-10-20 dot. ukończenia Graph v2 oraz Stage 0 `GV2-01`..`GV2-06`)
+
+> **Kontekst**: Po przebudowie grafu do wersji v2 (`kg_neo4j_data_v2`, 99,995% pokrycia osadzonymi recenzjami) oraz podłączeniu pól tekstowych w Stage 0 (`GV2-01`..`GV2-06`), zrealizowano pakiet **Release R2b** zgodnie z zatwierdzoną specyfikacją `production_artifacts/Technical_Specification_R2b.md` oraz badaniami w `production_artifacts/Research_Report.md` (§7). Równolegle usunięto martwe, porzucone wcześniej pliki starych benchmarków z `evaluations/benchmarks/`.
+>
+> **Odniesienie do Vision Report**: realizuje decyzję **2026-10-20-022** (oraz domyka decyzje **2026-10-18-014** i **2026-10-18-015** na grafie v2). Zachowuje pełną kompatybilność wsteczną ze wszystkimi testami `R1`, `R2a` i `Stage 0` (`57 passed`).
+
+#### 🔴 Nowe komponenty
+
+1. **Moduł Stratyfikowanego Benchmarku v2 (`src/evaluation/benchmark_v2.py` — Critical):**
+   * Deterministyczny podział haszowany `assign_split(key, salt="crs_r2b_20261020", test_ratio=60)` (`sha256 % 100 < 60 -> test`, w przeciwnym razie `tuning`).
+   * Automatyczna bramka anty-wyciekowa i anty-trywialności leksykalnej `check_query_leakage(...)`: weryfikuje brak wycieku alfanumerycznych kodów modeli (`model_code_leak == False`), brak nieoznaczonego wycieku marki (`unflagged_brand_leak == False`), nakładanie tokenów tytułu `title_token_overlap <= 0.30` oraz rangę TF-IDF celu `tfidf_target_rank > 1` (wykluczając zapytania trywialne leksykalnie).
+   * Generator wypowiedzi bez dostępu do tytułu `synthesize_title_blind_utterance(...)` (korzystający wyłącznie z `features`, `details_json`, `attributes`, ceny, kategorii/taksonu i opcjonalnie marki) wraz z automatyczną adnotacją `gold_constraints` zgodną ze schematem `src/evaluation/constraint_satisfaction.py`.
+   * Zestaw 30 niejednoznacznych zapytań `AMBIGUOUS_QUERIES_V2` (warstwa `A`, `gold_action = "CLARIFY"`, `type_explicit = False`, podzielona na 3 podtypy po 10 zapytań: `open_use_case`, `category_indecision`, `underspecified_part`).
+   * Filtrowanie po podziale `filter_benchmark_by_split` (`tuning`, `test`, `all`, `legacy`) oraz rejestr dostępu do zbioru testowego `log_test_split_access` zapisujący do `evaluations_archive/test_split_access_log.jsonl`.
+
+2. **Zamrożony artefakt `evaluations/benchmarks/benchmark_v2.json` oraz `evaluations/benchmarks/benchmark_v2_manifest.json` (`scripts/build_benchmark_v2.py` — Critical):**
+   * Wygenerowany i zweryfikowany względem żywego grafu Neo4j v2 (**251 zapytań łącznie**, SHA-256: `3ae073ff54f57d6092612ead279872d82edf84e7d3963a23a67d4633422a1f3c`):
+     * **Warstwa `S0` (Review-Dense Head, 40 zapytań: 14 `tuning` / 26 `test`)**: produkty z pełnym limitem 20 recenzji w grafie i katalogowym `review_count >= 362` ($P_{75}$).
+     * **Warstwa `S1` (Cold-Start / Zero-Review-Reliance, 40 zapytań: 17 `tuning` / 23 `test`)**: produkty z najniższego przedziału recenzji w grafie ($\le 2$ recenzje) z włączonym maskowaniem recenzji w czasie zapytania (`mask_target_reviews = True`, 0 widocznych recenzji celu).
+     * **Warstwa `S2` (Multi-Constraint Structured, 40 zapytań: 18 `tuning` / 22 `test`)**: produkty posiadające $\ge 2$ krawędzie `HAS_ATTRIBUTE`, $\ge 3$ punkty `features` oraz `details_json`.
+     * **Warstwa `S3` (Accessory Trap, 40 zapytań: 19 `tuning` / 21 `test`)**: urządzenia główne z 15 empirycznie zweryfikowanych rzeczowników głównych (`camera`, `laptop`, `monitor`, `printer`, `speaker`, `charger`, `keyboard`, `tablet`, `microphone`, `tripod`, `projector`, `webcam`, `headphones`, `router`, `mouse`), dla których $>50\%$ dopasowań w tytułach w grafie v2 stanowią akcesoria poboczne (`trap_out_of_taxon_ratio` od `0.519` do `0.938`).
+     * **Warstwa `S4` (Many-Feature Trade-off, 40 zapytań: 16 `tuning` / 24 `test`)**: produkty z $\ge 5$ punktami `features` i $\ge 2$ atrybutami, testujące wielowymiarowe kompromisy (4 klauzule wymagań).
+     * **Warstwa `A` (Ambiguous, 30 zapytań: 10 `tuning` / 20 `test`)**: zapytania wymagające dopytania (`gold_action = "CLARIFY"`).
+     * **Warstwa `legacy` (Continuity, 21 zapytań: 21 `tuning` / 0 `test`)**: zachowane 1:1 zapytania z `live_eval_dataset.json` przypisane do zbioru `tuning`.
+   * Rozpiętość kategorii w `S0`–`S4`: **158 unikalnych liści `Taxon`** oraz **19 kategorii `Category`**; **221 unikalnych `target_asin`** (zero duplikatów).
+   * Audyt wycieków na 200 zapytaniach `S0`–`S4`: `0` wycieków kodów modeli, `0` nieoznaczonych wycieków marek, maksymalne nakładanie tokenów tytułu `0.2000` (średnio `0.0046`), minimalna ranga TF-IDF `2` (`0` przypadków rangi 1).
+
+3. **Protokół strojenia fuzji `RS-02` i `RS-25` (`scripts/tune_fusion_r2b.py` + `evaluations/benchmarks/r2b_tuning_report.json` — High):**
+   * Przeprowadzono ewaluację wyłącznie na zbiorze `tuning` ($n = 105$ zapytań retrievalowych: 84 z `S0`–`S4` + 21 z `legacy`; zbiór `test` pozostał nietknięty: `test_split_touched = false`).
+   * Przebadano 4 pre-rejestrowane ramiona fuzji (`rrf3`, `rrf2`, `wrrf3`, `cc3`) oraz siatkę **192 konfiguracji** wag $(w_{\text{prod}}, w_{\text{attr}}, w_{\text{rev}}) \in \{0.5, 1.0, 1.5, 2.0\} \times \{0.5, 1.0, 1.5\} \times \{0.0, 0.25, 0.5, 1.0\}$ i stałej wygładzania RRF $k \in \{20, 40, 60, 100\}$.
+
+4. **Zestaw testów `tests/test_r2b_benchmark_and_metrics.py` (High):**
+   * 9 testów weryfikujących podział `assign_split`, detekcję wycieków `check_query_leakage`, maskowanie recenzji `mask_review_asins` w `GraphSearchTool` (w tym podczas relaksacji MACS), nowe metryki obciążenia, blokadę `--split test` bez `--confirm-test` oraz integralność zamrożonych artefaktów `benchmark_v2.json` i `r2b_tuning_report.json`.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1. **Maskowanie recenzji w czasie zapytania (`src/tools/graph_search_tool.py`, `src/agents/orchestrator.py` — G-9):**
+   * Dodano parametr `mask_review_asins: Optional[Sequence[str]] = None` do `GraphSearchTool.search`, `_execute_hybrid_search`, `_execute_vector_search`, `_execute_fused_search`, `_execute_legacy_sum_search` oraz `fetch_product_attributes`, a także do `AgentOrchestrator.run`.
+   * Dla zapytań z warstwy `S1` (`mask_target_reviews = True`) kanał wektorowy recenzji otrzymuje klauzulę `NOT node.parent_asin IN $mask_review_asins`, a `fetch_product_attributes` wyklucza recenzje wskazanego ASIN-u, symulując prawdziwy zimny start (0 widocznych recenzji celu).
+   * Dodano zwracanie `channel_hits` w `result["metadata"]` w `_execute_fused_search` oraz metody `fetch_review_cap_asins(min_reviews=20)` i `fetch_head_popular_asins(percentile=0.90)`.
+
+2. **Redefinicja metryk obciążenia recenzjami i popularnością na grafie v2 (`src/evaluation/metrics.py`, `scripts/evaluate_retrieval.py` — C-8..C-11):**
+   * Zachowano `METRIC_LABELS["popularity_bias"]` bez zmian dla pełnej zgodności z kontraktami testowymi R2a (`tests/test_retrieval_metrics_r2.py`).
+   * Dodano dwie nowe metryki posiadające realną wariancję na grafie v2:
+     * `review_cap_bias@k` (`RevCapBias@K`): udział kandydatów w top-$K$ posiadających pełny limit 20 recenzji w grafie v2 (`137 678` produktów, częstość bazowa wśród produktów z tytułem `0.519`).
+     * `head_popularity_bias@k` (`HeadPopBias@K`): udział kandydatów w top-$K$ należących do górnych 10% katalogu pod względem `p.review_count >= 1 241` (`26 531` produktów, częstość bazowa `0.100`).
+   * Dodano przekroje `by_stratum` (`S0`–`S4`, `A`, `legacy`) oraz `by_target_review_cap` w `aggregate_rows`.
+   * Rozbudowano CLI `scripts/evaluate_retrieval.py` o flagi `--split {tuning,test,all,legacy}`, `--confirm-test` (wymagane dla `--split test`, w przeciwnym razie kod wyjścia `2`) oraz `--no-mask-s1-reviews`.
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+* Wcześniej w tej sesji (commit `a9b557b`) usunięto 4 martwe pliki starych, porzuconych benchmarków: `evaluations/benchmarks/live_dataset_sample.json`, `evaluations/benchmarks/live_retrieval_benchmark.json`, `evaluations/benchmarks/retrieval_benchmark.json` oraz `src/evaluation/live_dataset_generator.py`. Plik `live_eval_dataset.json` (21 zapytań) pozostał nienaruszony jako domyślny zbiór ciągłości.
+
+#### 📊 Weryfikacja
+
+* **Testy automatyczne:** `pytest tests/test_r2b_benchmark_and_metrics.py tests/test_retrieval_metrics_r1.py tests/test_retrieval_metrics_r2.py tests/test_provenance.py tests/test_benchmark_alignment.py tests/test_stage0_graph_v2_wiring.py` → **`57 passed`**.
+* **Wyniki empiryczne `RS-02` i `RS-25` na zbiorze `tuning` (`n = 105` zapytań retrievalowych, `evaluations/benchmarks/r2b_tuning_report.json`):**
+  * **Walidacja nowych metryk obciążenia (`C-8..C-11`):** Stara metryka `popularity_bias@5` (`>=1` osadzona recenzja) wynosi `1.0000` dla każdego ramienia i każdej warstwy. Nowe metryki wyraźnie różnicują ramiona: `rrf3` ma `RevCapBias@5 = 0.6892` i `HeadPopBias@5 = 0.1926`, podczas gdy `rrf2` obniża je do `0.6097` ($\Delta = -0.0794$, $p = 0.0004$) i `0.1497` ($\Delta = -0.0429$, $p = 0.0038$), a `wrrf3` (`0.60/0.25/0.15`) obniża je do `0.6229` ($\Delta = -0.0692$, $p = 0.0002$) i `0.1580` ($\Delta = -0.0404$, $p = 0.0038$).
+  * **Rozstrzygnięcie `RS-02` (`rrf3` vs `rrf2`):** Kanał recenzji w `rrf3` ratuje **7 unikalnych celów** do top-20 (przy 2 degradacjach), podnosząc `HR@20` z `0.2095` do `0.2571` ($\Delta\text{HR@20} = +0.0476$, 95% CI `[0.0000, +0.1048]`). Kanał recenzji nie jest więc martwy dla odzysku w top-20 i zostaje zachowany.
+  * **Rozstrzygnięcie `RS-25` (strojenie wag RRF):** Ramię ważone `wrrf3` (`0.60/0.25/0.15`, $k=60$) poprawia punktowo `MRR` (`0.1215` vs `0.1115`, $\Delta = +0.0100$, 95% CI `[-0.0031, +0.0273]`) oraz `HR@5` (`0.1714` vs `0.1429`, $\Delta = +0.0286$) przy istotnie niższym obciążeniu popularnością, a najlepsza konfiguracja z siatki 192 ustawień (`grid_k20_p2.0_a0.5_r0.0`) osiąga `MRR = 0.1276` (95% CI różnicy względem `rrf3`: `[-0.0122, +0.0485]`). Zgodnie z pre-rejestrowaną regułą parsymonii (żaden 95% CI dla `MRR`/`NDCG@10` nie wyklucza zera przed wdrożeniem drzewa `Taxon`), `rrf3` pozostaje domyślnym ramieniem bazowym, a `wrrf3` przechodzi jako główne ramię porównawcze do Stage 1 (`GV2-07`..`GV2-09`) i R3.
+
+#### ❌ Nadal brakuje (kolejne kroki)
+
+* **Stage 1 (`GV2-07`..`GV2-09`)**: Przełączenie `ResolverService` i `GraphSearchTool._build_filters` z 38 zgrubnych węzłów `Category` (i nieistniejących w v2 krawędzi `SUBCATEGORY_OF`) na 1 183-węzłową hierarchię `Taxon` (`IN_TAXON` / `BROADER*0..7`), dodanie kanału leksykalnego `product_fulltext_index` do RRF oraz selektywnego filtrowania przed ANN. Przebieg strojenia R2b bezpośrednio wykazał, dlaczego na warstwach `S0`–`S4` (używających 158 szczegółowych nazw liści `Taxon`) obecny filtr kategorii oparty na 38 węzłach `Category` ogranicza `HR@20` do `9.52%`.
+
+---
+
+## 📅 2026-10-20 (Graph v2 wykonany: zbudowany, zwalidowany, opieczętowany i zmierzony; F4 zakończone)
+
+### Changelog (względem stanu z 2026-10-19, wpis „Graph v2 — przebudowa fundamentu danych")
+
+> **Kontekst**: Wpis z 2026-10-19 opisywał wyłącznie kod potoku; żadna operacja na grafie nie była wtedy wykonana. Ten wpis opisuje **wykonanie** runbooka (punkty kontrolne CP-1 … CP-9) na gałęzi `feature/afp-002-vector-aggregation`. Źródło główne: `graph_versions/v2/RUNBOOK_LOG.md`, uzupełniająco `graph_versions/v2/preflight_report.json`, `graph_versions/v2/pilot/pilot_report.json`, `graph_versions/v2/validation_report.json`, `graph_versions/v2/baseline_comparison.json`, `graph_versions/v1/DUMP.json` oraz pozycja F4 w `production_artifacts/Implementation_Plan.md` (F4.1 … F4.7 oznaczone `[x]`). Liczby poniżej pochodzą z tych plików; nie ponowiono żadnych pomiarów na żywym grafie.
+>
+> **Odniesienie do Vision Report**: realizuje decyzje 2026-10-19-018 … 021 (przywrócenie uziemienia §4 „Knowledge Graph as Grounding”). Nie zmienia kierunku strategicznego, nie dodaje trenowania modeli ani nowego zbioru danych. Wpis nie wymaga nowej decyzji w Vision Report; po stronie metryk wynika jedna otwarta kwestia (redefinicja `review-coverage-bias@K`, patrz „Nadal brakuje”).
+>
+> **Zakres commitów** (kolejność wykonania):
+>
+> | Commit | Opis |
+> |---|---|
+> | `8306d9b` | poprawka braku pamięci MPS (pre-flight i osadzanie) |
+> | `e6183d0` | zapis CP-1 |
+> | `75c5c0a` | zapis CP-2 … CP-4; **czysty commit transformacji** (`--require-clean`) |
+> | `d4f338b` | linie pochodzenia (lineage) |
+> | `8c35d68` | pilot |
+> | `8b10a35`, `0a32604` | trzy błędy po imporcie (patrz „Korekty”) |
+> | `35e395c` | graf v2 zbudowany, zwalidowany i opieczętowany |
+> | `79f21e6` | profil uruchomieniowy (R-11) i pre-check R-12 |
+> | `012b780`, `4248d03` | poprawka A-7: lista dozwolonych ścieżek dla dokumentacji i `docker-compose` |
+> | `65a0ba0` | przebiegi baseline v2 (cytowalne) i porównanie v1 / v2 |
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Aktywny graf v2 (Critical):** Neo4j 5.14.0 działa na wolumenie Docker `kg_neo4j_data_v2` (compose, `.env`: `NEO4J_DATA_VOLUME=kg_neo4j_data_v2`). Liczności z `validation_report.json` (`graph_version: v2`, `passed: true`, utworzony 2026-10-20T02:22:44Z):
+
+    | Element | v1 | v2 |
+    |---|---|---|
+    | `ParentProduct` | 265 307 (z czego **104 281 duchów**) | 265 307 (**8 bez tytułu**; udział 0,393058 → 0,00003) |
+    | `Review` | 1 629 426 | 3 382 248 |
+    | `User` | 471 474 | 2 594 661 |
+    | `Brand` | 40 998 | 49 663 |
+    | `Category` | 71 | 38 |
+    | `Attribute` | 47 335 | 36 187 |
+    | `Taxon` (drzewo kategorii, `BROADER`, `IN_TAXON`) | brak | **1 183** (maks. głębokość 7, 3 korzenie) |
+    | Pokrycie produktów osadzoną recenzją | 0,021541 (2,2%) | **0,999951 (99,995%)** |
+
+    Relacje v2: `ABOUT_PRODUCT` i `WROTE` po 3 382 248, `HAS_BRAND` 264 274, `BELONGS_TO_CATEGORY` 261 664, `HAS_ATTRIBUTE` 190 043, `IN_TAXON` 248 053, `BROADER` 1 180. W v2 nie istnieją już etykiety `Variant`, `Product`, `PriceRange` ani relacje `RATED`, `REVIEWS`, `IN_PRICE_RANGE`, `IS_VARIANT_OF`, `SUBCATEGORY_OF` (kontrola R-08 pokazuje je jako `null` w v2; bramka H-16 „no legacy schema” = 0).
+2.  **Węzeł `GraphVersion` v2 (High):** `(:GraphVersion {version: 'v2', validation_passed: true})` zapisany 2026-10-20T08:20:05Z poleceniem `post_import_v2.py stamp … --confirm-validation-sha256 d8a68b7f…8af` (lineage `3f985952…86ec`, commit kodu `75c5c0a`, commit pieczęci `0a32604`, Neo4j 5.14.0). Dopiero od tego momentu przebiegi live są cytowalne wg `src/evaluation/provenance.py` (powód `graph_version_not_validated` znika).
+3.  **Artefakty w `graph_versions/` (git):** `graph_versions/v2/build_params.json` (zatwierdzony w CP-1; `product_content_rule = "title_description"`, `embedding_device = "mps"`, partia kodowania 32), `catalogue_asins.txt.gz` (SHA-256 `76d882ab…f528`), `preflight_report.json` (SHA-256 `3c2804ff49968f6490a04e300ee0c4ddfbe8c269c053caf0afe442fdfc03f5d1`), `pilot/pilot_report.json`, `import_run.json`, `validation_report.json` (SHA-256 **`d8a68b7f…8af`**; pełny skrót `d8a68b7f2ac1589353fc8d32b6b00646dfe4e2aca98150b1964f8f1e6b1bb8af`), `baseline_comparison.json`, `RUNBOOK_LOG.md`; `graph_versions/v1/DUMP.json`.
+4.  **Zrzut v1 (High, ścieżka wycofania):** `~/neo4j-backups/kg_v1_20261019_2234/neo4j.dump`, 2 717 863 893 bajtów, SHA-256 **`51db81286ef04f4a780a37833ed5d6d47d1ecc9737ea16ca9043c20af6c0026f`** (sprawdzony niezależnie `shasum`; zapis w `graph_versions/v1/DUMP.json`, `created_at` 2026-10-19T22:35:27Z). Opcjonalny test odtworzenia (`restore-test`) **nie został uruchomiony**.
+5.  **Cytowalne przebiegi baseline v2 (High):** `eval_2026-10-20_1114`, `_1128`, `_1142`, zarchiwizowane (`evaluations_archive/`), `graph_version` = v2 zwalidowany. Szczegóły w sekcji „Weryfikacja”.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **Przebieg wykonania — punkty kontrolne (wszystkie zatwierdzone przez użytkownika 2026-10-20):**
+    *   **CP-1 (R-1, pre-flight):** raport bez nieudanych sekcji (SHA-256 `3c2804ff49968f6490a04e300ee0c4ddfbe8c269c053caf0afe442fdfc03f5d1`), uruchomiony na `82a1bb9` z niezatwierdzoną poprawką MPS (dwa wcześniejsze przebiegi zawiesiły się w P-04 i nie zapisały raportu; poprawka w `8306d9b`). Pomiary: 8 produktów bez tytułu, 0 produktów katalogu bez surowych metadanych, **3 382 248** zachowanych recenzji (60 521 zduplikowanych identyfikatorów recenzji scalono), 1 081 137 recenzji do osadzenia, 2 594 661 użytkowników, 265 294 produkty z co najmniej jedną recenzją, 1 183 węzły taksonów, 17 254 produkty bez ścieżki kategorii, 151 262 bez ceny; osadzanie na MPS przy partii 32 (335 tekstów/s; partia 64 kończyła się brakiem pamięci); szczytowy RSS próby 3,6 GB (cel 3 GB, zaakceptowany przez użytkownika), 72 GB wolnego miejsca. P-09: osadzenia produktów odtwarzają v1 (19 z 20 identycznych), osadzenia kategorii nie (40% identycznych), bo zmienia się próbka tytułów po uzupełnieniu duchów; uznane za część różnicy v1 → v2. Decyzje: zatwierdzenie `build_params.json` w całości, w tym OQ-1 (jedyny produkt wyłącznie z `features` nie dostaje osadzenia zamiast prawie pustego).
+    *   **CP-2 (R-2, bramka startowa):** użytkownik potwierdził, że R2a nie wymaga już grafu v1 (cytowalne przebiegi v1 zarchiwizowane: `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`, commit `96874f3`). Do `.env` (ignorowany przez git) dodano `NEO4J_DATA_VOLUME` i `NEO4J_DATA_VOLUME_V1` (strażnik importu). R-3: `export_v1_snapshot.py --verify-only` potwierdził niezmienność katalogu (265 307), migawki v1 i celów benchmarku.
+    *   **CP-3 (R-4, zatrzymanie v1):** `docker stop neo4j-recommendation` (kod wyjścia 0). Polecenie zatrzymania z runbooka nie pasowało do kontenera (należy do projektu compose `knowledge-graph`, utworzonego ze ścieżki `src/knowledge-graph/docker-compose.yml`); obsłużone w R-9/R-7 przez przemianowanie kontenera.
+    *   **CP-4 (R-5, zrzut):** patrz „Nowe komponenty” p. 4; wolumen v1 `knowledge-graph_neo4j_data` był zamontowany tylko przez kontener zrzutu i nie został zmodyfikowany.
+    *   **R-6 (transformacja)** na czystym commicie `75c5c0a`: pilot `--sample-mod 20` (13 381 produktów, 171 212 recenzji, 54 668 do osadzenia, 790 taksonów; 6 min, szczyt RSS 1,1 GB) i pełna (265 307 produktów, 3 382 248 recenzji, 1 081 137 do osadzenia, 2 594 661 użytkowników, 49 663 marki, 38 kategorii, 36 187 atrybutów, 1 183 taksony; 2,9 GB CSV; 10,5 min; szczyt RSS **4,2 GB**, czyli powyżej celu NFR-002 ≤ 3 GB i powyżej wcześniejszego oszacowania 3,3 GB). Liczności zgodne z `build_params.json`.
+    *   **CP-5 (R-7, pilot):** kontener v1 przemianowany na `neo4j-recommendation-v1` (niezmieniony, zatrzymany), aby compose mógł utworzyć `neo4j-recommendation`. Wolumen roboczy `kg_neo4j_data_v2_pilot`: import 13 s, magazyn 479 MB, pusty raport importu (0 błędnych wierszy). `post_import_v2.py all`: 7,8 min, MPS, partia 32, 0 zdarzeń braku pamięci, 0 przejść na CPU; 5 indeksów wektorowych (procedura), test dymny full-text zaliczony. `validate_graph.py --pilot`: **18/18** bramek twardych. R-07: 20 celów benchmarku poza 5% próbą; próbkowany cel `live_eval_laptop_02` zachował tytuł, cenę, markę i kategorię (recenzje 33 → 20, limit). Ekstrapolacja pełnego budowania (`pilot/pilot_report.json`): import ≈ 4 min, osadzanie ≈ 2,25 h, magazyn ≈ 12,5 GB + 0,5–1 GB logów. Kontener pilota usunięty (`compose down` bez `-v`), wolumen roboczy skasowany.
+    *   **CP-6 (R-8, pełny import):** `docker volume create kg_neo4j_data_v2`; `import_graph_v2.py import --execute`: **94 s**, magazyn 4,0 GB, pusty raport importu (0 błędnych wierszy); `graph_versions/v2/import_run.json`.
+    *   **CP-7 (R-9, przełączenie, kroki po imporcie, walidacja):** compose uruchomiony na `kg_neo4j_data_v2` z profilem budowania (sterta 4G, cache stron 1G, limit transakcji 600 s). `post_import_v2.py all` uruchomiony odłączony (`nohup`), ok. **2,6 h**: wszystkie etykiety osadzone na MPS przy partii 32 bez braku pamięci (`Review` 1 081 137; `ParentProduct` 265 303, 4 pominięte przez regułę `title_description`; `Brand` 49 663; `Category` 38). Przebieg zatrzymał się na kroku full-text (patrz p. 2). Po poprawkach: `validate_graph.py` → **18/18 bramek twardych**.
+    *   **CP-8 (R-10, pieczęć):** użytkownik przejrzał i zatwierdził raport walidacji; zapis `GraphVersion` (patrz „Nowe komponenty” p. 2).
+    *   **R-11 (profil uruchomieniowy):** `.env` bez nadpisań budowania; compose odtworzony z stertą 2 GiB, cache stron 2 GiB, limitem transakcji 1 min; `GraphVersion` v2 obecny.
+    *   **CP-9 (R-12, baseline):** patrz „Weryfikacja”; zaakceptowany przez użytkownika 2026-10-20. Na tym F4 jest zakończone.
+2.  **Trzy błędy kodu znalezione dopiero na pełnym grafie (po zatwierdzonej walidacji pilota), naprawione i zatwierdzone z testami:**
+    *   `8b10a35`: (a) test dymny full-text na pojedynczym tokenie nie skalował się (token pasował do 11 828 produktów) i uruchamiał awaryjny indeks `features_text`; zastąpiony testem frazą, z odzyskiwaniem po awarii; (b) 2 węzły `Attribute` z niesparowanymi surogatami nie zostały zapisane zwrotnie, bo zapis dopasowywał ciągi znaków; zapis zwrotny przez `elementId`, z licznikami zapisów.
+    *   `0a32604`: zapytanie testu dymnego przekazywało parametr `query=` do `Session.run` (kolizja nazw argumentów); zmieniono na `$search`.
+    *   Po poprawkach ponowiono `embed --labels Attribute` (2 osadzone; 36 187 / 36 187) oraz `fulltext-index` (indeks awaryjny usunięty, `features_text` zdjęte z 215 032 produktów, indeks przebudowany na `title`, `description`, `features`, `details_text`; test frazą znalazł produkt na pozycji 1; bramka H-13 w raporcie: `B00006HC8Q`).
+3.  **Poprawka A-7 listy dozwolonych ścieżek (`012b780`, `4248d03`; `scripts/graph_ingestion/check_baseline_diff.py`):** pre-check R-12 (`--base 88cdbdf`) zwrócił kod 1: 5 ścieżek poza listą, wszystkie dokumentacja lub infrastruktura (`src/README.md`, `src/knowledge_graph/DOCKER.md`, usunięte `src/knowledge_graph/README.md` i `QUICKSTART.md`, `src/knowledge_graph/docker-compose.yml`). Użytkownik wybrał opcję (a) — rozszerzenie listy; po zmianie: 37 zmienionych ścieżek, wszystkie dozwolone.
+4.  **Różnica w liczbie recenzji względem prognozy:** wpis z 2026-10-19 podawał oczekiwane 3 388 842 recenzji (do potwierdzenia w P-02). Zmierzone i zbudowane: 3 382 248. Wcześniejsza liczba pochodziła z szybkiego zliczenia tylko do odczytu, które nie deduplikowało (`preflight_report.json`, P-02: `reference_kept_measured` = 3 388 842). Potok scala 60 521 zduplikowanych identyfikatorów recenzji (ten sam użytkownik, ten sam podrzędny ASIN i ten sam znacznik czasu; `duplicate_review_id` = 60 521, zapis CP-1 w `RUNBOOK_LOG.md`: „3,382,248 kept reviews (60,521 duplicate review IDs collapsed)”). Wyjaśnia to różnicę 6 594 między prognozą a stanem zbudowanym.
+5.  **Rozbieżność nazewnicza do odnotowania:** wpis z 2026-10-19 (p. 1) podawał dla v1 1 630 273 recenzje; kontrola R-08 w `validation_report.json` pokazuje dla `Review` w v1 1 629 426 (`WROTE` 1 624 586, `ABOUT_PRODUCT` 1 634 273). Obie liczby są poprawne, ale dotyczą różnych rzeczy: 1 630 273 to liczba wierszy wejściowego pliku v1 `datasets/processed_data/processed_reviews.csv`, a 1 629 426 to liczba węzłów `Review` w grafie v1. Różnica 847 jest zgodna z tym, że w v1 `review_id = md5(user_id-asin-sort_timestamp)`, a znacznik czasu zawsze wynosił 0, więc powtórne recenzje tego samego podrzędnego ASIN-a przez jednego użytkownika zlewały się w jeden węzeł (`Research_Report_Graph_Rebuild.md` N-2: „likely but not verified”, czyli prawdopodobne, niezweryfikowane).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Kod czytników i agentów (`src/tools/graph_search_tool.py`, `src/tools/kecr_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`, `src/agents/orchestrator.py`, `src/agents/critic_agent.py`) nie był modyfikowany w ramach wykonania; baseline v2 uruchomiono na nich bez zmian (NFR-009), a bramka H-15 potwierdziła, że 21 celów legacy-21 jest uziemionych w v2.
+*   Fuzja RRF i ramiona ablacji z R1, metryki i archiwum R2a: bez zmian. Neo4j pozostaje w wersji 5.14.0; `vector_search_helper.py` nadal emituje `db.index.vector.queryNodes` (D-4), a indeksy wektorowe są tworzone procedurą.
+*   Bramka spurious CLARIFY (RS-23): `check_eval_gate.py --max-spurious-clarify 0` → PASS, 0/21 w każdym z trzech przebiegów v2.
+*   Wszystkie 18 bramek twardych H-01 … H-18 zaliczone (H-03: 8 bez tytułu; H-04: brak sygnatury ducha; H-07: maks. 20 recenzji na produkt; H-10: osadzone = kwalifikujące się dla wszystkich pięciu etykiet, 0 złych wymiarów; H-11: maks. wynik próbek 0,9954624 < 0,9999; H-12: wszystkie indeksy ONLINE 100%; H-14: 4 203 porównane, 0 niezgodności importu; H-17: 0 błędów taksonomii).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **R2b** (stratyfikowany benchmark ~200 + 30 zapytań, podział tuning / test, zamrożenie) — odblokowany, ale niewykonany. Wymaga redefinicji stratum **S1 „cold”** (G-9): w v2 praktycznie wszystkie produkty mają osadzoną recenzję (99,995%), więc definicja „brak recenzji” z decyzji 2026-10-18-014 nie ma już populacji.
+*   **Redefinicja `review-coverage-bias@K`:** wg `RUNBOOK_LOG.md` metryka „nie rozdziela już ramion na v2”; zasady jej przeformułowania nie zostały jeszcze określone (to samo dotyczy plasterka `target_review_embedded`).
+*   Wyniki baseline v2 mają niską moc (21 zapytań); żadne twierdzenie o poprawie lub pogorszeniu wyszukiwania po przebudowie nie jest poparte istotnością statystyczną. Rozstrzygnąć może dopiero R2b.
+*   Test odtworzenia zrzutu v1 (`restore-test`) nie został wykonany; dotychczasowa ścieżka wycofania opiera się na zatrzymanym kontenerze, a zrzut jest drugą, nieprzetestowaną warstwą.
+*   Nadal otwarte (odblokowane przez v2, ale niewykonane): AI-03 (ścieżki historyczne KECR; znaczniki czasu recenzji są teraz w grafie, w tej sesji niezweryfikowane zapytaniem), AI-06, RS-03, RS-12; nadal otwarte bez zmian: RS-24, RS-11, B1–B6, Meta-Phase C, dynamiczne schematy domen (2026-09-29-007), pozostałe uwagi L-1 … L-13 i DL-1 … DL-3 z audytu.
+*   Brak zweryfikowanego wpływu na `ResolverService` i `GraphSearchTool` poza legacy-21: w v2 kategorie to 38 węzłów `Category` (z 71 w v1) plus drzewo `Taxon`; czytniki nadal używają `Category`, a `Taxon` nie jest jeszcze wykorzystywany przez retrieval (nie sprawdzano kodu pod tym kątem w tej sesji).
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+*   **Graf v1 jako aktywny graf.** Pozostaje jako zatrzymany kontener `neo4j-recommendation-v1`, wolumen `knowledge-graph_neo4j_data` (niezmieniony) i zrzut z SHA-256 `51db8128…026f`. Przebiegi live na v1 nie są już cytowalne (brak `GraphVersion`); dowodem dla v1 są wyłącznie zarchiwizowane przebiegi R1 / R2a.
+*   104 281 węzłów-duchów, etykiety `Variant`, `Product`, `PriceRange`, relacje `RATED`, `REVIEWS`, `IN_PRICE_RANGE`, `IS_VARIANT_OF`, `SUBCATEGORY_OF` — nieobecne w v2.
+*   Pilot: kontener usunięty, wolumen roboczy `kg_neo4j_data_v2_pilot` skasowany.
+
+#### 📊 Weryfikacja
+
+*   **Walidacja grafu:** `validate_graph.py` → 18/18 bramek twardych, raport SHA-256 `d8a68b7f2ac1589353fc8d32b6b00646dfe4e2aca98150b1964f8f1e6b1bb8af`, zatwierdzony w CP-8.
+*   **Baseline v2 vs v1** (`graph_versions/v2/baseline_comparison.json`; legacy-21, 3 przebiegi v1: `eval_2026-10-18_2340/_2349/_2358`, 3 przebiegi v2: `eval_2026-10-20_1114/_1128/_1142` na czystym commicie `4248d03`, `--fusion-arms rrf3 rrf2 wrrf3 cc3 sum_legacy`, `gpt-4o-2024-08-06`; średnia na zapytanie po r = 3, test randomizacji parami, bootstrap 95% CI różnicy v2 − v1, korekta Holma między ramionami dla MRR):
+
+    | Ramię | MRR v1 | MRR v2 | Δ | 95% CI | p_Holm |
+    |---|---|---|---|---|---|
+    | `hybrid@rrf3` | 0,226 | 0,319 | +0,093 | [-0,004; +0,208] | 0,875 |
+    | `hybrid@rrf2` | 0,237 | 0,206 | -0,031 | [-0,092; +0,014] | 1,0 |
+    | `hybrid@wrrf3` | 0,345 | 0,322 | -0,023 | [-0,103; +0,065] | 1,0 |
+    | `hybrid@cc3` | 0,298 | 0,288 | -0,011 | [-0,102; +0,088] | 1,0 |
+    | `hybrid@sum_legacy` | 0,176 | 0,144 | -0,032 | [-0,124; +0,058] | 1,0 |
+    | `vector_only` | 0,162 | 0,047 | -0,115 | [-0,276; +0,014] | 0,918 |
+    | `cypher_only` | 0,148 | 0,056 | -0,093 | [-0,198; -0,011] | 0,875 |
+
+    **Wniosek zgodny z zapisem w logu:** żadne ramię nie zmienia się istotnie (MRR p_Holm ≥ 0,875). Zmiany jednoznacznie dodatnie widać tylko w `rrf3`; ramiona jednokanałowe (`vector_only`, `cypher_only`) spadają, przy czym przedział ufności `cypher_only` nie obejmuje 0 przed korektą wielokrotności, a po korekcie Holma p = 0,875. Dla `rrf3` HR@5 0,286 → 0,397 (p = 0,25), HR@20 0,429 → 0,492 (p = 0,625). Przy n = 21 i szumie LLM między przebiegami test ma niską moc, więc brak istotności nie dowodzi braku efektu.
+*   **Bramka spurious CLARIFY:** PASS (0/21 w każdym z trzech przebiegów v2).
+*   **Cytowalność:** wszystkie trzy przebiegi v2 oznaczone jako cytowalne (czysty commit, `graph_version` v2 zwalidowany), zarchiwizowane.
+*   Nie uruchamiano w tej sesji testów jednostkowych ani zapytań do grafu; wpis opiera się na zapisach i raportach wymienionych na początku.
+
+#### 🔁 Ścieżka wycofania (z `RUNBOOK_LOG.md`, R-11)
+
+1.  Zatrzymać `neo4j-recommendation` (v2).
+2.  `docker start neo4j-recommendation-v1` (kontener przemianowany w CP-5, zatrzymany, niezmieniony) albo uruchomić compose z `NEO4J_DATA_VOLUME=knowledge-graph_neo4j_data` (wartość wycofania odnotowana w komentarzu `.env`).
+3.  Awaryjnie: odtworzyć `~/neo4j-backups/kg_v1_20261019_2234/neo4j.dump` po sprawdzeniu SHA-256 `51db81286ef04f4a780a37833ed5d6d47d1ecc9737ea16ca9043c20af6c0026f` (odtwarzanie nieprzetestowane).
+4.  Skutek: przebiegi live na v1 nie będą cytowalne (brak `GraphVersion`).
+
+#### ➡️ Następne kroki
+
+1.  R2b: zamrożenie stratyfikowanego benchmarku na v2, z redefinicją stratum S1 (G-9).
+2.  Redefinicja `review-coverage-bias@K` (i plasterka `target_review_embedded`) dla grafu o pokryciu recenzjami 99,995%.
+3.  Odblokowane pozycje: AI-03, AI-06, RS-12, RS-03.
+4.  Sugestia: ponieważ wykonanie F4 zmienia podstawę empiryczną wyników R1 / R2a (pula kandydatów bez duchów), warto rozważyć wpis w Decision Log Vision Report przez @pm-research — „Te zmiany wprowadzają istotne zmiany architektoniczne. Czy chcesz, żebym zaktualizował `production_artifacts/Vision_Report.md` z nowym wpisem w Decision Log?” (decyzje 2026-10-19-018 … 021 już istnieją; ten wpis nie jest ich zamiennikiem).
+
+### Zaktualizowana Architektura
+
+Architektura potoku bez zmian względem diagramu z 2026-10-19; zmieniło się to, że wszystkie jego kroki zostały wykonane, a graf aktywny to v2.
+
+```mermaid
+flowchart LR
+    V1[("v1: kontener neo4j-recommendation-v1<br/>wolumen knowledge-graph_neo4j_data<br/>zrzut SHA-256 51db8128…026f")]
+    V2[("v2: neo4j-recommendation<br/>wolumen kg_neo4j_data_v2<br/>GraphVersion v2, 18/18 bramek")]
+    RAW["datasets/raw + catalogue_asins.txt.gz"] --> BUILD["build_graph_v2.py (75c5c0a)"]
+    BUILD --> IMP["import_graph_v2.py (94 s)"]
+    IMP --> POST["post_import_v2.py (≈2,6 h, MPS)"]
+    POST --> VAL["validate_graph.py → stamp (CP-8)"]
+    VAL --> V2
+    V2 --> EV["baseline v2: eval_2026-10-20_1114/_1128/_1142"]
+    V1 -. "wycofanie (R-11)" .-> V2
+```
+
+---
+
+## 📅 2026-10-19 (Graph v2 — przebudowa fundamentu danych: kod potoku gotowy, żadna operacja na grafie jeszcze nie wykonana)
+
+### Changelog (względem stanu z 2026-10-19, wpis R2a)
+
+> **Kontekst**: Pipeline `/implement` dla przebudowy grafu wiedzy (gałąź `feature/afp-002-vector-aggregation`, zmiany **niezatwierdzone** w git: `git status` pokazuje zmodyfikowane pliki i nieśledzone nowe katalogi). Podstawa: `production_artifacts/Research_Report_Graph_Rebuild.md` (Gate #1, decyzje G-1 … G-12), `production_artifacts/Technical_Specification_Graph_Rebuild.md` (Gate #2, wraz z poprawkami A-1 … A-6 w §13), `production_artifacts/Audit_Report_Graph_Rebuild.md` (**PASS WITH FIXES**, audyt delta: PASS), decyzje Vision Report **2026-10-19-018 … 021** oraz `_bmad-output/brainstorming/brainstorm-kg-attribute-problems-2026-10-18/brainstorm-intent.md` (decyzje K-1 … K-12). Wpis opisuje wyłącznie **kod i dokumentację**. **Żadna operacja na grafie (zatrzymanie v1, zrzut, import, zapis do Neo4j, przełączenie wolumenu) nie została wykonana**; graf aktywny to nadal v1. Wpis R2a powyżej pozostaje bez zmian.
+>
+> **Odniesienie do Vision Report**: §4 „Knowledge Graph as Grounding” i „bogate węzły strukturalne” nie zachodziły dla v1 (decyzja 2026-10-19-021, p. 5). Przebudowa przywraca tę właściwość, a przez to warunek poprawności metryk z §5. Nie zmienia kierunku strategicznego, nie dodaje trenowania modeli, nie zmienia zbioru danych (nadal wyłącznie Amazon Reviews 2023 Electronics).
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Przyczyna: „duchy” w grafie v1 (ustalenie, Critical):**
+    *   **104 281 z 265 307** węzłów `ParentProduct` w v1 (39,3%) to „duchy”: tylko `parent_asin` oraz identyczne osadzenie pustego szablonu, bez tytułu, ceny i kategorii.
+    *   Trzy współdziałające przyczyny: (1) niezależne próbkowanie metadanych i recenzji w `AmazonDataProcessor.process_and_save_data` (`src/utils/AmazonDataProcessor.py`), co daje recenzje bez metadanych; (2) `MERGE` produktu w kroku recenzji w `scripts/graph_ingestion/batch_ingest.py`, który tworzył produkt z samej recenzji; (3) osadzanie pustych tekstów w `src/knowledge_graph/graphdb/backfill_embeddings.py`.
+    *   Konsekwencje: wyniki R1 i R2a zmierzono na puli kandydatów z ~104 tys. duchami o identycznym wektorze (decyzja 2026-10-19-021 p. 2); 85% z 5 715 produktów z osadzoną recenzją to duchy; atrybuty v1 zawierają tylko Material, Color, Style i Size, a żaden `Attribute` nie ma `numeric_value`.
+    *   **Drugie ustalenie (preprocessing v1):** `AmazonDataProcessor.process_reviews_file` czytał pola `helpful_votes` i `sort_timestamp`, a w surowych danych pola nazywają się `helpful_vote` i `timestamp`. Wszystkie **1 630 273** recenzje v1 mają więc 0 głosów i znacznik czasu 0; „20 najbardziej pomocnych” w v1 nie wynikało z pomocności, a plan AI-03 (uzupełnienie znaczników z `processed_reviews.csv`) nie mógłby zadziałać.
+2.  **Pakiet transformacji `src/knowledge_graph/graph_v2/` (nowy, Critical):** czysty Python, testowalny bez Neo4j, Dockera i surowych plików. Moduły: `product_mapping.py` (rekord metadanych → produkt, marka, kategoria, atrybuty; FR-006 … FR-009), `taxonomy.py` (`TaxonomyBuilder`, `TaxonIdCollisionError`), `review_selection.py` (`make_review_id`, `TopKSelector`, rangi `cap_rank` i `embed_rank`), `csv_io.py` (sanityzacja i `ImportCsvWriter`), `lineage.py` (składanie linii pochodzenia, niezmienniki, `build_paths`, `FULL_PATHS`, `PILOT_PATHS`), `models.py` (modele Pydantic v2 dla artefaktów JSON, m.in. `BuildParams`), `transform.py` (dwuprzebiegowa orkiestracja, `--dry-run`, `--sample-mod`), `import_command.py` (budowanie poleceń Docker), `validation.py` (bramki jako czyste funkcje; `pilot_build_params`), `graph_queries.py`.
+3.  **Podsumowanie decyzji projektowych (poziom ogólny):**
+    *   **Źródło (K-1):** surowe pliki Amazon 2023 Electronics z `datasets/raw/` (`meta_Electronics.jsonl`, `Electronics.jsonl`), SHA-256 w `datasets/raw/SHA256SUMS` sprawdzane przez transformację przed odczytem jakichkolwiek danych (niezgodność = kod wyjścia 2, zanim powstanie jakikolwiek plik wyjściowy). Dodatkowo oficjalne podziały `datasets/Electronics.{train,valid,test}.csv`.
+    *   **Katalog (K-3):** te same 265 307 produktów (zamrożona lista `graph_versions/v2/catalogue_asins.txt.gz`), duchy uzupełnione z surowych metadanych. Produkty powstają **wyłącznie z metadanych**, nigdy z recenzji; recenzje produktów bez metadanych są odrzucane (`product_missing`).
+    *   **Recenzje (K-11, K-12, G-6):** wykluczone pary (`user_id`, `parent_asin`) z podziałów valid i test; potem maksymalnie 20 na produkt wg klucza `(helpful_vote DESC, verified_purchase DESC, timestamp DESC, review_id ASC)`; oczekiwane **3 388 842** recenzji (liczba do potwierdzenia w pre-flight P-02). Na `Review` zapisywane: `timestamp`, `helpful_vote`, `asin`, `in_train_split`, `cap_rank`, `embed_rank`.
+    *   **Schemat (K-7, G-3, G-11):** drzewo `Taxon` (`BROADER`, `IN_TAXON`) z surowych list kategorii, nowe nazwy; `p.features`, `p.details_json`, `p.details_text` przechowywane; etykiety, relacje, właściwości i szablony osadzeń z v1 zachowane (czytniki `GraphSearchTool`, `KnowledgePathExtractor`, `ResolverService` działają bez zmian, NFR-009); `numeric_value` nie jest zapisywane.
+    *   **Osadzenia (G-4, G-5):** szablony v1, kolejność deterministyczna, pomijanie pustych tekstów; osadzane top-5 recenzji na produkt (~1,1 mln). Wariant z tekstem `features` w osadzeniu produktu (K-6) odroczony do ramienia R3.
+    *   **Ładowanie (G-1, G-2, G-10):** `neo4j-admin database import full` w kontenerze `neo4j:5.14.0` do **nowego** wolumenu Docker; wolumen v1 zachowany; Neo4j pozostaje w wersji 5.14.
+    *   **Walidacja i cytowalność (G-8):** bramka twarda H-01 … H-18 oraz kontrole raportowe R-01 … R-08; węzeł `GraphVersion` zapisywany tylko po przejściu bramki i zatwierdzeniu użytkownika; przebieg live na grafie bez `GraphVersion` nie jest cytowalny.
+    *   **Bezpieczeństwo operacyjne:** dziewięć punktów kontrolnych CP-1 … CP-9 wymagających jawnej zgody użytkownika; **żadna operacja na grafie nie rusza przed bramką startową CP-2**.
+4.  **Skrypty `scripts/graph_ingestion/` (7 nowych):**
+    *   `preflight_v2.py`: pomiary P-01 … P-10 (tylko odczyt), raport `graph_versions/v2/preflight_report.json`, w tym szczytowe zużycie pamięci próby (`p10_timing.dry_run_peak_rss_bytes`).
+    *   `export_v1_snapshot.py`: zamrożenie katalogu, migawka v1 i cele benchmarku na v1; `--verify-only`.
+    *   `build_graph_v2.py`: CLI transformacji (`--dry-run`, `--sample-mod`, `--require-clean`, `--build-params`), pliki CSV i `lineage.json` (bajtowo deterministyczne).
+    *   `import_graph_v2.py`: podpolecenia `dump`, `restore-test`, `import`; domyślnie tylko loguje polecenie; wykonanie wymaga `--execute --confirm-volume <nazwa>`; odmawia przy wolumenie równym `NEO4J_DATA_VOLUME_V1`, wolumenie w użyciu, braku CSV lub zbyt małej ilości miejsca.
+    *   `post_import_v2.py`: `constraints` (8 ograniczeń), `embed`, `vector-indexes` (forma proceduralna `db.index.vector.createNodeIndex`, bo 5.14 nie ma `CREATE VECTOR INDEX`), `fulltext-index` (`product_fulltext_index` z testem dymnym i awaryjnym `features_text`), `stamp`, `all`; strażnik „zły graf” przed każdym podpoleceniem.
+    *   `validate_graph.py`: bramki H-01 … H-18 (m.in. brak duchów, integralność referencyjna, wykluczenie podziałów valid/test, limit 20, brak osadzeń pustego szablonu, indeksy online, H-15 uziemienie celów benchmarku), raport `validation_report.json`, kod wyjścia 0 / 1 / 2, tryb `--pilot`.
+    *   `check_baseline_diff.py`: sprawdza, że różnica commita bazowego `88cdbdf` względem commita B zawiera wyłącznie ścieżki z listy dozwolonych (kod wyjścia 1 przy ścieżce spoza listy).
+5.  **`src/knowledge_graph/graphdb/embedding_templates.py` (nowy):** szablony tekstu osadzeń v1 (`product_text_v1`, `review_text_v1`, `brand_text_v1`, `attribute_text_v1`, `category_text_v1`) z regułą pomijania pustych tekstów (zwracają `None`); współdzielone przez `backfill_embeddings.py`, `backfill_category_embeddings.py` i `post_import_v2.py`.
+6.  **Testy (nowe):** `tests/graph_v2/` (13 plików testowych: `test_product_mapping`, `test_taxonomy`, `test_review_selection`, `test_csv_io`, `test_transform`, `test_lineage`, `test_embedding_templates`, `test_check_baseline_diff`, `test_import_command`, `test_post_import`, `test_validation`, `test_validate_graph_collectors` oraz `conftest.py`), `tests/fixtures/graph_v2/` (ręcznie napisane deterministyczne fixtury z syntetycznymi identyfikatorami), `tests/test_legacy_ingest_guards.py` (FR-031 … FR-035), `tests/test_graph_cypher_prompt.py` (FR-036). Wszystkie działają bez Neo4j, Dockera i `datasets/raw/` (NFR-005).
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **Strażniki duchów w starych skryptach (High):**
+    *   `scripts/graph_ingestion/batch_ingest.py`: krok recenzji używa `OPTIONAL MATCH (p:ParentProduct {...})` + `WITH row, p WHERE p IS NOT NULL` zamiast `MERGE` produktu; niedopasowane wiersze są liczone i logowane; docstring oznacza skrypt jako legacy v1.
+    *   `src/knowledge_graph/graphdb/backfill_embeddings.py` (`BackfillService`): generatory delegują do `embedding_templates`, puste teksty są pomijane i liczone, atrybuty sortowane przed `collect` (deterministyczna kolejność).
+    *   `src/knowledge_graph/graphdb/backfill_category_embeddings.py`: próbka kategorii tylko z produktów z tytułem, sortowana `review_count DESC, parent_asin ASC` przed `collect(...)[..5]`.
+2.  **Indeksy wektorowe w formie proceduralnej dla Neo4j 5.14:** `src/knowledge_graph/graphdb/create_vector_indexes.cypher` przepisany na `CALL db.index.vector.createNodeIndex(...)` (z odwołaniem do decyzji D-4); `src/knowledge_graph/graphdb/setup_indexes.py` ma moduł-poziomowe `INDEX_SPECS`, wstrzykiwalny konektor, parametr `allow_ddl_fallback` (tylko dla wersji ≥ 5.15) i `.consume()` na wynikach (poprawka audytu M-1: błąd procedury był wcześniej przypisywany następnemu indeksowi); `create_indexes.py` dostał tylko notę, że wymaga Neo4j ≥ 5.15.
+3.  **Pochodzenie i cytowalność (High):** `src/evaluation/provenance.py` — `collect_runtime_provenance` dodaje do `graph_snapshot` klucze `graph_version` (właściwości pojedynczego węzła `GraphVersion`, w przeciwnym razie `None`), `products_untitled`, `reviews_embedded`; `evaluate_citable(..., graph=...)` dodaje powody `graph_version_unknown` i `graph_version_not_validated` w trybie `live`. **Skutek:** przebiegi live na grafie v1 (np. po wycofaniu) nie będą cytowalne; dowodem dla v1 są zarchiwizowane przebiegi R1/R2a. `scripts/evaluate_retrieval.py` przekazuje migawkę grafu do `evaluate_citable`; `scripts/archive_eval_run.py` kopiuje `graph_version` do `evaluations_archive/index.json`. Testy: `tests/test_provenance.py`, `tests/test_archive_eval_run.py`.
+4.  **`src/knowledge_graph/docker-compose.yml` i `.env.example`:** wolumen danych Neo4j jest **zewnętrzny** i wskazywany przez wymaganą zmienną `NEO4J_DATA_VOLUME` (Compose nie może utworzyć ani usunąć wolumenu grafu, więc `docker compose down -v` go nie usunie); sterta i cache stron z zmiennych (`NEO4J_HEAP`, `NEO4J_PAGECACHE`, domyślnie 2G / 2G), limit transakcji `db.transaction.timeout` (`NEO4J_TX_TIMEOUT`) i retencja logów (`NEO4J_TX_LOG_RETENTION`); nowe zmienne `NEO4J_DATA_VOLUME_V1` i `GRAPH_BACKUP_DIR`.
+5.  **`src/llm_interface/prompts/graph_cypher_prompt.py` (G-12):** usunięte linie schematu `Variant` i `PriceRange` oraz relacja `IN_PRICE_RANGE`; reguła „abstract range” zastąpiona regułą bez wymyślania pułapu ceny (sortowanie `pp.price ASC`); przykład „budget headphones” przepisany. Plik poza ścieżką ewaluacji.
+6.  **`src/utils/AmazonDataProcessor.py`:** poprawione nazwy pól (`helpful_vote` z zapasowym `helpful_votes`, `timestamp` z zapasowym `sort_timestamp`; kolumny wyjściowe zachowują dotychczasowe nazwy), stabilne sortowanie (`kind="mergesort"`), ostrzeżenie przy `frac < 1.0` (metadane i recenzje próbkowane niezależnie), docstring zabraniający użycia do budowy KG. **Usunięty błąd składniowy sprzed zmian:** zbłąkana cyfra `1` powodowała, że `ast.parse` pliku w HEAD kończył się błędem; obecny plik się parsuje. Logika próbkowania i wartości domyślne bez zmian (moduł nadal obsługuje klasyczne baseline'y).
+7.  **`scripts/graph_ingestion/README.md`:** sekcja „Graph v2 (current)” z poleceniami runbooka (R-6, R-7 z jawnymi ścieżkami pilota), dotychczasowa treść pod nagłówkiem legacy v1.
+8.  **Zależności:** `seaborn>=0.12` dodane do `requirements.txt` i zainstalowane w `.venv` (zamyka część AI-13; potrzebne, bo bramka H-15 ładuje `scripts/evaluate_retrieval.py`, który przez `src/evaluation/visualizer.py` importuje `seaborn`).
+9.  **Poprawki z audytu (kod już uwzględnia):**
+    *   **H-1 (High):** `scripts/graph_ingestion/import_graph_v2.py` — strażnik nazwy wolumenu v1 był „fail-open”, gdy `NEO4J_DATA_VOLUME_V1` nie było w środowisku procesu (skrypt nie ładował `.env`); teraz `main` ładuje `.env` (`override=False`), a `--execute` bez tej zmiennej kończy się kodem 2 (`GuardRefused`). Test: `test_refuses_execute_without_v1_volume_name`.
+    *   **H-2 (High):** `scripts/graph_ingestion/post_import_v2.py` — strażnik „zły graf” (FR-021) nie odróżniał v1 od v2, gdy `catalogue_missing_in_meta = 0` (ta sama liczba produktów, brak `GraphVersion` w v1); dodano warunek `count(:Taxon) == lineage.counts.nodes["Taxon"]` (`GUARD_TAXON_COUNT_QUERY`, `check_graph_guard`). Test: `test_guard_v1_lookalike_graph` (6 przypadków).
+    *   **M-1:** patrz p. 2. **M-2:** `transform.py` zwalnia rekordy produktów po zapisie plików po stronie produktów i usuwa zbiór wykluczeń po przebiegu 1; szacowany szczyt ~3,3 GB (cel NFR-002 ≤ 3 GB jest teraz mierzony w P-10 i oceniany przez użytkownika w CP-1, poprawka A-4).
+    *   **Poprawki specyfikacji A-1 … A-6** (§13): m.in. A-3 — `validate_graph.py --pilot` czyta `build_params.json` pełnego buildu, a trzy liczności (H-01, H-08, H-10) bierze z linii pochodzenia pilota (`pilot_build_params`); A-6 — testy kolektorów walidacji na fałszywych sesjach (AC-048).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Czytniki grafu: `src/tools/graph_search_tool.py`, `src/tools/kecr_tool.py`, `src/knowledge_graph/graphdb/resolver_service.py`, `src/knowledge_graph/graphdb/vector_search_helper.py` (nadal emituje `db.index.vector.queryNodes`, D-4), `src/agents/orchestrator.py`, `src/agents/critic_agent.py` — bez zmian i zgodnie ze specyfikacją mają działać na v2 bez modyfikacji (NFR-009).
+*   `live_eval_dataset.json` i `src/evaluation/live_dataset_generator.py` bez zmian; `validate_benchmark_graph_grounding()` w `scripts/evaluate_retrieval.py` bez zmian (używana jako bramka H-15); zmiana w tym skrypcie dotyczy tylko wywołania `evaluate_citable`.
+*   Architektura wyszukiwania i agentów (RRF, router, Critic, KECR) oraz wpis R2a powyżej: bez zmian. Neo4j pozostaje w wersji 5.14 (G-10).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **Brak wykonania na grafie (najważniejsze):** pre-flight (CP-1, zatwierdzenie `build_params.json`), bramka startowa CP-2, zatrzymanie v1 i zrzut ze skrótem SHA-256 (CP-3, CP-4), transformacja pilotowa i pełna, pilot 5% na wolumenie roboczym (CP-5), pełny import do `kg_neo4j_data_v2` (CP-6), kroki po imporcie i walidacja H-01 … H-18 (CP-7), pieczęć `GraphVersion` (CP-8). Kryteria AC-040 … AC-045 są kontrolami runbooka i nie zostały uruchomione.
+*   **Baseline v2:** trzy przebiegi live (r = 3) legacy-21 na commicie B i porównanie v1 / v2 (CP-9, §6.6 specyfikacji). Kierunek zmiany wyników jest nieprzewidywalny (104 tys. dawnych duchów to teraz realni konkurenci). Do tego czasu wszystkie liczby coverage i wyniki R1/R2a są dowodem wyłącznie dla v1.
+*   **R2b** (stratyfikowany benchmark, zamrożenie podziału) — czeka na v2 (z redefinicją stratum S1 wg G-9); do przeliczenia na v2: statystyki pokrycia recenzjami i liczba kategorii.
+*   Pozycja F4 planu implementacji (`production_artifacts/Implementation_Plan.md`) nie została jeszcze zatwierdzona i nie jest odnotowana w planie; plan nie jest tu modyfikowany.
+*   Wciąż otwarte: AI-03 (ścieżki historyczne KECR; odblokowane dopiero przez znaczniki czasu na v2), AI-06, RS-03, RS-12, RS-11, RS-24, B1–B6, Meta-Phase C (wymaga decyzji 2026-10-19-020 o oficjalnych podziałach), dynamiczne schematy domen (2026-09-29-007).
+*   Uwagi niskiego priorytetu z audytu, nienaprawione: L-1 … L-13 oraz DL-1 … DL-3 (m.in. L-3 brak weryfikacji SHA-256 plików CSV przed importem, L-13 brak przełącznika `attribute_key` fallback w `post_import_v2.py`, DL-2 wywołanie `build_graph_v2.py` bez argumentów uruchamia pełną transformację).
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+*   Z promptu `graph_cypher_prompt.py` usunięto `Variant`, `PriceRange` i `IN_PRICE_RANGE`; w v2 nie powstają też `Variant`, `Product`, `PriceRange`, `RATED` i `REVIEWS`.
+*   `AmazonDataProcessor` oznaczony jako zdeprecjonowany dla budowy KG (nadal używany przez klasyczne baseline'y); `batch_ingest.py` i `create_indexes.py` oznaczone jako ścieżki legacy (v1 / Neo4j ≥ 5.15).
+*   Wyłączony pomysł przyrostowych zapisów „in place” (K-2): zastąpiony wersjonowaną przebudową (decyzja 2026-10-19-019).
+
+#### 📊 Weryfikacja
+
+*   **Audyt:** PASS WITH FIXES (0 Critical, 2 High — H-1, H-2 — naprawione; 5 Medium — M-1, M-2 naprawione, M-3, M-4, M-5 zamknięte audytem delta). Audyt delta (A-3, A-5, A-6): **PASS**, 3 uwagi Low.
+*   **Testy:** pełny zestaw **805 zaliczonych, 5 pominiętych, 0 niezaliczonych** (767 w pierwszym audycie + 38 w delcie); celowane `tests/graph_v2` + `tests/test_legacy_ingest_guards.py` + `tests/test_graph_cypher_prompt.py` + `tests/test_provenance.py` + `tests/test_archive_eval_run.py`: 193 zaliczone. Wykluczono cztery pliki łączące się z Neo4j (`tests/test_category_resolution.py`, `tests/test_challenger_empirical.py`, `tests/test_benchmark_alignment.py`, `tests/test_cypher_ranking.py`). Audyt nie używał Dockera, Neo4j ani surowych plików JSONL.
+*   Uwaga: pełny zestaw testów nadal zapisuje przebiegi offline do ignorowanego przez git katalogu `evaluations/` (AI-12, istniejący problem).
+
+#### ➡️ Następne kroki
+
+1.  Zatwierdzenie i commit kodu (obecnie niezatwierdzony), tak by `--require-clean` było spełnione.
+2.  Pre-flight i punkty kontrolne runbooka CP-1 … CP-8 (zrzut v1, pilot, pełny import, walidacja, pieczęć), potem baseline v2 (CP-9), a następnie R2b.
+
+### Zaktualizowana Architektura
+
+```mermaid
+flowchart LR
+    RAW["datasets/raw/*.jsonl<br/>(SHA-256 w SHA256SUMS)"] --> T["graph_v2.transform<br/>build_graph_v2.py<br/>2 przebiegi, bez Neo4j"]
+    CAT["catalogue_asins.txt.gz<br/>265 307 ASIN"] --> T
+    SPL["Electronics.{train,valid,test}.csv"] --> T
+    T --> CSV["CSV importu + lineage.json"]
+    CSV --> IMP["import_graph_v2.py<br/>neo4j-admin import full<br/>nowy wolumen v2"]
+    IMP --> POST["post_import_v2.py<br/>ograniczenia, osadzenia v1,<br/>indeksy wektorowe, full-text"]
+    POST --> VAL["validate_graph.py<br/>H-01..H-18"]
+    VAL -->|"przeszła + zgoda CP-8"| GV["GraphVersion v2"]
+    GV --> PROV["provenance.py<br/>citable tylko z GraphVersion"]
+    V1[("wolumen v1<br/>zachowany + zrzut")] -.-> IMP
+```
+
+Diagram opisuje potok zaimplementowany w kodzie; żaden jego krok nie został jeszcze wykonany na grafie.
+
+---
+
+## 📅 2026-10-19 (R2a — fundament ewaluacji, poprawka fałszywego CLARIFY RS-23, archiwum cytowalnych przebiegów)
+
+### Changelog (względem stanu z 2026-10-17, po wdrożeniu R1)
+
+> **Kontekst**: Realizacja wydania R2a z mapy drogowej `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` (pipeline `/implement`, gałąź `feature/afp-002-vector-aggregation`, zakres `git log 9cbf426..HEAD`). R2 dzieli się na R2a (metryki, poprawka RS-23, archiwum) i R2b (stratyfikowany benchmark); ten wpis opisuje wyłącznie **R2a**. Podstawa: `production_artifacts/Research_Report.md` (R2, zatwierdzony 2026-10-18 na Gate #1), `production_artifacts/Technical_Specification.md` (R2a wraz z poprawkami A-1 … A-13 w §13) oraz decyzje Vision Report **2026-10-18-014 … 017**. R1 pokazał, że wyniki 21 zapytań nie pozwalają odróżnić wariantów fuzji (warianty różniły się w 2 z 21 zapytań), szum między przebiegami LLM jest tak duży jak mierzone efekty (liczba CLARIFY: 0 / 4 / 5), a hash commita w manifeście nie identyfikował ocenianego kodu. R2a usuwa te trzy przeszkody po stronie narzędzi pomiarowych i naprawia przyczynę fałszywych CLARIFY.
+>
+> **Zakres commitów** (`9cbf426..HEAD`):
+>
+> | Commit | Opis |
+> |---|---|
+> | `5446dcf` | `feat(eval)`: fundament ewaluacji R2a i poprawka fałszywego CLARIFY (RS-23), wraz z FR-007a |
+> | `93ce435` | archiwizacja przebiegów R1 jako nie-cytowalnego dowodu historycznego |
+> | `f3ed804` | dokumenty: raport badawczy R2, specyfikacja R2a, audyt, decyzje Vision 014–017, dokument tezy 10 |
+> | `471d77c` | usunięcie nieosiągalnego duplikatu `return` w `_recover_category` (L-10), re-audyt FR-007a |
+> | `88cdbdf` | poprawki specyfikacji A-12 i A-13 po re-audycie (**commit bramki**) |
+> | `96874f3` | archiwizacja trzech cytowalnych przebiegów bramki R2a i raport bramki |
+> | `7fc2d8b` | dokumenty tezy: wkłady 11–12 oraz datowana korekta dokumentu 10 |
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **RS-23, warstwa 1: reguły ekstrakcji kategorii (`src/llm_interface/prompts/preference_extract_prompt.py`, `src/llm_interface/preference_parser.py`):**
+    *   **Przyczyna (trzy warstwy działające razem).** Pięć fałszywych CLARIFY z `eval_2026-10-17_1937` (`charger_01`, `mouse_02`, `keyboard_01`, `keyboard_02`, `keyboard_03`) miało wspólny wzorzec: rzeczownik określający typ produktu był głową długiej frazy z wieloma modyfikatorami („compact 65W GaN wall charger”). (1) `LLMPreferenceParser` przenosił modyfikatory do `soft_preferences`, a głowę frazy zostawiał tylko w `situational_context`. (2) `DialogueManager._evaluate_dialogue_state` przeliczał gotowość deterministycznie z `category` jako atrybutem krytycznym i nadpisywał własne `ready=true` parsera. (3) Guardrail w `AgentOrchestrator._decide_next_step` zmieniał SEARCH routera na CLARIFY, ignorując `has_category` i uruchamiając się przed `_generate_search_params`, który kategorię by znalazł. Router wybierał SEARCH za każdym razem. Każda warstwa działała zgodnie z projektem; błąd był właściwością ich złożenia.
+    *   `PRODUCT_TYPE_RULE`: rzeczownik będący głową frazy z nazwą żądanego produktu jest twardym ograniczeniem `category` (`operator: "include"`, wartość w słowach użytkownika), a wszystkie modyfikatory trafiają do `soft_preferences`. Reguła nie zawiera list kategorii ani reguł fleksji (zgodnie z odrzuceniem reguły liczby mnogiej 2026-10-17).
+    *   `CATEGORY_CONSISTENCY_RULE`: jeżeli wiadomość lub własny `situational_context` parsera nazywa typ produktu, `category` jest wymagane i nie może figurować w `missing_critical_attributes`; może być brakujące tylko wtedy, gdy użytkownik nie zdecydował, jaki rodzaj produktu kupić.
+    *   `LONG_MODIFIER_EXAMPLE` (`<example_7>`): kurtka turystyczna z siedmioma modyfikatorami, głowa frazy `jacket` staje się `category`. Przykład jest spoza katalogu elektroniki i nie używa żadnego typu produktu z legacy-21 (reguła kontaminacji).
+    *   `PRODUCT_TYPE_SCHEMA_HINT` (`preference_parser.py`): jedno zdanie w bloku `<schema_injection>` równoważące istniejące „ALL other specifications MUST be classified as soft_preferences”.
+2.  **RS-23, warstwa 2: odzyskiwanie kategorii przed CLARIFY (`src/agents/orchestrator.py`, `src/agents/state.py`):**
+    *   `AgentOrchestrator._recover_category()`: gdy guardrail miałby zmienić SEARCH na CLARIFY, najpierw sprawdza źródła kategorii, a dopiero potem pyta. Wywołuje `_generate_search_params` **raz**; wynik jest zapisywany w `state["search_params"]` i ponownie używany przez gałąź SEARCH w `_execute_step` (NFR-001: tura odzyskana kosztuje tyle samo wywołań LLM, co zwykły SEARCH, czyli 3).
+    *   Pomocnicze: `_present_category()` (pierwsza użyteczna wartość: ograniczenia twarde sesji → `active_filters` → `current_context.category`; wspólna dla guardraila, immunizacji marki i `parser_category`), `_category_from_hard_constraints()`, `_category_from_filters()`, `_search_history_text()` (wspólny tekst historii dla obu miejsc wywołania), `_resolution_for_trace()`. Stałe `CATEGORY_FILTER_KEYS`, `NULL_CATEGORY_VALUES` (znaczniki pustki: `""`, `none`, `null`, `unknown`, `n/a`, `any`; nie słownik domenowy) i `CLARIFY_REASONS`.
+    *   Przełącznik: argument `AgentOrchestrator(category_recovery=...)`, a przy `None` zmienna `ORCH_CATEGORY_RECOVERY` (domyślnie `1`; udokumentowana w `.env.example`). Wyłączenie odtwarza guardrail sprzed R2 z `clarify_reason = "parser_missing_category"` i daje punkt odniesienia dla czułości klaryfikacji w R2b.
+    *   Atrybucja w `eval_trace`: `clarify_reason` ∈ {`router`, `router_fallback`, `parser_missing_category`, `recovery_failed`, `recovery_error`} (`null` dla SEARCH) oraz `category_resolution` (`parser_category`, `category`, `source`, `guardrail_triggered`, `recovery_attempted`, `recovery_outcome`, `recovery_product_type_decided`, `recovery_discarded_category`); SEARCH dodatkowo `search_params_source`, `search_params_fallback`, `relaxed_constraints`.
+3.  **H-1 i flaga `product_type_decided` (opcja c, FR-007a):**
+    *   **H-1 (audyt, High).** W pierwszej wersji odzyskiwania jedyną ochroną przed zgadywaniem była instrukcja w `SEARCH_GENERATION_PROMPT`: ustaw `category = null`, gdy użytkownik nie zdecydował. Dla wypowiedzi „I need a gift for my dad who likes gadgets, around $50.” model zwrócił `category = "gadget"` w 2 z 3 przebiegów QA, a tura kończyła się wyszukiwaniem zamiast pytaniem (naruszenie Vision §2: „does not guess”). Użytkownik wybrał opcję (c) (spec §13 A-11).
+    *   `PRODUCT_TYPE_DECIDED_RULE` oraz nowe pole wyjściowe `product_type_decided` (typu boolean, na najwyższym poziomie JSON, między `thought` a `structured_filters`, żeby model deklarował decyzję przed zapisaniem `category`). Ta sama odpowiedź LLM, brak dodatkowego wywołania.
+    *   `_recover_category` zwraca `{"category", "outcome", "product_type_decided", "discarded_category"}`; wyniki sprawdzane w kolejności: `error` (wyjątek lub `param_source == "fallback"`) → `undecided` (flaga nie jest literalnie `True`: `false`, brak klucza, `null`, `"true"`, `1`) → `null_category` (flaga `True`, brak użytecznej kategorii) → `found`. Test to tożsamość `raw_flag is not True`, więc system zamyka się bezpiecznie (fail closed). `undecided` i `null_category` kończą się CLARIFY z `clarify_reason = "recovery_failed"`; `CLARIFY_REASONS` bez zmian.
+    *   Zakres: flagę czyta wyłącznie `_recover_category`. Gałąź SEARCH scala tylko `structured_filters`, więc flaga nie trafia do `active_filters`, partycji katalogu ani Cypher. Tura z kategorią od parsera wyszukuje niezależnie od flagi.
+    *   `recovery_discarded_category` ujawnia każdą zablokowaną „zgadniętą” kategorię (w przypadku H-1: `'gadget'`).
+4.  **Metryki dialogu (`src/evaluation/dialogue_metrics.py`, nowy moduł):**
+    *   `build_query_record`, `compute_dialogue_metrics`, `search_intersection`, `annotate_target_admission`, `category_from_hard_constraints`, `format_share`.
+    *   **Category-extraction recall (CER)** w dwóch wariantach: *parser-only* (ograniczenie twarde `category` w sesji; liczba regresyjna dla AI-07) i *pipeline* (dowolne źródło po odzyskiwaniu).
+    *   **Współczynnik fałszywych CLARIFY** (`numerator`, `n`, `query_ids`, `by_reason`) oraz `type_explicit_non_search` (akcje inne niż SEARCH i CLARIFY na zapytaniach z jawnym typem).
+    *   **Target-admitting category rate**: czy zastosowany filtr kategorii dopuszcza produkt docelowy (łapie przypadek „obecna, ale zła”), wraz z liczbą kategorii porzuconych przez MACS.
+    *   **Czułość i precyzja klaryfikacji** dla zapytań z `gold_action = "CLARIFY"` (na legacy-21 `n/a (n=0)`).
+    *   `category_source_counts` (`parser`, `active_filters`, `session_context`, `search_params`, `search_request`, `null`).
+5.  **constraint-satisfaction@K, trójwartościowe (`src/evaluation/constraint_satisfaction.py`, nowy moduł, czyste funkcje bez I/O):**
+    *   `GoldConstraint`, `parse_gold_constraints`, `validate_gold_annotations`, `constraints_from_search_request`, `brand_matches`, `judge`, `verdict_matrix`, `cs_scores_at_k`, `attribute_names_for`.
+    *   Werdykt dla pary (produkt, ograniczenie): `satisfied` / `violated` / `unknown`. Brak faktu (cena `NULL` lub ≤ 0, brak krawędzi marki, brak `numeric_value`) daje `unknown` i **nigdy nie jest liczony jako naruszenie** (zasada P-2). Kategoria jest wyłączona (pokrywa ją `type-precision@K`).
+    *   Klucze: `cs_sat`, `cs_viol`, `cs_unk`, `cs_known` (`sat / (sat + viol)`), `violation_free`, `cs_coverage`; wariant żądania (diagnostyka adherencji wyszukiwania) z prefiksem `cs_req_`. Wariant *gold* liczy się od ograniczeń z wypowiedzi, więc braki ekstrakcji i rozszerzenie budżetu przez MACS liczą się przeciw systemowi; wariant *request* liczy się od faktycznie wykonanego `search_request`.
+    *   `GraphSearchTool.fetch_constraint_facts()`: jedno sparametryzowane zapytanie Cypher na zapytanie benchmarkowe, na sumie top-20 wszystkich wariantów.
+    *   **Pokrycie numeryczne wynosi 0**, bo w grafie żaden węzeł `Attribute` nie ma `numeric_value` (patrz sekcja wyników). Opcja 1 ze specyfikacji: werdykty tylko z `numeric_value`, `graph_attribute_names` puste dla wszystkich 19 ograniczeń numerycznych.
+6.  **Adnotacje złotego standardu w `live_eval_dataset.json`:** pola `type_explicit`, `gold_action`, `gold_product_type`, `gold_constraints`, `gold_annotation` dla wszystkich 21 zapytań legacy-21 (12 ograniczeń ceny, 7 marki, 19 numerycznych, razem 38). Adnotacje wyprowadzone **wyłącznie z tekstu wypowiedzi**, nigdy z pól pochodzących z produktu docelowego; istniejące pola bez zmian. `validate_gold_annotations` zwraca błędy, a `scripts/evaluate_retrieval.py` kończy się kodem 1 przy ich wystąpieniu.
+7.  **Statystyka sparowana (`src/evaluation/stats.py`, nowy moduł; tylko NumPy i biblioteka standardowa, bez SciPy):**
+    *   `paired_randomization_test` (dokładny rozkład po odwróceniu znaków dla ≤ 16 niezerowych różnic, w przeciwnym razie Monte Carlo z ziarnem), `paired_bootstrap_ci`, `mcnemar_exact`, `wilson_ci`, `holm_correction`, `build_comparisons`, `format_comparison`.
+    *   Wstępnie zarejestrowane porównania (decyzja 2026-10-18-015): **pierwotne** `rrf3` vs `sum_legacy` oraz `rrf2` vs `rrf3` (RR i NDCG@10, bez korekty); **wtórne** pozostałe pary wariantów (RR, korekta Holma). Populacja: tylko zapytania SEARCH, parowanie po `query_id`, ziarno `20261018`. Wyniki w `summary.json["comparisons"]` i w logu.
+    *   Niezależna weryfikacja w audycie: zgodność z `scipy.stats.binomtest`, Wilson i Holm ze `statsmodels`, pełnym wyliczeniem odwróceń znaków.
+8.  **Pochodzenie przebiegów i flaga `citable` (`src/evaluation/provenance.py`, nowy moduł):**
+    *   `collect_git_provenance`, `collect_benchmark_provenance`, `collect_runtime_provenance`, `evaluate_citable`, `offending_paths`, `file_sha256`. Manifest (`manifest["provenance"]`): `git_commit`, wynik `git describe --always --dirty`, `git_dirty`, `git_dirty_paths`, `git_scope` (`src`, `scripts`), SHA-256 różnicy `git diff HEAD -- src scripts`, pliki nieśledzone, ścieżka / SHA-256 / liczba zapytań benchmarku, alias LLM i **rozwiązane identyfikatory modelu** zwrócone przez API, wersja i edycja Neo4j, migawka grafu (produkty, kategorie, recenzje, produkty z osadzoną recenzją), wersja i ścieżka interpretera Pythona.
+    *   `manifest["citable"] = true` tylko gdy: tryb `live`, brak `--sample-size`, brak zmian w `src/` i `scripts/`, benchmark śledzony i niezmodyfikowany. Powody w `citable_reasons`, ostrzeżenia w `citable_warnings`.
+    *   Opcja `--require-clean` w `scripts/evaluate_retrieval.py`: odmowa uruchomienia z kodem wyjścia 2 **przed** zbudowaniem orkiestratora, z listą ścieżek.
+    *   `SimpleLLMHandler.record_response_model()` i `resolved_model_ids` (`src/llm/simple_llm_handler.py`); `LLMPreferenceParser.extract_preferences` zapisuje identyfikator modelu, tolerując atrapy bez tej metody.
+9.  **Archiwum przebiegów (`evaluations_archive/`, `scripts/archive_eval_run.py`):**
+    *   Śledzony w git katalog `evaluations_archive/<run_id>/` z `manifest.json`, `summary.json`, `retrieval_metrics.csv`, `per_query.jsonl` (generowany przez `tracker.write_per_query_jsonl`) i `ARCHIVE.json` (SHA-256 każdego pliku, SHA-256, rozmiar i liczba linii niekopiowanego `execution_trace.log`, `archived_at`, `archived_from_commit`). Dodatkowo `evaluations_archive/index.json` i `evaluations_archive/README.md` (polityka: **teza cytuje wyłącznie zarchiwizowane przebiegi**).
+    *   Skrypt odmawia archiwizacji przebiegów nie-cytowalnych bez `--legacy --note "<powód>"`, odmawia nadpisania bez `--force`, nie modyfikuje przebiegu źródłowego. Przyjmuje identyfikator przebiegu (np. `eval_2026-10-18_2340`), nie ścieżkę.
+    *   Trzy przebiegi z R1 zarchiwizowane wstecznie jako `citable: false`, `legacy: true`, `legacy_reconstructed: true`: `eval_2026-10-09_1336`, `eval_2026-10-17_1846`, `eval_2026-10-17_1937`.
+10. **Sprawdzanie bramki (`scripts/check_eval_gate.py`):** `--runs <id> <id> <id> --max-spurious-clarify 0`; sprawdza G-3 … G-6 (≥ 3 przebiegi, `citable`, ten sam commit i hash benchmarku, zero fałszywych CLARIFY, wszystkie akcje SEARCH, `hybrid == hybrid@rrf3`, obecność pięciu wariantów), drukuje tabelę i rozmiar przecięcia zapytań SEARCH; kod wyjścia 0 (PASS) lub 1 (FAIL).
+11. **Nowe testy** (zestaw na commicie bramki: **654 zaliczone, 5 pominiętych** (testy live); przed R2a: 453):
+    *   `tests/test_preference_prompt_r2.py`, `tests/test_category_recovery.py` (w tym klasy `TestDecidedPrompt`, `TestDecidedGate`, `TestRecoverCategoryDirect`, `TestDecidedScope`), `tests/test_live_eval_gold_annotations.py`, `tests/test_dialogue_metrics.py`, `tests/test_retrieval_metrics_r2.py`, `tests/test_constraint_satisfaction.py`, `tests/test_eval_stats.py`, `tests/test_provenance.py`, `tests/test_archive_eval_run.py`, `tests/test_r2a_audit_fixes.py`.
+    *   `tests/integration/test_category_recovery_live.py` (uruchamiany przy `RUN_LIVE_TESTS=1`): `test_decided_gate_fresh_vague_set` i `test_decided_gate_type_explicit_legacy` (AC-039, po 3 przebiegi na zestaw) oraz `test_ambiguous_smoke_recovery_on_and_off` (diagnostyka §7.4, 5 wypowiedzi, z odzyskiwaniem i bez).
+12. **Dokumenty tezy:** `thesis/11-doc-evaluation-protocol.md` (protokół ewaluacji ograniczający twierdzenia: trójwartościowe CS, statystyki sparowane, przebiegi cytowalne) i `thesis/12-doc-clarification-gating.md` (diagnoza trzech warstw, instrumentacja atrybucji, bramka fail-closed, wynik negatywny H-1); w obu rozdzielono dowody cytowalne od kontekstu.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`AgentOrchestrator._decide_next_step` (`src/agents/orchestrator.py`):**
+    *   Guardrail SEARCH → CLARIFY (dawniej bezwarunkowy przy `"category"` w `missing`) uwzględnia teraz `has_category` i odzyskiwanie (FR-006). Powód każdego CLARIFY zapisuje w `clarify_reason`.
+    *   `has_category` jest bardziej rygorystyczne niż w pierwotnym tekście specyfikacji (poprawka A-1): wartości-znaczniki pustki i operator `exclude` są ignorowane, a ta sama wartość zasila guardrail, immunizację marki (AFP-004) i `parser_category`. Skutek uboczny: immunizacja marki działa tylko dla użytecznej, niewykluczonej kategorii (wcześniej `{"attribute": "category", "value": null}` mogło ją uruchomić). Test AFP-004 `test_orchestrator_routes_affirmative_brand_to_search` przechodzi bez modyfikacji.
+2.  **`SEARCH_GENERATION_PROMPT` (`src/agents/orchestrator.py`):** poprawiony wiersz „actually under 1500” (wcześniej uczył `price_max = 150`, teraz 1500), reguła „Copy numbers exactly as the user states them”, reguła `category = null` przy braku decyzji, pole `product_type_decided`. Pierwszy wiersz promptu pozostał bez zmian (atrapy testowe dopasowują po nim). Funkcja zapasowa `_generate_search_params` zwraca `"param_source": "fallback"` (wyjątek, niepoprawny JSON lub łańcuch `"Error: ..."`), w przeciwnym razie `"llm"`.
+3.  **`<example_1>` promptu ekstrakcji:** ograniczenie `operating_system` usunięte z `hard_constraints` i przeniesione do `soft_preferences` (`value: "ChromeOS"`, `polarity: -1.0`), co usuwa sprzeczność z regułą taksonomii; po zmianie każde ograniczenie twarde w przykładach przechodzi `validate_hard_constraint`.
+4.  **`GraphSearchTool` (`src/tools/graph_search_tool.py`):** `search()` zapisuje `result["metadata"]["normalized_filters"]` (kopia filtrów po `_normalize_filters`, przed relaksacją MACS); `match_category(asins, category, raw_category=None)` przyjmuje opcjonalnie surową kategorię z żądania (wywołanie bez niej niezmienione); nowa metoda `fetch_constraint_facts()`.
+5.  **`src/evaluation/metrics.py`:** każdy blok strategii w `aggregates_by_strategy` ma `n_all`, `n_search` i podblok `search_only`; każda średnia pomijająca `None` ma licznik `n_<metryka>@k`; CLARIFY na zapytaniu z jawnym typem jest pudłem, a CLARIFY na zapytaniu `gold_action = "CLARIFY"` trafieniem (`scored_as: "clarify_gold"`: nadpisane `hit@k`, `strict_hit@k`, `strict_ndcg@k`, `mrr`); `aggregate_rows` przelicza blok dla dowolnego podzbioru; `by_target_review_embedded` (slice `true` / `false` z `n`); mapowania `CS_GOLD_KEYS` / `CS_REQ_KEYS`. Klucze i znaczenie dotychczasowych agregatów R1 bez zmian.
+6.  **Etykieta `popularity_bias@K` (`src/evaluation/metrics.py`, `scripts/evaluate_retrieval.py`):** klucz bez zmian, ale `summary.json["metric_labels"]` i logi (`RevCovBias@K`) nazywają ją teraz **review-coverage-bias@K** (udział top-K z produktów mających ≥ 1 osadzoną recenzję; nie jest to popularność). Docstring `compute_popularity_bias_at_k` zaktualizowany.
+7.  **`scripts/evaluate_retrieval.py`:** walidacja adnotacji złotego standardu; wstępna kontrola „złoty standard kontra produkt docelowy” (`manifest.configuration.gold_target_check`: sprawdzono 17 produktów docelowych, 38 ograniczeń, 0 naruszeń, 19 nieznanych (wszystkie numeryczne)); werdykty CS dla każdego wariantu i obu wariantów (gold / request); porównania statystyczne i opcje `--stats-resamples`, `--stats-seed`; `per_query.jsonl`; dane uruchomieniowe (identyfikatory modelu, Neo4j, migawka grafu) zbierane **po** pętli zapytań, bo identyfikatory modelu są znane dopiero po wywołaniach LLM; `--require-clean` sprawdza także benchmark (dirty / untracked).
+8.  **Dwie stopy bazowe zamiast jednej (poprawka audytu M-1, `compute_review_coverage_base_rates`):** manifest zawiera obok niezmienionego `catalog_popular_share` także `catalog_titled_products`, `review_embedded_products_titled` i `catalog_popular_share_titled`. Zweryfikowane na żywym grafie: 104 281 z 265 307 węzłów `ParentProduct` (39,3%) to „duchy” (bez tytułu, ceny i kategorii, tylko z osadzeniem), a 4 874 z 5 715 produktów z osadzoną recenzją (85,3%) to duchy. Stopa bazowa wynosi więc **2,15%** dla wszystkich węzłów, ale **0,52%** (841 / 161 026) dla produktów z tytułem. **Korekta względem wpisu z 2026-10-17**: tamto porównanie z 2,15% zaniżało siłę obciążenia około 4-krotnie.
+9.  **`scripts/archive_eval_run.py` (poprawka audytu M-2):** `--force` usuwał istniejące archiwum, zanim skrypt odmówił archiwizacji przebiegu bez `per_query.jsonl`; wszystkie odmowy następują teraz przed usunięciem (test regresyjny `TestForceDoesNotDeleteOnRefusal`).
+10. **Zmiana statusu dowodów z R1 (korekta względem wpisu z 2026-10-17):** przebiegi `eval_2026-10-17_1846` i `eval_2026-10-17_1937` mają w manifeście `git_commit 989c1cd`, ale oceniany kod R1 działał niezatwierdzony i został zatwierdzony później jako `99b8506`. Zarchiwizowano je jako `citable: false` z notą. Wpis R1 pozostaje bez zmian; jego liczby z `eval_2026-10-17_1937` mają od teraz status kontekstu, a tezę cytuje się z przebiegów R2a tam, gdzie mierzą tę samą wielkość.
+11. **Pliki konfiguracyjne:** `.env.example` (`ORCH_CATEGORY_RECOVERY=1`), `.gitignore` (`!/evaluations_archive/**/*.csv`, bo globalna reguła `*.csv` ukrywałaby archiwalne pliki CSV; `scripts/graph_ingestion/.ingest_checkpoint.json`, bo nieśledzony plik czasu wykonania oznaczałby każdy przebieg jako nie-cytowalny; `/evaluations/*` pozostaje ignorowane).
+12. **Decyzje Vision Report zapisane w ramach R2** (`production_artifacts/Vision_Report.md`):
+    *   **2026-10-18-015**: protokół ewaluacji R2 (zamrożony podział, statystyki sparowane, CS@K, reguła RS-02, przebiegi cytowalne). Wdrożone w R2a w części dotyczącej metryk, statystyk, pochodzenia i archiwum; podział i zamrożenie benchmarku czekają na R2b.
+    *   **2026-10-18-016**: poprawka fałszywego CLARIFY (RS-23). Wdrożone w całości, z rozszerzeniem o flagę `product_type_decided` (spec A-11).
+    *   **2026-10-18-014**: stratyfikowany benchmark v2 (zmiana 2026-10-06-002). **Niewdrożone**, to zakres R2b.
+    *   **2026-10-18-017**: nota korygująca. Dynamiczne schematy domen (2026-09-29-007) nie zostały zaimplementowane (`scripts/extract_domain_schemas.py` ani `dynamic_domain_schemas.json` nie istnieją; parser wstrzykuje statyczny `src/llm_interface/domain_schemas.json` z trzema domenami), a warstwa „Lucene full-text” z 2026-09-28-006 jest zastąpiona warstwą z wyrażeniem regularnym na granicach słów (2026-10-07-009).
+
+#### 📊 Wyniki bramki wyjściowej R2a (`88cdbdf`, `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358`)
+
+Trzy kolejne przebiegi na jednym czystym commicie `88cdbdf`, wszystkie `citable: true` (`citable_reasons == []`, `citable_warnings == []`), ten sam SHA-256 benchmarku (`cbbf3621bdfc64f5…`), `gpt-4o-2024-08-06`, Neo4j 5.14.0 community. Raportowano wszystkie przebiegi wykonane na tym commicie (wybór 3 z N jest niedozwolony), żaden nie był powtarzany, brak błędów API. Źródło: `production_artifacts/Audit_Report.md`, sekcja „R2a exit gate (2026-10-18)”. Wszystkie 21 zapytań legacy-21 to SEARCH, więc populacja „wszystkie zapytania” i „tylko SEARCH” pokrywają się (n = 21).
+
+**Bramka:**
+
+| Bramka | Wynik | Dowód |
+|---|---|---|
+| G-1 | PASS | `pytest tests/`: 654 zaliczone, 5 pominiętych (testy `RUN_LIVE_TESTS`) |
+| AC-039 | PASS | (i) świeży zbiór niejednoznaczny: `undecided` w 3/3 przebiegach dla każdej z 8 wypowiedzi; (ii) jawne typy: `found` w 3/3 dla każdej z 8 pozycji |
+| G-2 | PASS | `test_fusion_live_regression.py`: 2 zaliczone |
+| G-3 | PASS | 3 przebiegi `citable: true`, ten sam commit i hash benchmarku |
+| G-4 | PASS | fałszywe CLARIFY 0/21 w każdym przebiegu |
+| G-5 | PASS | `type_explicit_non_search` 0/21; wszystkie 21 linii `per_query.jsonl` to SEARCH z `clarify_reason == null` |
+| G-6 | PASS | `hybrid == hybrid@rrf3` dla 21/21 zapytań, pięć wariantów obecnych |
+| `check_eval_gate.py --max-spurious-clarify 0` | **PASS**, kod 0 | przecięcie zapytań SEARCH: 21 |
+| G-7 | PASS | przebiegi zarchiwizowane i zatwierdzone w `96874f3` |
+| G-8 | PASS | trzy archiwa legacy (`citable: false`) |
+
+**Dialog (RS-23):**
+
+| Przebieg | Fałszywe CLARIFY | CER parser-only | CER pipeline | Wywołania odzyskiwania | `category_source_counts` | Kategoria dopuszcza cel |
+|---|---:|---:|---:|---:|---|---:|
+| `eval_2026-10-18_2340` | 0/21 | 21/21 | 21/21 | 0 | parser 21 | 20/21 |
+| `eval_2026-10-18_2349` | 0/21 | 21/21 | 21/21 | 0 | parser 21 | 20/21 |
+| `eval_2026-10-18_2358` | 0/21 | 21/21 | 21/21 | 0 | parser 21 | 20/21 |
+
+*   **Fałszywe CLARIFY: 4–5 z 21 (R1: `_1846` 4/21, `_1937` 5/21; CER parser-only 17/21 i 16/21) → 0/21 w trzech przebiegach cytowalnych; CER 21/21.** Poprawkę tę w całości tłumaczy reguła promptu (warstwa 1): odzyskiwanie nie zostało wywołane w żadnym przebiegu na legacy-21, bo parser dostarczył każdą kategorię. Ścieżka odzyskiwania jest potwierdzona na żywo wyłącznie przez AC-039 i test dymny.
+*   Jedyne chybienie „kategoria dopuszcza cel” to `camera_02` we wszystkich przebiegach (zastosowana kategoria „smart home security bundle” nie dopuszczała celu, MACS porzucił kategorię).
+*   **Bez testu istotności przed/po**, celowo: liczby sprzed poprawki pochodzą z nie-cytowalnych przebiegów na różnych stanach kodu, poprawkę opracowano na tych samych 21 zapytaniach (dane strojenia), a przebiegi po poprawce są prawie deterministyczne, nie niezależne. Opis jest czysto opisowy: 9 fałszywych CLARIFY w 42 przebiegach zapytań przed poprawką, 0 w 63 po poprawce.
+*   **Diagnostyka dymna §7.4** (nie bramkowa), po każdym przebiegu bramki: CLARIFY **5/5 z odzyskiwaniem i 5/5 bez** (3 z 3 razy). Wypowiedź „gift … gadgets” kończy się `recovery_failed` (`undecided`), bez zablokowanej kategorii; przed FR-007a objaw H-1 (SEARCH dla `'gadget'`) wystąpił w 2 z 3 przebiegów QA.
+*   AC-039 (jedyny nieskażony przebieg, `N_PASSES = 3`): w 24/24 wywołaniach zbioru (i) model zwrócił `category: null` i flagę `false`, a w 24/24 wywołaniach zbioru (ii) flagę `true` z oczekiwaną kategorią. Brak wywołania, w którym flaga `false` towarzyszyłaby zgadniętej kategorii, więc **mechanizm fail-closed nie został uruchomiony na żywo**; jego zachowanie potwierdzają tylko testy jednostkowe. Live pokazuje, że samo dodanie pola decyzji zmieniło wyjście kategorii modelu. Zbiór (i) powstał w `5446dcf` przed raportowanym przebiegiem; repozytorium nie może wykluczyć wcześniejszego, nieraportowanego przebiegu live.
+
+**Wyszukiwanie według wariantu** (ścisłe trafienie celu, n = 21; HR bez zmian we wszystkich trzech przebiegach, MRR i NDCG@10 jako średnia z trzech przebiegów):
+
+| Wariant | HR@10 (trafienia, Wilson 95%) | HR@20 (trafienia, Wilson 95%) | MRR R_a / R_b / R_c (średnia) | NDCG@10 (średnia) |
+|---|---|---|---|---:|
+| `rrf3` (= `hybrid`) | 8/21 [0,208, 0,591] | 9/21 (0,429) [0,245, 0,635] | 0,234 / 0,234 / 0,210 (0,226) | 0,259 |
+| `rrf2` | 9/21 [0,245, 0,635] | 9/21 (0,429) [0,245, 0,635] | 0,237 / 0,237 / 0,237 (0,237) | 0,280 |
+| `wrrf3` | 11/21 [0,324, 0,717] | 12/21 (0,571) [0,365, 0,755] | 0,361 / 0,337 / 0,337 (0,345) | 0,387 |
+| `cc3` | 10/21 [0,283, 0,676] | 10/21 (0,476) [0,283, 0,676] | 0,298 / 0,298 / 0,298 (0,298) | 0,340 |
+| `sum_legacy` | 7/21 [0,172, 0,546] | 9/21 (0,429) [0,245, 0,635] | 0,182 / 0,174 / 0,174 (0,176) | 0,208 |
+| `vector_only` (kontekst) | 5/21 | 7/21 | 0,162 | 0,174 |
+| `cypher_only` (kontekst) | 4/21 | 4/21 | 0,148 | 0,157 |
+
+*   Przebiegi są prawie deterministyczne: w 3 przebiegach × 5 wariantów × 21 zapytań zmieniają się tylko trzy pozycje celu (`phone_03` w `rrf3`, `laptop_02` w `sum_legacy`, `keyboard_02` w `wrrf3`).
+*   **Wartości bezwzględne nie są porównywalne z tabelą R1** (np. HR@20 `rrf3` 0,286 w R1): w R1 pięć zapytań kończyło się CLARIFY i liczyło jako pudła, a przebiegi R1 nie są cytowalne. Wzrost nie jest twierdzeniem o fuzji.
+
+**Porównania pierwotne** (wstępnie zarejestrowane; dokładny sparowany test randomizacji; bootstrap 95% CI; ziarno 20261018):
+
+| Porównanie | Przebieg | ΔRR [95% CI] | p (RR) | p (NDCG@10) | HR@20: rozbieżne, McNemar p |
+|---|---|---|---:|---:|---|
+| `rrf3` − `sum_legacy` | R_a | +0,052 [−0,099, +0,196] | 0,500 | 0,516 | 1–1, 1,0 |
+| | R_b | +0,060 [−0,094, +0,209] | 0,469 | 0,492 | 1–1, 1,0 |
+| | R_c | +0,036 [−0,109, +0,179] | 0,688 | 0,625 | 1–1, 1,0 |
+| `rrf2` − `rrf3` | R_a | +0,003 [0,000, +0,006] | 0,250 | 0,250 | 0–0, 1,0 |
+| | R_b | +0,003 [0,000, +0,006] | 0,250 | 0,250 | 0–0, 1,0 |
+| | R_c | +0,027 [0,000, +0,075] | 0,125 | 0,125 | 0–0, 1,0 |
+
+*   **Żadne porównanie pierwotne nie jest istotne w żadnym przebiegu**, zgodnie z analizą mocy z raportu R2 (n = 21 nie pozwala odróżnić wariantów; przy 3 różnych niezerowych różnicach najmniejsze osiągalne dokładne p to 0,25). ΔHR@20 dla `rrf2` − `rrf3` wynosi 0 w każdym przebiegu; to dowód wyłącznie po stronie strojenia dla reguły RS-02, której rozstrzygnięcie nastąpi na benchmarku v2 (R2b), a potwierdzenie na zbiorze testowym w R3.
+*   **Rodzina wtórna (RR, korekta Holma na 8 testach):** `wrrf3` vs `sum_legacy` odrzucone we wszystkich trzech przebiegach (ΔRR +0,180 / +0,164 / +0,164, p = 0,0039, p_Holm = 0,031); tylko w R_c także `wrrf3` > `rrf3` (p_Holm 0,031) i `wrrf3` > `rrf2` (p_Holm 0,047).
+*   **`wrrf3` (wagi 0,60 / 0,25 / 0,15 z AFP-002) prowadzi we wszystkich metrykach, ale pozostaje hipotezą dla R2b, nie twierdzeniem tezy.** Wagi ustalono a priori przed R1 i nie strojono, ale R1 pokazał to samo na tych samych 21 zapytaniach, a trzy przebiegi to powtórzenia tego samego wyniku, nie niezależne potwierdzenia. `rrf3` pozostaje domyślnym wariantem. **n = 21 jest zbiorem wyłącznie po stronie strojenia** (nie jest zamrożonym podziałem testowym, który powstanie w R2b).
+
+**constraint-satisfaction@20** (wariant gold, `rrf3`; pokrycie R_a / R_b / R_c):
+
+| Rodzaj | Pokrycie | satisfied / violated / unknown (R_a) | Przyczyna nieznanych |
+|---|---|---|---|
+| Cena | 0,539 / 0,541 / 0,528 | 124 / 0 / 106 | cena `NULL` (duchy oraz 48 037 produktów z tytułem bez ceny) |
+| Marka | 1,000 / 1,000 / 1,000 | 130 / 0 / 0 | |
+| Numeryczne | **0,000 / 0,000 / 0,000** | 0 / 0 / 370 | **brak `Attribute.numeric_value` w całym grafie** |
+
+*   `mean_cs_known@20 = 1,0` (n = 15; n = 14 dla `wrrf3` i `cc3`) i `violation_free@20 = 1,0` (n = 17) dla każdego wariantu w każdym przebiegu; w wariancie żądania `cs_req_known@20 = 1,0` i `cs_req_violation_free@20 = 1,0` (n = 15).
+*   **System nie może zweryfikować ani jednej specyfikacji numerycznej względem grafu** (370 z 370 werdyktów to `unknown`). Grafem opartym na faktach można uzasadnić tylko cenę i markę. To dowód na potrzebę RS-11, nie wada metryki.
+*   CS@K nie rozróżnia tu wariantów: cena i marka są twardymi filtrami Cypher, MACS nie poszerzył budżetu, a ekstrakcja nie pominęła ceny ani marki, więc `cs_viol = 0` wynika w dużej mierze z konstrukcji. Metryka stanie się informatywna, gdy ekstrakcja coś pominie lub relaksacja poszerzy ograniczenie (zaprojektowane w benchmarku R2b).
+*   Odczyt trójwartościowy a dwuwartościowy (kontrfaktyczny odczyt z archiwalnych linii `per_query.jsonl`, wyliczony na potrzeby `thesis/11-doc-evaluation-protocol.md`): przy zliczaniu `unknown` jako naruszeń tylko 17–21% list top-20 jest wolnych od naruszeń, a kolejność wariantów odwraca się (`rrf3` pierwszy, `wrrf3` ostatni), podczas gdy żaden wariant nie narusza żadnego znanego ograniczenia.
+
+**review-coverage-bias@K** (średnia z trzech przebiegów; stopy bazowe 2,15% dla wszystkich węzłów i **0,52%** dla produktów z tytułem):
+
+| Wariant | RCB@5 (× baza wszystkich węzłów / × baza z tytułem) | RCB@20 (× / ×) |
+|---|---|---|
+| `sum_legacy` | 0,502 (23× / 96×) | 0,239 (11× / 46×) |
+| `rrf3` | 0,216 (10× / 41×) | 0,192 (9× / 37×) |
+| `cc3` | 0,143 (7× / 27×) | 0,140 (7× / 27×) |
+| `rrf2` | 0,054 (2,5× / 10×) | 0,051 (2,4× / 10×) |
+| `wrrf3` | 0,038 (1,8× / 7×) | 0,021 (1,0× / 4×) |
+
+*   Replikacja ustalenia R1 na przebiegach cytowalnych: `rrf3` obniża obciążenie na czele listy (0,502 → 0,216 przy K = 5), ale nie przy K = 20 (0,239 → 0,192).
+*   Względem bazy dla produktów z tytułem każdy wariant nadal nadreprezentuje produkty z recenzjami (4–10× nawet dla `rrf2` i `wrrf3`). Wariant `rrf2` (bez kanału recenzji) jest lepszą hipotezą zerową niż jakakolwiek stopa bazowa katalogu; nadwyżka nad `rrf2` (+0,162 dla `rrf3`, +0,448 dla `sum_legacy`) szacuje obciążenie wnoszone przez sam kanał recenzji.
+*   Tylko 1 z 21 celów (`charger_02`) ma osadzoną recenzję i każdy wariant stawia go na pierwszym miejscu, więc benchmark legacy-21 prawie nie pozwala testować kanału recenzji.
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   Moduł fuzji `src/tools/score_fusion.py` i warianty `FUSION_ARMS` z R1; `hybrid == hybrid@rrf3` na 21/21 zapytań w każdym przebiegu bramki.
+*   `CriticAgent`, `KnowledgePathExtractor` (KECR), router dialogowy, MACS, `PromptConstructor`, indeksy wektorowe i schemat grafu.
+*   `DialogueManager._evaluate_dialogue_state` (poprawka odbywa się w guardrailu i w prompcie, nie w tej klasie).
+*   `requirements.txt` bez zmian (NFR-003); zapytania Cypher dodane w R2a są sparametryzowane i działają na Neo4j 5.14.
+*   453 testy sprzed R2a przechodzą bez modyfikacji. Zmieniono trzy testy z samego R2a w `tests/test_category_recovery.py` (flaga `product_type_decided: True` w atrapach testów AC-004, AC-005 i NFR-001 oraz dwa nowe klucze w oczekiwanym słowniku AC-004), uznane w audycie za zachowujące intencję (poprawka specyfikacji A-12).
+*   Wybór domyślnego wariantu fuzji: `rrf3` pozostaje domyślny (żaden wynik R2a nie spełnia wstępnie zarejestrowanej reguły zmiany).
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **R2b (następny krok):** generator benchmarku v2 (strata S0–S4 i A, ok. 200 + 30 zapytań z ≥ 12 kategorii, generowanie bez tytułu, kontrola wycieków), zamrożony podział (`sha256(sól + parent_asin) mod 100 < 60` → test, `--split` / `--confirm-test`), przegląd wypowiedzi testowych przez użytkownika, linia bazowa na zbiorze strojenia z r = 3 oraz rozstrzygnięcie RS-02 (reguła z 2026-10-18-015). `wrrf3` czeka tam na test jako wstępnie zarejestrowane porównanie pierwotne na danych wstrzymanych. RS-21 w `Implementation_Plan.md` pozostaje otwarte.
+*   **Czułość klaryfikacji na zapytaniach niejednoznacznych nie jest mierzona** (na legacy-21 `n/a (n=0)`). Ochrona Vision §2 („does not guess”) jest na razie tylko diagnostyczna: 5 wypowiedzi dymnych, z których 4 router klaryfikuje, zanim odzyskiwanie mogłoby zadziałać, oraz 8 świeżych wypowiedzi AC-039. Bramka formalna (czułość na warstwie A przy włączonym i wyłączonym odzyskiwaniu nie niższa niż przed poprawką) to R2b. Flaga `product_type_decided` pochodzi z tego samego wywołania LLM co kategoria, więc jest miękką ochroną, nie niezależną weryfikacją.
+*   **A-13 (audyt M-4), odroczone do R2b i wymagane przed pierwszym pomiarem warstwy A:** `recovery_product_type_decided` i `recovery_discarded_category` w `per_query.jsonl` oraz `summary.dialogue.recovery_outcome_counts`. Dziś zablokowaną kategorię widać tylko w linii `[STEP 2] Category recovery` pliku `execution_trace.log` (ignorowanego przez git, archiwizowanego jedynie jako SHA-256).
+*   **L-12:** `tests/test_session_adapter.py::test_live_eval_phone_01_candidate_recovery` wywołuje OpenAI bez znacznika pomijania; bez środków kończy się błędem 429, a ze środkami domyślny zestaw zużywa tokeny. Dodanie znacznika `RUN_LIVE_TESTS` wymaga zgody użytkownika (AC-009 zabrania edycji testów sprzed R2a).
+*   **L-13:** jeśli model umieści `product_type_decided` wewnątrz `structured_filters`, na turze z kategorią od parsera klucz trafiłby do `active_filters` jako miękka preferencja; potrzebny strażnik w scalaniu gałęzi SEARCH (niezaobserwowane).
+*   **L-11 / A-12:** test `test_null_like_category_values_do_not_count` (AC-006) nie ćwiczy już markerów pustki od początku do końca (`"N/A"`, `"unknown"`, `"any"` są pokryte tylko testem jednostkowym `_category_from_filters`); poprawka w R2b.
+*   **L-14:** `git_describe` ma sufiks `88cdbdf-dirty` we wszystkich trzech manifestach przy `git_dirty: false` i `citable: true` (jedyna zmiana śledzona leży poza zakresem `src/` i `scripts/`). Przebiegi są poprawnie cytowalne, ale czytelnik może źle odczytać sufiks; zalecenie: zawęzić `git describe` do tych samych ścieżek lub opisać różnicę w `evaluations_archive/README.md`.
+*   **M-3 i K-3 (duchy):** 104 281 węzłów `ParentProduct` bez tytułu, ceny i kategorii może trafiać do wyników zapytań bez filtra kategorii (np. `camera_02` po porzuceniu kategorii przez MACS; w `vector_only` duchy zajmują 102 z 420 miejsc). Wykluczenie duchów z wyszukiwania (K-3) nie zostało zatwierdzone, w kodzie wyszukiwania nic nie zmieniono.
+*   **Otwarte decyzje A-3 / L-1:** `soft_hit@k`, `graded_ndcg@k` i `recall@k` nie są nadpisywane na wierszach `clarify_gold`; rekomendowane nadpisanie tak jak pozostałych metryk, do rozstrzygnięcia przed warstwą A.
+*   **RS-11:** pokrycie werdyktów numerycznych wynosi 0%, bo żaden `Attribute` nie ma `numeric_value`.
+*   **RS-24 (R3)** — dopasowanie typu produktu niezależne od domeny („present but wrong”, `camera_02`; zapasowe dopasowanie do słownika kategorii katalogu czeka na RS-24). **AI-07**: parser i `_generate_search_params` nadal niezależnie ekstrahują kategorię, a odzyskana kategoria nie jest zapisywana z powrotem do sesji (kolejna tura bez kategorii odzyskuje ją ponownie); CER parser-only jest jego bramką regresyjną. **AI-11**: interpolowany warunek tytułu kategorii w Cypher. Pozostałe uwagi niskiego priorytetu L-2, L-4 … L-9 w `production_artifacts/Audit_Report.md`.
+*   **Dokumenty planistyczne:** w `production_artifacts/Implementation_Plan.md` pozycje RS-20 (reszta) i RS-23 w momencie pisania nie mają zaznaczonego statusu ukończenia; aktualizacja wymaga zgody użytkownika.
+*   **D-2 … D-4** (Vision Report) oraz wydania R3–R5 mapy drogowej bez zmian. Dynamiczne schematy domen (2026-09-29-007) pozostają niezaimplementowane (nota 2026-10-18-017).
+*   **Powiązany kolejny krok (osobny nurt, poza R2a):** decyzje Vision Report 2026-10-19-018 … 021 przebudowują graf jako v2 z surowych plików Amazon Reviews 2023; wszystkie wyniki w tym wpisie są dowodem dla grafu v1.
+
+#### 🗑️ Usunięte / Zdeprecjonowane
+
+*   **Bezwarunkowy guardrail SEARCH → CLARIFY** w `_decide_next_step` (zastąpiony przez `has_category` i odzyskiwanie kategorii); odtwarzalny tylko przez `ORCH_CATEGORY_RECOVERY=0`.
+*   **Sprzeczność w `<example_1>`** (`operating_system` jako ograniczenie twarde) oraz wiersz „UPDATE `price_max` to 150” w `SEARCH_GENERATION_PROMPT`.
+*   **Nieosiągalny duplikat `return`** na końcu `_recover_category` (usunięty w `471d77c`, L-10).
+*   **Status dowodowy trzech przebiegów sprzed R2** (`eval_2026-10-09_1336`, `eval_2026-10-17_1846`, `eval_2026-10-17_1937`): od teraz `citable: false`, wyłącznie kontekst.
+*   **Filary 1–2 i rozmiar „14–21 pozycji” z decyzji 2026-10-06-002** są zastąpione decyzją 2026-10-18-014 (zakres R2b; w R2a benchmark legacy-21 zmieniono wyłącznie przez dodanie adnotacji złotego standardu).
+*   **Procedura bramki z pierwszego audytu** (`Audit_Report.md`, „Gate Procedure”) jest zastąpiona procedurą z re-audytu FR-007a.
+
+### Zaktualizowana Architektura
+
+**Przepływ decyzji o klaryfikacji (RS-23):**
+
+```mermaid
+flowchart TD
+    U[Tura użytkownika] --> P["LLMPreferenceParser<br/>reguła głowy frazy, spójność, example_7"]
+    P --> D["DialogueManager<br/>ready, missing (bez zmian)"]
+    U --> R[Router LLM: akcja]
+    D --> G{"SEARCH, not ready,<br/>category w missing?"}
+    R --> G
+    G -->|nie| A[Zachowaj akcję routera<br/>po immunizacji marki]
+    G -->|tak| H{"has_category?<br/>parser → active_filters → kontekst sesji"}
+    H -->|tak| S[SEARCH]
+    H -->|nie, odzyskiwanie wyłączone| C1["CLARIFY<br/>parser_missing_category"]
+    H -->|nie, odzyskiwanie włączone| RC["_recover_category<br/>jedno wywołanie _generate_search_params"]
+    RC -->|error / fallback| C2["CLARIFY<br/>recovery_error"]
+    RC -->|flaga ≠ True| C3["CLARIFY recovery_failed<br/>undecided, zgadnięta kategoria odrzucona"]
+    RC -->|flaga True, brak kategorii| C4["CLARIFY recovery_failed<br/>null_category"]
+    RC -->|flaga True, kategoria| S2["SEARCH<br/>source = search_params"]
+    S --> T["eval_trace:<br/>clarify_reason, category_resolution"]
+    S2 --> T
+    C1 --> T
+    C2 --> T
+    C3 --> T
+    C4 --> T
+```
+
+**Przepływ ewaluacji R2a:**
+
+```mermaid
+flowchart TD
+    B["live_eval_dataset.json<br/>gold_constraints, type_explicit, gold_action"] --> V["validate_gold_annotations<br/>kod 1 przy błędzie"]
+    V --> PV["provenance: git, benchmark SHA-256"]
+    PV -->|"--require-clean i brudne drzewo"| X["kod 2, przed zbudowaniem orkiestratora"]
+    PV --> PF["wstępna kontrola: gold vs cel"]
+    PF --> O["AgentOrchestrator na zapytanie<br/>eval_trace.search_request"]
+    O --> RP["powtórzenie tego samego żądania:<br/>rrf3, rrf2, wrrf3, cc3, sum_legacy"]
+    RP --> F["fetch_constraint_facts<br/>jedno zapytanie Cypher"]
+    F --> J["judge: satisfied / violated / unknown"]
+    J --> AG["agregaty z n_all, n_search, n_metryki"]
+    AG --> ST["stats: randomizacja, bootstrap, McNemar, Wilson, Holm"]
+    ST --> M["manifest (citable), summary.json, per_query.jsonl"]
+    M --> GC["check_eval_gate.py (≥ 3 przebiegi)"]
+    M --> AR["archive_eval_run.py → evaluations_archive/"]
+```
+
+---
+
+## 📅 2026-10-17 (R1 — fuzja rankingowa, AFP-002 przez RRF)
+
+### Changelog (względem stanu z 2026-10-09, po wdrożeniu AFP-005)
+
+> **Kontekst**: Realizacja wydania R1 z mapy drogowej `production_artifacts/action_items/Retrieval_Score_Redesign_Roadmap.md` (pipeline `/implement`, gałąź `feature/afp-002-vector-aggregation`). Wynik wyszukiwania ma mierzyć, jak dobrze produkt pasuje do prośby użytkownika, a nie ile tekstów o produkcie przypomina zapytanie. Zgodnie z decyzją Vision Report **2026-10-17-013** propozycja AFP-002 została zrealizowana przez Reciprocal Rank Fusion zamiast pierwotnej adaptacyjnej fuzji późnej (niemonotonicznej). Kierunek wynika z sesji burzy mózgów (`_bmad-output/brainstorming/brainstorm-retrieval-score-relevance-2026-10-10/`) i raportu badawczego `production_artifacts/Research_Report.md`.
+
+#### 🔴 Nowe komponenty (nieopisane w poprzednim raporcie)
+
+1.  **Moduł fuzji wyników (`src/tools/score_fusion.py`):**
+    *   Czysty moduł Pythona bez I/O: `ChannelHit`, `ChannelEvidence`, `FusedCandidate`, `FusionConfig`, `competition_ranks()`, `fuse()`.
+    *   Ranking konkurencyjny w obrębie kanału (remisy dzielą najlepszą pozycję: 1, 2, 2, 4), deduplikacja produktu do jego najlepszego dopasowania (MaxP).
+    *   Fuzja RRF `Σ w_c / (k + rank_c)` z `k = 60` oraz alternatywna kombinacja wypukła (CC) znormalizowanych min-max podobieństw.
+    *   Warianty ablacyjne `FUSION_ARMS`: `rrf3` (domyślny), `rrf2` (bez kanału recenzji), `wrrf3` (wagi 0.60 / 0.25 / 0.15 z AFP-002), `cc3`, `sum_legacy`. Wybór przez zmienną `RETRIEVAL_FUSION_ARM` (udokumentowaną w `.env.example`).
+    *   Znaczenie: każdy produkt liczy się raz na kanał, więc liczba recenzji lub atrybutów nie zawyża już wyniku (koniec „efektu huba”).
+
+2.  **Nowe testy:**
+    *   `tests/test_score_fusion.py` (17 testów): brak premii za liczbę dopasowań, wzór RRF, przykład `ret_021` z burzy mózgów, remisy, niezależność od kolejności, warianty, ograniczenie maksymalnego wyniku, konfiguracja środowiskowa.
+    *   `tests/test_retrieval_metrics_r1.py` (7 testów): nowe metryki i agregaty per strategia.
+    *   `tests/integration/test_fusion_live_regression.py` (2 testy na żywej bazie, uruchamiane przy `RUN_LIVE_TESTS=1`): brak dominacji słuchawek Senso w `ret_001` i ograniczony wynik fuzji; pozycja Logitech C920 w `ret_021` zapisywana jako diagnostyka.
+
+#### 🟡 Korekty / Modyfikacje istniejących komponentów
+
+1.  **`GraphSearchTool` (`src/tools/graph_search_tool.py`):**
+    *   `_execute_hybrid_search` i `_execute_vector_search` wykonują teraz jedno zapytanie MaxP na kanał (`_build_channel_query`: `max(score)` na produkt, filtry twarde przed rankingiem, deterministyczne obcięcie `ORDER BY similarity DESC, asin ASC LIMIT $depth`) oraz jedno zapytanie szczegółów (`DETAIL_QUERY`), a następnie fuzję w Pythonie (`_execute_fused_search`).
+    *   Dawne zapytanie `UNION` + `sum(score)` zachowano bez zmian jako wariant porównawczy `sum_legacy` (`_execute_legacy_sum_search`).
+    *   Każdy wynik zawiera `fused_score`, `soft_bonus` i `fusion.channels` (pozycja, podobieństwo i powód w każdym kanale), co jest pierwszą kolumną planowanego rejestru dowodów (RS-18).
+    *   Premia za miękkie preferencje skalowana do zakresu fuzji (`β × max_fused_score`, `β = 0.25`); ścieżka filtrów (`_execute_cypher_search`) i `sum_legacy` zachowują jednostkę 0.2.
+    *   Nowe metody `match_category()` i `fetch_review_embedded_asins()` na potrzeby metryk.
+    *   Konfiguracja fuzji odczytywana po utworzeniu `Neo4jConnector`, który ładuje `.env` (poprawka z audytu QA).
+    *   MACS, Critic, KECR i router pozostały bez zmian.
+2.  **`AgentOrchestrator` (`src/agents/orchestrator.py`)** — `eval_trace["search_request"]` zapisuje dokładne argumenty `GraphSearchTool.search`, aby ewaluacja mogła odtworzyć to samo zapytanie w każdym wariancie.
+3.  **Metryki (`src/evaluation/metrics.py`)** — nowe `compute_popularity_bias_at_k` i `compute_type_precision_at_k`; `evaluate_retrieval_batch` zwraca `aggregates_by_strategy`. Dotychczasowe agregaty w `summary.json` uśredniały wszystkie strategie razem; bazowy wynik `eval_2026-10-09_1336` przeliczono dla samej strategii hybrid (HR@1 0.048, HR@5 0.190, HR@20 0.381).
+4.  **`scripts/evaluate_retrieval.py`** — opcja `--fusion-arms` (tylko tryb live) odtwarza zapisane zapytanie przez każdy wariant jako strategię `hybrid@<wariant>`, w rotowanej kolejności (eliminacja zniekształcenia latencji); manifest zawiera konfigurację fuzji i udział produktów z recenzjami w katalogu.
+5.  **Wcześniejsza poprawka na tej gałęzi (commit `f7bbf81`)** — pomijanie pustych miękkich preferencji, obsługa filtrów listowych marki i kategorii, dopasowanie cyfr na granicach liczb.
+6.  **Testy istniejące** — `test_graph_search_tool_digit_lookaround_boundaries` używa wariantu `sum_legacy` (sprawdza dopasowanie liczb przy jednostce 0.2). Pełny zestaw: **453 testy zaliczone, 2 pominięte (live)**.
+
+#### 📊 Wyniki ewaluacji (live, `eval_2026-10-17_1937`, 21 zapytań)
+
+| Wariant | HR@1 | HR@5 | HR@20 | NDCG@5 | PopBias@5 | p50 wyszukiwania |
+|---|---:|---:|---:|---:|---:|---:|
+| `sum_legacy` | 0.238 | 0.286 | 0.286 | 0.259 | 0.337 | 727 ms |
+| `rrf3` | 0.238 | 0.286 | 0.286 | 0.262 | 0.212 | 757 ms |
+| `rrf2` | 0.238 | 0.286 | 0.333 | 0.262 | 0.062 | 642 ms |
+| `wrrf3` | 0.238 | 0.286 | 0.333 | 0.268 | 0.050 | 716 ms |
+| `cc3` | 0.238 | 0.286 | 0.333 | 0.268 | 0.088 | 707 ms |
+
+*   Fuzja wyraźnie obniża stronniczość popularności (produkty z recenzjami to 2.15% katalogu). Trafność nie zmienia się mierzalnie: warianty różnią się w 2 z 21 zapytań. `rrf3` pozostaje domyślny do czasu podziału tuning/test w R2.
+*   Wzrost HR@1 względem 2026-10-09 (0.048 → 0.238) **nie wynika z fuzji**: `sum_legacy` osiąga ten sam wynik w tym samym przebiegu.
+*   Audyt QA: **PASS WITH FIXES** (`production_artifacts/Audit_Report.md`).
+
+#### ✅ Bez zmian (potwierdzone jako zgodne)
+
+*   `CriticAgent`, `KnowledgePathExtractor` (KECR), router dialogowy, `PromptConstructor`, MACS, indeksy wektorowe i schemat grafu.
+
+#### ❌ Nadal brakuje (względem pełnej wizji projektu)
+
+*   **RS-24 (R3)** — dopasowanie typu produktu niezależne od domeny. Filtr kategorii oparty na wyrażeniach regularnych odrzuca Logitech C920 dla „Webcams” (tytuł „Webcam”, kategoria „Computers”). Regułowa obsługa liczby mnogiej dla języka angielskiego została zaimplementowana, odrzucona przez użytkownika (nie przenosi się na modę czy kosmetyki) i wycofana.
+*   **RS-23 (R2)** — 4–5 z 21 zapytań traci kategorię podczas ekstrakcji LLM i kończy się akcją CLARIFY.
+*   **D-2 … D-4** — decyzje Vision Report: trenowanie małych modeli, korekta HyDE, Cypher 25 vs Neo4j 5.14.
+*   Wydania R2–R5 mapy drogowej.
+
+### Zaktualizowana Architektura
+
+```mermaid
+flowchart LR
+    Q[semantic_query + filtry] --> E[EmbeddingService]
+    E --> P[kanał produktu<br/>MaxP + WHERE]
+    E --> A[kanał atrybutów<br/>MaxP + WHERE]
+    E --> R[kanał recenzji<br/>MaxP + WHERE]
+    P --> F[score_fusion.fuse<br/>RRF / CC]
+    A --> F
+    R -. wyłączony w rrf2 .-> F
+    F --> D[zapytanie szczegółów]
+    D --> S[premia miękkich preferencji<br/>β × max_fused]
+    S --> O[kandydaci + dowody kanałów<br/>→ MACS / Critic / eval_trace]
+```
+
+---
+
 ## 📅 2026-10-09 (AFP-005)
 
 ### Changelog (względem stanu po wdrożeniu AFP-004)
@@ -893,3 +1735,40 @@ W odpowiedzi na analizę awarii zapytania 16 (`ret_016`) w sesji ewaluacyjnej `e
 * Przeprowadzono pełny zestaw testów regresyjnych (78/78 testów zaliczonych).
 
 
+
+
+---
+
+## 📅 2026-10-22
+
+### Realizacja Audytu E.5: Uczciwe Nazewnictwo Komponentów Grafowych, Relaksacja Ograniczeń i Rzeczywiste Wagi RRF
+
+W odpowiedzi na zalecenia audytu akademickiego (punkt E.5 „Uczciwe nazewnictwo”) przeprowadzono kompleksowe dostosowanie dokumentacji technicznej, planu implementacji, raportu wizji oraz specyfikacji wkładu do pracy magisterskiej w celu eliminacji nadinterpretacji terminologicznych i zapewnienia pełnej przejrzystości naukowej.
+
+#### 1. Uczciwe Nazewnictwo Ekstrakcji Ścieżek: Graph Evidence Paths (Inspirowane KECR/PGPR)
+* **Rozróżnienie od KECR (Ren i in., ACM TIST 2024)**: Model KECR Rena i in. osadza wiedzę grafową oraz uczy się sekwencyjnego łańcucha rozumowania za pomocą algorytmu optymalizacji polityki RL (ich Algorithm 1). Zaimplementowany w projekcie moduł (`KnowledgePathExtractor`, dawniej `KECRTool`) nie wykorzystuje uczenia maszynowego ani sieci neuronowych — jest to w pełni deterministyczny wyszukiwacz szablonowych metapaths w Cypherze (`BOUGHT_TOGETHER`, `HAS_ATTRIBUTE`, `IN_TAXON`).
+* **Rozróżnienie od KECRS (Zhang i in., SIGIR 2022)**: Wyeliminowano potencjalne mylenie modułu z generatywnym modelem KECRS opartym na podgrafach i pamięciach zewnętrznych.
+* **Nowa nazwa formalna**: Wprowadzono precyzyjne określenie: **Graph Evidence Paths (szablonowe metapaths, inspirowane KECR/PGPR)** (ang. *Graph Evidence Paths — template metapaths inspired by KECR/PGPR*), nawiązujące do koncepcji uziemiania ścieżek grafowych (PGPR, Xian i in., 2019; KECR, Ren i in., 2024).
+
+#### 2. Uczciwa Rola w Wyjaśnianiu Rekomendacji
+* **Charakterystyka komponentu**: Skorygowano opisy w planie implementacji i raporcie wizji wskazujące, jakoby komponent generował gotowe wyjaśnienia rekomendacji. W rzeczywistości komponent ten ekstrahuje surowe ciągi dowodowe (`[GRAPH EVIDENCE]`), które są wstrzykiwane do prompta generacji.
+* **Brak historii i fallbacki**: W przypadku użytkowników w scenariuszu *cold-start* lub bez powiązanych recenzji w grafie, moduł generuje standardowe komunikaty zapasowe (*„Matched via hybrid semantic retrieval...”*). Rzeczywiste wyjaśnienia konwersacyjne w języku naturalnym są syntetyzowane dopiero na etapie prompta przez model LLM (często na bazie ogólnych cech z katalogu), a nie przez sam algorytm grafowy.
+
+#### 3. Przemianowanie „MACS/MACR” na Relaksację Ograniczeń (Constraint Relaxation)
+* Zrezygnowano z arbitralnego pseudonimu „MACS” (rozwijanego niejednolicie jako *Minimal Active Constraint Set*, *Multi-Agent Constraint Solving* lub mylonego z *MACR*), w tym usunięto fikcyjne odwołania bibliograficzne.
+* Mechanizm w `GraphSearchTool` został sformalizowany jako **hierarchiczna relaksacja ograniczeń (relaksacja ograniczeń)** — deterministyczna 3-etapowa kaskada heurystyczna: poszerzenie widełek budżetowych o 15% $\to$ uogólnienie taksonomiczne w górę hierarchii `Taxon` poprzez relację `[:BROADER]` $\to$ ostateczne wycofanie filtru kategorii przy niedoborze kandydatów ($< 3$).
+
+#### 4. Mechanizm Rankingu: Wagi Kanałów RRF Zamiast „Bramkowania $\alpha$”
+* Wyjaśniono rzeczywisty wpływ parametru $\alpha$ w `KnowledgePathExtractor`: służy on wyłącznie jako wewnętrzna waga liniowa do porządkowania rekordów dowodowych w zapytaniu Cypher ($S_{composite} = \min(1.0, \alpha \cdot s_{hist} + (1-\alpha) \cdot s_{conv})$) i nie modyfikuje kolejności kandydatów przekazywanych użytkownikowi.
+* Pozycjonowanie i ranking kandydatów są determinowane wyłącznie przez **ważoną fuzję odwrotności rang (wRRF / RRF)** na 4 kanałach MaxP (`product`, `attribute`, `review`, `lexical` w `src/tools/score_fusion.py`) oraz weryfikację filtracyjną przez `CriticAgent`.
+
+#### 5. Zaktualizowane Artefakty i Moduły
+* `production_artifacts/Vision_Report.md`: Decyzja `2026-10-22-027`, aktualizacja celów i metryk.
+* `production_artifacts/Implementation_Plan.md`: Aktualizacja sekcji A1, A4, B1 oraz tabeli GAP.
+* `production_artifacts/Technical_Specification.md`: Klaryfikacja telemetryczna i nazewnicza.
+* `production_artifacts/Project_State_Report.md`: Aktualizacja inwentarza modułów i backlogu luk.
+* `production_artifacts/Research_Report.md`: Ujednolicenie opisów architektury wieloagentowej.
+* `thesis/6-doc-orthogonal-gating.md`: Gruntowna rewizja dokumentu wkładu pracy magisterskiej (Noty korekcyjne C-4, C-5, C-6, nowy diagram przepływu, aktualizacja hipotez i metryk).
+* `thesis/4-doc-hybrid-scoring.md`, `thesis/7-doc-evaluation-framework.md`, `thesis/15-doc-taxonomic-lexical-fusion.md`, `thesis/README.md`: Dostosowanie terminologii relaksacji ograniczeń i usunięcie zmyślonych cytowań.
+* `src/tools/kecr_tool.py`: Aktualizacja docstringów modułu i klasy `KnowledgePathExtractor` oraz dodanie aliasu wstecznego `KECRTool`.
+* `src/llm_interface/prompt_constructor.py`, `src/agents/orchestrator.py`: Dostosowanie komentarzy i logów telemetrycznych.
