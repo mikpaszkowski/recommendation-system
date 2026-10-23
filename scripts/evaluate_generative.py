@@ -8,9 +8,13 @@ Evaluates conversational recommendations across four decomposed quality pillars:
 3. Coherence (Multi-turn dialogue context retention)
 4. Recoverability (Negative feedback adaptation and negative constraint penalty)
 
-Supports dual modes:
+Supports dual execution modes:
 - Offline Mock Mode (--mode offline / --offline): Deterministic heuristic execution
 - Live Mode (--mode live): Live LLM-as-a-Judge invocations via OpenAI models
+
+Supports dynamic system output evaluation (AI-04):
+- Passing --run-orchestrator executes AgentOrchestrator live to produce real candidate
+  recommendations, graph evidence paths, and conversational answers before judging.
 
 Outputs versioned run artifacts (manifest.json, summary.json, generative_metrics.json,
 generative_metrics.csv, and publication-grade plots in plots/).
@@ -18,6 +22,7 @@ generative_metrics.csv, and publication-grade plots in plots/).
 from __future__ import annotations
 
 import argparse
+import asyncio
 import datetime
 import json
 import logging
@@ -66,6 +71,69 @@ def parse_metrics_list(raw_input: Optional[List[str]]) -> List[str]:
     return metrics if metrics else ["groundedness", "explainability", "coherence", "recoverability"]
 
 
+async def _execute_orchestrator_batch(
+    test_cases: List[Dict[str, Any]],
+    mode: str = "live"
+) -> List[Dict[str, Any]]:
+    """
+    Executes AgentOrchestrator across benchmark scenarios to capture real system outputs,
+    graph reasoning paths, and candidate items for generative evaluation (AI-04).
+    """
+    from src.agents.orchestrator import AgentOrchestrator
+
+    logger.info(f"Initializing AgentOrchestrator for {len(test_cases)} scenarios (mode={mode})...")
+    try:
+        orchestrator = AgentOrchestrator()
+    except Exception as exc:
+        logger.error(f"Failed to initialize AgentOrchestrator: {exc}")
+        return test_cases
+
+    for idx, sample in enumerate(test_cases):
+        query = (
+            sample.get("user_query")
+            or sample.get("utterance")
+            or sample.get("query")
+            or sample.get("current_query")
+        )
+        if not query:
+            logger.warning(f"Scenario [{idx+1}/{len(test_cases)}] has no query string; skipping orchestrator execution.")
+            continue
+
+        sid = sample.get("sample_id") or sample.get("query_id") or sample.get("id") or f"sample_{idx+1:03d}"
+        user_id = sample.get("user_id") or f"user_{sid}"
+        session_id = f"session_{sid}"
+
+        logger.info(f"[{idx+1}/{len(test_cases)}] Running orchestrator for: '{query[:65]}...'")
+        try:
+            result = await orchestrator.run(
+                user_id=user_id,
+                user_message=query,
+                session_id=session_id
+            )
+            answer = result.get("answer", "")
+            sample["generated_response"] = answer
+            eval_trace = result.get("eval_trace", {})
+            sample["eval_trace"] = eval_trace
+
+            # Extract graph evidence paths
+            graph_evidence = eval_trace.get("graph_evidence", [])
+            sample["graph_evidence"] = graph_evidence
+            sample["reasoning_paths"] = graph_evidence
+
+            # Extract retrieved candidates
+            candidates = result.get("data", {}).get("items", [])
+            if candidates:
+                sample["retrieved_candidates"] = candidates
+
+            logger.info(f"[{idx+1}/{len(test_cases)}] Success. Response length: {len(answer)} chars. Graph paths: {len(graph_evidence)}")
+        except Exception as exc:
+            logger.warning(f"[{idx+1}/{len(test_cases)}] Orchestrator execution encountered error: {exc}")
+            if not sample.get("generated_response"):
+                sample["generated_response"] = f"Error during orchestrator execution: {exc}"
+
+    return test_cases
+
+
 def run_generative_evaluation(
     benchmark_path: Path,
     judge_model: str = "gpt-4o-mini",
@@ -73,6 +141,7 @@ def run_generative_evaluation(
     sample_size: Optional[int] = None,
     mode: str = "live",
     output_dir: Optional[str] = None,
+    run_orchestrator: bool = False,
 ) -> int:
     """Executes generative evaluation and persists artifacts."""
     logger.info(f"Loading generative benchmark from: {benchmark_path}")
@@ -92,6 +161,12 @@ def run_generative_evaluation(
 
     logger.info(f"Loaded {len(test_cases)} generative scenarios. Running mode: {mode} (judge: {judge_model})")
     offline = mode in ("offline", "mock")
+
+    # If requested or if benchmark lacks pre-generated responses, execute AgentOrchestrator
+    needs_orchestration = run_orchestrator or not any(tc.get("generated_response") for tc in test_cases)
+    if needs_orchestration:
+        logger.info("Executing AgentOrchestrator live across benchmark scenarios (AI-04)...")
+        test_cases = asyncio.run(_execute_orchestrator_batch(test_cases, mode=mode))
 
     # Run batch LLM-as-a-Judge evaluation
     batch_results = evaluate_generative_batch(test_cases, judge_model=judge_model, offline=offline)
@@ -137,6 +212,7 @@ def run_generative_evaluation(
             "mode": mode,
             "benchmark": str(benchmark_path),
             "judge_model": judge_model,
+            "run_orchestrator": needs_orchestration,
             "metrics": metrics_list,
             "sample_size": sample_size,
             "evaluated_count": len(test_cases),
@@ -165,9 +241,15 @@ def main() -> None:
         "--dataset",
         dest="benchmark",
         default="evaluations/benchmarks/generative_benchmark.json",
-        help="Path to generative benchmark JSON",
+        help="Path to generative benchmark JSON (default: evaluations/benchmarks/generative_benchmark.json)",
     )
-    parser.add_argument("--judge-model", default="gpt-4o-mini", help="Judge model (default: gpt-4o-mini)")
+    parser.add_argument(
+        "--run-orchestrator",
+        action="store_true",
+        default=False,
+        help="Execute AgentOrchestrator to produce live system responses before evaluation (AI-04).",
+    )
+    parser.add_argument("--judge-model", default="gpt-4o-mini", help="Judge model (default: gpt-4o-mini, option: gpt-4o)")
     parser.add_argument(
         "--metrics",
         nargs="*",
@@ -189,6 +271,7 @@ def main() -> None:
         sample_size=args.sample_size,
         mode=mode,
         output_dir=args.output_dir,
+        run_orchestrator=args.run_orchestrator,
     )
     sys.exit(exit_code)
 

@@ -210,14 +210,16 @@ def test_contrastive_differentiation_against_peers(eval_dataset):
     )
 
 
-def test_evaluate_retrieval_offline_pipeline():
-    """Asserts that evaluate_retrieval.py runs without errors on live_eval_dataset.json."""
+def test_evaluate_retrieval_offline_pipeline(tmp_path):
+    """Asserts that evaluate_retrieval.py runs without errors on live_eval_dataset.json (isolated output dir, AI-12)."""
+    isolated_out = str(tmp_path / "offline_eval")
     cmd = [
         "python3",
         "scripts/evaluate_retrieval.py",
         "--mode", "offline",
         "--benchmark", "live_eval_dataset.json",
-        "--sample-size", "5"
+        "--sample-size", "5",
+        "--output-dir", isolated_out
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     assert proc.returncode == 0, f"evaluate_retrieval.py failed: {proc.stderr}\n{proc.stdout}"

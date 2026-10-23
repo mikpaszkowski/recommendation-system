@@ -1,0 +1,873 @@
+[
+  {
+    "sample_id": "gen_001",
+    "id": "gen_001",
+    "name": "Dual-Context Audio Accessory Recommendation",
+    "scenario_type": "xai_path_provenance",
+    "user_id": "AHMNA5UK3V66O2V3DZSBJA4FYMOA",
+    "user_query": "Can you recommend a durable 3.5mm replacement cable under $20 for my headphones?",
+    "current_query": "Can you recommend a durable 3.5mm replacement cable under $20 for my headphones?",
+    "user_profile": {
+      "preferences": {"preferred_brand": "Sony", "durability": "high"},
+      "history": [
+        {"parent_asin": "B094V7S7D7", "title": "Sony WH-1000XM4 Wireless Overhead Headphones", "rating": 5.0, "timestamp_days_ago": 30}
+      ]
+    },
+    "conversation_history": [
+      {"user": "I love my Sony WH-1000XM4 headphones, but the aux cable wore out.", "assistant": "I can help you find a durable replacement audio cable compatible with your headphones."}
+    ],
+    "user_preferences": {
+      "category": "Audio Accessories",
+      "price_max": 20.0,
+      "connector": "3.5mm jack",
+      "feature": "braided"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B08CBL35MM",
+        "title": "Anker 3.5mm Premium Braided Auxiliary Audio Cable",
+        "price": 14.99,
+        "brand": "Anker",
+        "category": ["Audio Accessories"],
+        "score": 0.94,
+        "attributes": [
+          {"name": "Connector Type", "value": "3.5mm male-to-male", "source": "specs"},
+          {"name": "Material", "value": "Braided Nylon", "source": "specs"},
+          {"name": "Length", "value": "4ft / 1.2m", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Extremely durable braided wire, fits perfectly into my Sony WH-1000XM4 3.5mm port."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B08CBL35MM",
+        "title": "Anker 3.5mm Premium Braided Auxiliary Audio Cable",
+        "price": 14.99,
+        "brand": "Anker",
+        "category": "Audio Accessories",
+        "attributes": ["3.5mm jack", "braided nylon", "4ft length", "gold-plated connectors"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Anker 3.5mm Premium Braided Auxiliary Audio Cable",
+        "reasoning_path": "Compatible with standard 3.5mm jack on previously purchased 'Sony WH-1000XM4 Headphones' (rated 5.0★, 30d ago); Matches requested feature: Durability (Braided Nylon)"
+      }
+    ],
+    "ground_truth_facts": [
+      "Compatible with standard 3.5mm headphone jack",
+      "Priced at $14.99, under the $20 budget ceiling",
+      "Constructed with double-braided nylon for enhanced durability",
+      "Gold-plated connectors resist corrosion"
+    ],
+    "generated_response": "I recommend the Anker 3.5mm Premium Braided Auxiliary Audio Cable ($14.99). It is fully compatible with the 3.5mm port on your previously purchased Sony WH-1000XM4 headphones. Built with double-braided nylon and gold-plated connectors, it delivers the high durability you need while remaining well under your $20 budget."
+  },
+  {
+    "sample_id": "gen_002",
+    "id": "gen_002",
+    "name": "Negative Feedback Brand Exclusion & Grip Adjustment",
+    "scenario_type": "negative_feedback_recovery",
+    "user_id": "U_GAMER_01",
+    "user_query": "I don't like SteelSeries, it feels too small and flimsy. Recommend something larger and more durable under $70.",
+    "current_query": "I don't like SteelSeries, it feels too small and flimsy. Recommend something larger and more durable under $70.",
+    "user_profile": {
+      "preferences": {"hand_size": "large", "excluded_brands": ["SteelSeries"]},
+      "history": []
+    },
+    "conversation_history": [
+      {"user": "I need a gaming mouse under $70.", "assistant": "Consider the SteelSeries Rival 3, a lightweight gaming mouse with 8500 CPI under $40."},
+      {"user": "I don't like SteelSeries, it feels too small and flimsy. Recommend something larger and more durable under $70.", "assistant": ""}
+    ],
+    "user_preferences": {
+      "category": "Mice",
+      "price_max": 70.0,
+      "excluded_brands": ["SteelSeries"],
+      "form_factor": "large ergonomic",
+      "durability": "durable"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B01N5VHLUT",
+        "title": "Razer DeathAdder Elite Gaming Mouse",
+        "price": 49.99,
+        "brand": "Razer",
+        "category": ["Mice"],
+        "score": 0.92,
+        "attributes": [
+          {"name": "Form Factor", "value": "Ergonomic right-handed large grip", "source": "specs"},
+          {"name": "Sensor", "value": "16,000 DPI Optical", "source": "specs"},
+          {"name": "Switch Durability", "value": "Mechanical 50 million clicks", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Great mouse for palm grip and big hands, very solid build."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B01N5VHLUT",
+        "title": "Razer DeathAdder Elite Gaming Mouse",
+        "price": 49.99,
+        "brand": "Razer",
+        "attributes": ["Large ergonomic grip", "50 million click durability", "16,000 DPI"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Razer DeathAdder Elite Gaming Mouse",
+        "reasoning_path": "Excludes rejected brand SteelSeries; Matches user preference for large ergonomic chassis and high mechanical switch durability under $70"
+      }
+    ],
+    "ground_truth_facts": [
+      "Manufactured by Razer (SteelSeries successfully eliminated)",
+      "Priced at $49.99, under the $70 ceiling",
+      "Features large ergonomic right-handed chassis suited for palm grip",
+      "Rated for 50 million clicks for heavy durability"
+    ],
+    "generated_response": "Understood, excluding SteelSeries. I suggest the Razer DeathAdder Elite ($49.99). Designed specifically with a larger ergonomic chassis for palm grips, it feels much sturdier in hand. Its mechanical switches are rated for 50 million clicks, providing the durability you want while staying well within your $70 budget."
+  },
+  {
+    "sample_id": "gen_003",
+    "id": "gen_003",
+    "name": "MACS Relaxation Transparency Disclosure",
+    "scenario_type": "tradeoff_disclosure_after_relaxation",
+    "user_id": "U_BUDGET_01",
+    "user_query": "I need a 4K 144Hz monitor from LG under $150.",
+    "current_query": "I need a 4K 144Hz monitor from LG under $150.",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [],
+    "user_preferences": {
+      "category": "Monitors",
+      "brand": "LG",
+      "resolution": "4K",
+      "refresh_rate": "144Hz",
+      "price_max": 150.0
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B0791TX5P5",
+        "title": "LG 27UK850-W 27 Inch 4K UHD IPS Display",
+        "price": 379.99,
+        "brand": "LG",
+        "category": ["Monitors"],
+        "score": 0.81,
+        "attributes": [
+          {"name": "Resolution", "value": "4K UHD 3840x2160", "source": "specs"},
+          {"name": "Refresh Rate", "value": "60Hz", "source": "specs"},
+          {"name": "Panel", "value": "IPS", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Gorgeous 4K picture quality and colors, but refresh rate is 60Hz, not for high-FPS gaming."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B0791TX5P5",
+        "title": "LG 27UK850-W 27 Inch 4K UHD IPS Display",
+        "price": 379.99,
+        "brand": "LG",
+        "attributes": ["4K UHD", "60Hz refresh rate", "IPS panel", "HDR10", "$379.99"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "LG 27UK850-W 27 Inch 4K UHD IPS Display",
+        "reasoning_path": "Matches requested brand LG and 4K resolution; Required MACS budget relaxation from $150 to $379.99; Compromise: 60Hz instead of 144Hz"
+      }
+    ],
+    "ground_truth_facts": [
+      "No 4K 144Hz LG monitor exists in the knowledge graph under $150",
+      "The LG 27UK850-W offers 4K resolution and IPS color accuracy",
+      "Its refresh rate is 60Hz (not 144Hz)",
+      "Priced at $379.99, exceeding initial $150 budget"
+    ],
+    "generated_response": "I had to adjust your constraints because there are no 4K 144Hz monitors available under $150. If 4K clarity from LG is your top priority, I recommend the LG 27UK850-W ($379.99). It delivers excellent 4K UHD IPS visuals, but please note it operates at 60Hz rather than 144Hz and requires increasing your budget. Alternatively, if 144Hz and budget are strict, we could look at a 1080p gaming monitor instead."
+  },
+  {
+    "sample_id": "gen_004",
+    "id": "gen_004",
+    "name": "Multi-Turn Context Retention & Typing Preference",
+    "scenario_type": "multi_turn_coherence",
+    "user_id": "U_WRITER_02",
+    "user_query": "Also make sure it has backlighting and Mac modifier keycaps.",
+    "current_query": "Also make sure it has backlighting and Mac modifier keycaps.",
+    "user_profile": {"preferences": {"os": "macOS"}, "history": []},
+    "conversation_history": [
+      {"user": "I am looking for a compact wireless mechanical keyboard under $110.", "assistant": "I can help with that. Are you looking for quiet linear switches, or do you prefer tactile switches?"},
+      {"user": "Quiet switches please, I share an office space.", "assistant": "Noted: quiet switches for office use."},
+      {"user": "Also make sure it has backlighting and Mac modifier keycaps.", "assistant": ""}
+    ],
+    "user_preferences": {
+      "category": "Keyboards",
+      "price_max": 110.0,
+      "keyboard_type": "mechanical",
+      "connectivity": "wireless",
+      "switch_type": "quiet linear",
+      "backlighting": true,
+      "os": "macOS"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B0148NPH9I",
+        "title": "Keychron K3 Ultra-Slim Wireless Mechanical Keyboard",
+        "price": 84.99,
+        "brand": "Keychron",
+        "category": ["Keyboards"],
+        "score": 0.95,
+        "attributes": [
+          {"name": "Switches", "value": "Low Profile Optical Red (Quiet Linear)", "source": "specs"},
+          {"name": "Connectivity", "value": "Bluetooth 5.1 & USB-C Wired", "source": "specs"},
+          {"name": "Backlight", "value": "White LED Backlit", "source": "specs"},
+          {"name": "Keycaps", "value": "macOS and Windows keycaps included", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Quiet optical red switches make it perfect for the office, and native Mac keys are seamless."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B0148NPH9I",
+        "title": "Keychron K3 Ultra-Slim Wireless Mechanical Keyboard",
+        "price": 84.99,
+        "brand": "Keychron",
+        "attributes": ["Optical Red quiet switches", "White LED backlighting", "Mac keycaps included", "Bluetooth wireless", "$84.99"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Keychron K3 Ultra-Slim Wireless Mechanical Keyboard",
+        "reasoning_path": "Retains quiet switch constraint from Turn 2; Incorporates backlighting and macOS keycap preferences from Turn 3; Meets wireless and sub-$110 budget from Turn 1"
+      }
+    ],
+    "ground_truth_facts": [
+      "Priced at $84.99 (under $110 limit)",
+      "Wireless via Bluetooth 5.1",
+      "Equipped with quiet linear red switches for office use",
+      "Features white LED backlighting",
+      "Includes dedicated macOS modifier keycaps"
+    ],
+    "generated_response": "I recommend the Keychron K3 Ultra-Slim Wireless Mechanical Keyboard ($84.99). Retaining your requirements for quiet switches in a shared office and wireless connectivity under $110, this keyboard features smooth, quiet Optical Red switches. It includes white LED backlighting and comes with pre-installed macOS modifier keycaps, seamlessly satisfying all your preferences."
+  },
+  {
+    "sample_id": "gen_005",
+    "id": "gen_005",
+    "name": "Historical Co-Review Provenance for Developer User",
+    "scenario_type": "xai_path_provenance",
+    "user_id": "U_ACTIVE_DEV_01",
+    "user_query": "Looking for an ergonomic high-precision mouse to pair with my dual monitor setup under $100.",
+    "current_query": "Looking for an ergonomic high-precision mouse to pair with my dual monitor setup under $100.",
+    "user_profile": {
+      "preferences": {"use_case": "software development", "brand_affinity": "Logitech"},
+      "history": [
+        {"parent_asin": "B0791TX5P5", "title": "LG 27UK850-W 27 Inch 4K UHD IPS Display", "rating": 5.0, "timestamp_days_ago": 45}
+      ]
+    },
+    "conversation_history": [],
+    "user_preferences": {
+      "category": "Mice",
+      "price_max": 100.0,
+      "ergonomics": "ergonomic",
+      "feature": "multi-monitor horizontal scrolling"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B07S395RWD",
+        "title": "Logitech MX Master 3 Advanced Wireless Mouse",
+        "price": 99.99,
+        "brand": "Logitech",
+        "category": ["Mice"],
+        "score": 0.96,
+        "attributes": [
+          {"name": "Sensor", "value": "Darkfield 4000 DPI tracks on glass", "source": "specs"},
+          {"name": "Scroll Wheels", "value": "MagSpeed electromagnetic & thumb wheel", "source": "specs"},
+          {"name": "Multi-Device", "value": "Flow cross-computer control up to 3 screens", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Essential tool for programmers with multi-monitor workflows; thumb scroll is amazing."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B07S395RWD",
+        "title": "Logitech MX Master 3 Advanced Wireless Mouse",
+        "price": 99.99,
+        "brand": "Logitech",
+        "attributes": ["Darkfield 4000 DPI", "Thumb wheel", "Logitech Flow multi-monitor", "$99.99"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Logitech MX Master 3 Advanced Wireless Mouse",
+        "reasoning_path": "Supports Logitech Flow multi-monitor navigation complementing user's verified 4K monitor setup; Matches high-precision ergonomic preferences under $100"
+      }
+    ],
+    "ground_truth_facts": [
+      "Priced at $99.99, fitting within the $100 ceiling",
+      "Logitech Flow enables seamless cursor tracking across multiple screens",
+      "Thumb wheel enables horizontal scrolling in code and spreadsheets",
+      "Darkfield 4000 DPI sensor provides high precision on any desk surface"
+    ],
+    "generated_response": "I recommend the Logitech MX Master 3 ($99.99). Built specifically for multi-monitor developer setups, it features Logitech Flow to glide your cursor seamlessly across screens, complementing your 4K display setup. Its dedicated thumb wheel makes horizontal navigation effortless, and the sculpted ergonomic grip ensures all-day comfort while staying right within your $100 budget."
+  },
+  {
+    "sample_id": "gen_006",
+    "id": "gen_006",
+    "name": "Subtle Specification Hallucination Detection Test",
+    "scenario_type": "groundedness_audit_trap",
+    "user_id": "U_GAMER_03",
+    "user_query": "Is the ASUS VG248QE monitor 240Hz or 144Hz, and what ports does it have?",
+    "current_query": "Is the ASUS VG248QE monitor 240Hz or 144Hz, and what ports does it have?",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [],
+    "user_preferences": {"category": "Monitors", "asin": "B008DW96TE"},
+    "retrieved_candidates": [
+      {
+        "asin": "B008DW96TE",
+        "title": "ASUS VG248QE 24 Inch Full HD 1920x1080 144Hz Gaming Monitor",
+        "price": 229.0,
+        "brand": "ASUS",
+        "category": ["Monitors"],
+        "score": 0.90,
+        "attributes": [
+          {"name": "Refresh Rate", "value": "144Hz", "source": "specs"},
+          {"name": "Response Time", "value": "1ms GTG", "source": "specs"},
+          {"name": "Connectivity", "value": "DisplayPort, Dual-link DVI-D, HDMI", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Runs at 144Hz over DisplayPort or DVI. Note that HDMI is limited to 60Hz on this model."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B008DW96TE",
+        "title": "ASUS VG248QE 24 Inch Gaming Monitor",
+        "attributes": ["144Hz refresh rate", "1ms GTG response", "DisplayPort, Dual-link DVI-D, HDMI", "Does NOT support 240Hz", "No USB-C"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "ASUS VG248QE Gaming Monitor",
+        "reasoning_path": "Spec confirms 144Hz native refresh rate via DisplayPort; Rebuts 240Hz claim"
+      }
+    ],
+    "ground_truth_facts": [
+      "Native refresh rate is 144Hz (not 240Hz)",
+      "Available ports are DisplayPort, Dual-link DVI-D, and HDMI",
+      "HDMI port is capped at 60Hz",
+      "No USB-C or Thunderbolt connectivity"
+    ],
+    "generated_response": "The ASUS VG248QE is a 144Hz monitor, not 240Hz. For ports, it comes equipped with DisplayPort, Dual-link DVI-D, and an HDMI port. Keep in mind that to achieve the full 144Hz refresh rate, you must connect via DisplayPort or Dual-link DVI-D, as the HDMI input on this model is restricted to 60Hz."
+  },
+  {
+    "sample_id": "gen_007",
+    "id": "gen_007",
+    "name": "Fabricated Provenance Trap Test",
+    "scenario_type": "xai_path_provenance_trap",
+    "user_id": "U_COLD_START_03",
+    "user_query": "Recommend high-end noise cancelling headphones under $350.",
+    "current_query": "Recommend high-end noise cancelling headphones under $350.",
+    "user_profile": {
+      "preferences": {},
+      "history": []
+    },
+    "conversation_history": [],
+    "user_preferences": {"category": "Headphones", "price_max": 350.0},
+    "retrieved_candidates": [
+      {
+        "asin": "B094V7S7D7",
+        "title": "Sony WH-1000XM4 Wireless Premium Noise Canceling Overhead Headphones",
+        "price": 278.0,
+        "brand": "Sony",
+        "category": ["Headphones"],
+        "score": 0.95,
+        "attributes": [
+          {"name": "Noise Cancelling", "value": "Dual Noise Sensor technology", "source": "specs"},
+          {"name": "Battery Life", "value": "30 hours with quick charging", "source": "specs"},
+          {"name": "Multipoint", "value": "Bluetooth multipoint connection", "source": "specs"}
+        ],
+        "reviews": []
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B094V7S7D7",
+        "title": "Sony WH-1000XM4 Wireless Headphones",
+        "price": 278.0,
+        "brand": "Sony",
+        "attributes": ["30 hour battery", "Dual noise sensor ANC", "Multipoint bluetooth"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Sony WH-1000XM4 Wireless Headphones",
+        "reasoning_path": "Matches requested active noise cancellation and fits sub-$350 budget; Sparse user history (Cold Start)"
+      }
+    ],
+    "ground_truth_facts": [
+      "User is a cold-start profile with zero past transactions",
+      "Priced at $278.00 (under $350 limit)",
+      "Features 30-hour battery life and dual noise sensor ANC",
+      "No prior Sony purchases exist in knowledge graph for this user"
+    ],
+    "generated_response": "I recommend the Sony WH-1000XM4 Wireless Headphones ($278.00). They provide industry-leading active noise cancellation powered by dual noise sensors, along with up to 30 hours of battery life and multipoint Bluetooth pairing. At $278, they easily meet your $350 budget ceiling."
+  },
+  {
+    "sample_id": "gen_008",
+    "id": "gen_008",
+    "name": "Rapid Preference Pivot & Negative Constraint Compliance",
+    "scenario_type": "negative_feedback_recovery",
+    "user_id": "U_RUNNER_02",
+    "user_query": "Actually, NO in-ear earbuds. Earbuds hurt my ear canals. Show me lightweight over-ear sport headphones instead.",
+    "current_query": "Actually, NO in-ear earbuds. Earbuds hurt my ear canals. Show me lightweight over-ear sport headphones instead.",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [
+      {"user": "I need workout audio gear under $100.", "assistant": "I recommend the Anker Soundcore Spirit X wireless in-ear earbuds with earhooks."},
+      {"user": "Actually, NO in-ear earbuds. Earbuds hurt my ear canals. Show me lightweight over-ear sport headphones instead.", "assistant": ""}
+    ],
+    "user_preferences": {
+      "category": "Headphones",
+      "price_max": 100.0,
+      "excluded_form_factors": ["in-ear", "earbuds"],
+      "form_factor": "over-ear",
+      "weight": "lightweight"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B002QEBMAK",
+        "title": "Audio-Technica ATH-M50x Professional Studio Monitor Headphones",
+        "price": 99.0,
+        "brand": "Audio-Technica",
+        "category": ["Headphones"],
+        "score": 0.88,
+        "attributes": [
+          {"name": "Design", "value": "Over-Ear Circumaural", "source": "specs"},
+          {"name": "Comfort", "value": "Contoured earcups for sound isolation", "source": "specs"},
+          {"name": "Cable", "value": "Detachable cables", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Very comfortable over-ear fit, cushions sit completely around ears with no canal pressure."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B002QEBMAK",
+        "title": "Audio-Technica ATH-M50x",
+        "price": 99.0,
+        "brand": "Audio-Technica",
+        "attributes": ["Circumaural over-ear cups", "No ear canal insertion", "$99.00"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Audio-Technica ATH-M50x",
+        "reasoning_path": "Eliminates rejected in-ear earbud form factor; Satisfies over-ear preference and sub-$100 budget"
+      }
+    ],
+    "ground_truth_facts": [
+      "Completely eliminates in-ear earbuds and tips",
+      "Circumaural over-ear design rests around the ears",
+      "Priced at $99.00, staying under the $100 limit"
+    ],
+    "generated_response": "Understood, completely ruling out in-ear earbuds. I suggest the Audio-Technica ATH-M50x ($99.00). Its circumaural over-ear design rests around your ears rather than inside the canal, completely eliminating ear canal pressure while delivering excellent sound and staying under your $100 limit."
+  },
+  {
+    "sample_id": "gen_009",
+    "id": "gen_009",
+    "name": "High-Speed NVMe Storage Compatibility Verification",
+    "scenario_type": "grounded_recommendation",
+    "user_id": "U_BUILDER_02",
+    "user_query": "Will the Samsung 980 PRO work in a PS5 or PCIe 4.0 PC motherboard, and does it come with a heatsink?",
+    "current_query": "Will the Samsung 980 PRO work in a PS5 or PCIe 4.0 PC motherboard, and does it come with a heatsink?",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [],
+    "user_preferences": {"category": "Storage", "asin": "B08RK2SR23"},
+    "retrieved_candidates": [
+      {
+        "asin": "B08RK2SR23",
+        "title": "Samsung 980 PRO SSD 2TB PCIe NVMe Gen 4 M.2",
+        "price": 149.99,
+        "brand": "Samsung",
+        "category": ["Storage"],
+        "score": 0.94,
+        "attributes": [
+          {"name": "Form Factor", "value": "M.2 2280", "source": "specs"},
+          {"name": "Interface", "value": "PCIe Gen 4.0 x4, NVMe 1.3c", "source": "specs"},
+          {"name": "Sequential Read", "value": "Up to 7000 MB/s", "source": "specs"},
+          {"name": "Heatsink", "value": "Nickel coating heat spreader only (standard model without integrated heatsink)", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Works in PS5 if you add an inexpensive third-party M.2 heatsink."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B08RK2SR23",
+        "title": "Samsung 980 PRO SSD 2TB",
+        "price": 149.99,
+        "attributes": ["PCIe Gen 4.0 x4", "7000 MB/s read", "M.2 2280 form factor", "Standard model lacks bulky heatsink"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Samsung 980 PRO SSD 2TB",
+        "reasoning_path": "PCIe Gen 4.0 interface meets PS5/PC speed requirements; Clarifies heatsink presence based on exact model specification"
+      }
+    ],
+    "ground_truth_facts": [
+      "Compatible with PCIe 4.0 PC motherboards and PS5 expansion slot",
+      "Sequential read speeds reach up to 7,000 MB/s",
+      "This standard SKU includes a thermal heat spreader label but NOT a full metal heatsink",
+      "PS5 usage requires an additional or aftermarket heatsink"
+    ],
+    "generated_response": "Yes, the Samsung 980 PRO 2TB is fully compatible with PCIe 4.0 PC motherboards and meets Sony's speed requirements for the PS5 with read speeds up to 7,000 MB/s. However, this specific model features only a nickel-coated heat spreader label and does not include an integrated metal heatsink. If installing it in a PS5, you should attach an inexpensive aftermarket M.2 heatsink to meet thermal guidelines."
+  },
+  {
+    "sample_id": "gen_010",
+    "id": "gen_010",
+    "name": "Context Lag & Intent Shift Handling (Phone to Audio)",
+    "scenario_type": "multi_turn_coherence",
+    "user_id": "U_SWITCH_01",
+    "user_query": "Actually forget phones, my phone is working fine. I urgently need a portable Bluetooth speaker under $80.",
+    "current_query": "Actually forget phones, my phone is working fine. I urgently need a portable Bluetooth speaker under $80.",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [
+      {"user": "I am thinking about upgrading to a new smartphone under $500.", "assistant": "I can recommend mid-range smartphones like the Samsung Galaxy A-series or Google Pixel."}
+    ],
+    "user_preferences": {
+      "category": "Audio Accessories",
+      "superseded_category": "Smartphones",
+      "price_max": 80.0,
+      "feature": "portable bluetooth speaker"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B07P85M87P",
+        "title": "JBL Flip 5 Waterproof Portable Bluetooth Speaker",
+        "price": 79.95,
+        "brand": "JBL",
+        "category": ["Audio Accessories"],
+        "score": 0.93,
+        "attributes": [
+          {"name": "Waterproof", "value": "IPX7 waterproof up to 3 feet", "source": "specs"},
+          {"name": "Battery Life", "value": "12 hours playtime", "source": "specs"},
+          {"name": "Sound", "value": "Racetrack-shaped driver deep bass", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Great portable sound and truly waterproof."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B07P85M87P",
+        "title": "JBL Flip 5 Waterproof Portable Bluetooth Speaker",
+        "price": 79.95,
+        "brand": "JBL",
+        "attributes": ["IPX7 waterproof", "12h battery", "Portable design", "$79.95"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "JBL Flip 5 Portable Speaker",
+        "reasoning_path": "Purges superseded smartphone intent; Immediately addresses portable Bluetooth speaker request under $80"
+      }
+    ],
+    "ground_truth_facts": [
+      "User explicitly revoked the smartphone inquiry",
+      "Immediate intent shifted to portable Bluetooth speaker under $80",
+      "JBL Flip 5 is priced at $79.95, fitting the $80 budget",
+      "Features IPX7 waterproofing and 12 hours of battery life"
+    ],
+    "generated_response": "Got it, pivoting away from smartphones! For a portable Bluetooth speaker under $80, I recommend the JBL Flip 5 ($79.95). It offers rugged IPX7 waterproofing, up to 12 hours of playtime, and powerful bass in a compact design, coming in just under your $80 limit."
+  },
+  {
+    "sample_id": "gen_011",
+    "id": "gen_011",
+    "name": "USB-C Multiport Hub Compatibility for M2 MacBook Air",
+    "scenario_type": "grounded_recommendation",
+    "user_id": "U_MAC_USER_04",
+    "user_query": "I bought an M2 MacBook Air. Can you recommend a USB-C hub that supports 4K HDMI and charging under $50?",
+    "current_query": "I bought an M2 MacBook Air. Can you recommend a USB-C hub that supports 4K HDMI and charging under $50?",
+    "user_profile": {
+      "preferences": {"laptop": "M2 MacBook Air"},
+      "history": [
+        {"parent_asin": "B0B3C57X27", "title": "Apple MacBook Air M2", "rating": 5.0}
+      ]
+    },
+    "conversation_history": [],
+    "user_preferences": {
+      "category": "Cables & Interconnects",
+      "price_max": 50.0,
+      "feature": "4K HDMI",
+      "power_delivery": "pass-through charging"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B07ZVKTP53",
+        "title": "Anker 7-in-1 USB-C Hub",
+        "price": 34.99,
+        "brand": "Anker",
+        "category": ["Cables & Interconnects"],
+        "score": 0.95,
+        "attributes": [
+          {"name": "HDMI", "value": "4K at 30Hz", "source": "specs"},
+          {"name": "Power Delivery", "value": "100W pass-through charging", "source": "specs"},
+          {"name": "Data Ports", "value": "2x USB-A 3.0, SD & microSD card reader", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Works flawlessly with my M2 MacBook Air for external monitor and keyboard."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B07ZVKTP53",
+        "title": "Anker 7-in-1 USB-C Hub",
+        "price": 34.99,
+        "brand": "Anker",
+        "attributes": ["4K HDMI", "100W Power Delivery", "2x USB 3.0", "SD reader", "$34.99"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Anker 7-in-1 USB-C Hub",
+        "reasoning_path": "Compatible with USB-C ports on user's purchased Apple MacBook Air M2; Delivers 4K HDMI and 100W power delivery under $50"
+      }
+    ],
+    "ground_truth_facts": [
+      "Priced at $34.99, well under the $50 budget limit",
+      "Supports 4K HDMI video output",
+      "Supports up to 100W pass-through Power Delivery charging",
+      "Includes SD and microSD card slots plus 2x USB-A ports"
+    ],
+    "generated_response": "I recommend the Anker 7-in-1 USB-C Hub ($34.99). It connects directly to your MacBook Air M2, delivering 4K HDMI video output and up to 100W pass-through Power Delivery to keep your laptop charged through a single port. It also adds two USB-A ports and SD card slots, all well below your $50 budget."
+  },
+  {
+    "sample_id": "gen_012",
+    "id": "gen_012",
+    "name": "Podcast Microphone Zero-Hallucination Audio Audit",
+    "scenario_type": "grounded_recommendation",
+    "user_id": "U_CREATOR_02",
+    "user_query": "Is the Blue Yeti microphone XLR or USB, and does it require an audio interface?",
+    "current_query": "Is the Blue Yeti microphone XLR or USB, and does it require an audio interface?",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [],
+    "user_preferences": {"category": "Audio Accessories", "asin": "B002VA464S"},
+    "retrieved_candidates": [
+      {
+        "asin": "B002VA464S",
+        "title": "Blue Yeti USB Microphone for Recording and Streaming",
+        "price": 99.99,
+        "brand": "Blue",
+        "category": ["Audio Accessories"],
+        "score": 0.92,
+        "attributes": [
+          {"name": "Connectivity", "value": "USB Plug and Play", "source": "specs"},
+          {"name": "Capsules", "value": "Tri-capsule array (4 polar patterns)", "source": "specs"},
+          {"name": "Monitoring", "value": "Zero-latency 3.5mm headphone output", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Plug and play into Mac or PC with no external audio interface needed."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B002VA464S",
+        "title": "Blue Yeti USB Microphone",
+        "price": 99.99,
+        "brand": "Blue",
+        "attributes": ["USB plug-and-play", "No XLR", "No audio interface required", "3.5mm headphone jack"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Blue Yeti USB Microphone",
+        "reasoning_path": "Graph confirms USB interface and plug-and-play operation without external sound card/audio interface"
+      }
+    ],
+    "ground_truth_facts": [
+      "The standard Blue Yeti is a direct USB microphone, not XLR",
+      "It connects via plug-and-play USB without requiring an external audio interface",
+      "Has an integrated 3.5mm zero-latency headphone monitoring port",
+      "Priced at $99.99"
+    ],
+    "generated_response": "The standard Blue Yeti is a USB microphone, not XLR. It features direct plug-and-play USB connectivity for Mac and PC, meaning you do not need an external audio interface or mixer to use it. You can simply plug it in, connect headphones to its built-in 3.5mm monitoring port, and begin recording immediately."
+  },
+  {
+    "sample_id": "gen_013",
+    "id": "gen_013",
+    "name": "High-Power Multi-Port GaN Charger Recommendation",
+    "scenario_type": "grounded_recommendation",
+    "user_id": "U_MAC_USER_05",
+    "user_query": "Need a small GaN wall charger that can fast-charge my laptop and phone simultaneously under $60.",
+    "current_query": "Need a small GaN wall charger that can fast-charge my laptop and phone simultaneously under $60.",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [],
+    "user_preferences": {
+      "category": "Power & Chargers",
+      "price_max": 60.0,
+      "technology": "GaN",
+      "wattage": "100W",
+      "ports": "multiple"
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B091Z6JNX4",
+        "title": "Anker 736 Charger Nano II 100W",
+        "price": 55.99,
+        "brand": "Anker",
+        "category": ["Power & Chargers"],
+        "score": 0.94,
+        "attributes": [
+          {"name": "Wattage", "value": "100W max output", "source": "specs"},
+          {"name": "Ports", "value": "2x USB-C and 1x USB-A", "source": "specs"},
+          {"name": "Technology", "value": "GaN II semiconductor", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Powers my MacBook and iPhone at the same time with no overheating."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B091Z6JNX4",
+        "title": "Anker 736 Charger Nano II 100W",
+        "price": 55.99,
+        "brand": "Anker",
+        "attributes": ["100W total", "2x USB-C + 1x USB-A", "GaN II", "$55.99"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Anker 736 Charger Nano II 100W",
+        "reasoning_path": "GaN II technology delivers 100W across 3 ports simultaneously; Fits under $60 ceiling"
+      }
+    ],
+    "ground_truth_facts": [
+      "Priced at $55.99, fitting within the $60 budget",
+      "Outputs up to 100W total power using GaN II technology",
+      "Features 3 ports (2x USB-C and 1x USB-A) for simultaneous multi-device charging"
+    ],
+    "generated_response": "I recommend the Anker 736 Nano II 100W Charger ($55.99). Built with compact GaN II technology, it provides up to 100W of power across two USB-C ports and one USB-A port. It can fast-charge your laptop and smartphone simultaneously while staying comfortably under your $60 budget."
+  },
+  {
+    "sample_id": "gen_014",
+    "id": "gen_014",
+    "name": "Severe Negative Feedback Recovery: Rejection of Wired Constraint",
+    "scenario_type": "negative_feedback_recovery",
+    "user_id": "U_AUDIOPHILE_02",
+    "user_query": "No wires! I said I need wireless Bluetooth earbuds with LDAC, not wired studio headphones.",
+    "current_query": "No wires! I said I need wireless Bluetooth earbuds with LDAC, not wired studio headphones.",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [
+      {"user": "I want high-resolution audio listening gear under $280.", "assistant": "I recommend the Audio-Technica ATH-M50x wired studio headphones ($99.00)."},
+      {"user": "No wires! I said I need wireless Bluetooth earbuds with LDAC, not wired studio headphones.", "assistant": ""}
+    ],
+    "user_preferences": {
+      "category": "Headphones",
+      "price_max": 280.0,
+      "connectivity": "wireless bluetooth",
+      "codec": "LDAC",
+      "excluded_attributes": ["wired", "cable-only"]
+    },
+    "retrieved_candidates": [
+      {
+        "asin": "B094C4VDJZ",
+        "title": "Sony WF-1000XM4 Truly Wireless Earbuds",
+        "price": 198.0,
+        "brand": "Sony",
+        "category": ["Headphones"],
+        "score": 0.95,
+        "attributes": [
+          {"name": "Form Factor", "value": "True Wireless Earbuds", "source": "specs"},
+          {"name": "High-Res Audio", "value": "LDAC codec support", "source": "specs"},
+          {"name": "Noise Cancelling", "value": "Integrated Processor V1 ANC", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "LDAC audio quality over Bluetooth is unmatched for true wireless buds."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B094C4VDJZ",
+        "title": "Sony WF-1000XM4 Truly Wireless Earbuds",
+        "price": 198.0,
+        "brand": "Sony",
+        "attributes": ["True Wireless Bluetooth", "LDAC codec", "V1 Processor ANC", "$198.00"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Sony WF-1000XM4 Truly Wireless Earbuds",
+        "reasoning_path": "Eliminates wired constraint; Satisfies LDAC high-resolution wireless codec and stays within $280 budget"
+      }
+    ],
+    "ground_truth_facts": [
+      "Completely wireless Bluetooth earbuds with zero cable requirement",
+      "Supports LDAC codec for high-resolution wireless streaming",
+      "Priced at $198.00, well below the $280 budget limit"
+    ],
+    "generated_response": "My apologies for the oversight—switching completely to wireless. I recommend the Sony WF-1000XM4 Truly Wireless Earbuds ($198.00). They offer true wireless freedom with zero cables, native LDAC Bluetooth support for high-resolution audio, and industry-leading noise cancellation, all well within your $280 budget."
+  },
+  {
+    "sample_id": "gen_015",
+    "id": "gen_015",
+    "name": "Streaming Media Player Format Verification",
+    "scenario_type": "grounded_recommendation",
+    "user_id": "U_STREAM_01",
+    "user_query": "Does the Fire TV Stick 4K Max support Dolby Atmos and Wi-Fi 6, and is it under $60?",
+    "current_query": "Does the Fire TV Stick 4K Max support Dolby Atmos and Wi-Fi 6, and is it under $60?",
+    "user_profile": {"preferences": {}, "history": []},
+    "conversation_history": [],
+    "user_preferences": {"category": "Streaming Media", "asin": "B08XVYZ1Y5"},
+    "retrieved_candidates": [
+      {
+        "asin": "B08XVYZ1Y5",
+        "title": "Amazon Fire TV Stick 4K Max",
+        "price": 54.99,
+        "brand": "Amazon",
+        "category": ["Streaming Media"],
+        "score": 0.96,
+        "attributes": [
+          {"name": "Wireless", "value": "Wi-Fi 6 (802.11ax)", "source": "specs"},
+          {"name": "Audio", "value": "Dolby Atmos audio support", "source": "specs"},
+          {"name": "Video", "value": "Dolby Vision, HDR10, HDR10+", "source": "specs"}
+        ],
+        "reviews": [
+          {"review_text": "Wi-Fi 6 makes 4K streaming seamless, Atmos audio passes through perfectly to soundbar."}
+        ]
+      }
+    ],
+    "graph_evidence": [
+      {
+        "asin": "B08XVYZ1Y5",
+        "title": "Amazon Fire TV Stick 4K Max",
+        "price": 54.99,
+        "brand": "Amazon",
+        "attributes": ["Wi-Fi 6 support", "Dolby Atmos audio", "Dolby Vision", "$54.99"]
+      }
+    ],
+    "graph_reasoning_paths": [
+      {
+        "target_item": "Amazon Fire TV Stick 4K Max",
+        "reasoning_path": "Spec confirms Wi-Fi 6 and Dolby Atmos capabilities at $54.99"
+      }
+    ],
+    "ground_truth_facts": [
+      "Supports Wi-Fi 6 (802.11ax)",
+      "Supports immersive Dolby Atmos audio pass-through",
+      "Priced at $54.99 (under $60 ceiling)"
+    ],
+    "generated_response": "Yes, the Amazon Fire TV Stick 4K Max supports both Dolby Atmos audio and next-generation Wi-Fi 6 for smoother 4K streaming. It is priced at $54.99, which fits right under your $60 budget."
+  }
+]
