@@ -159,6 +159,14 @@ The implementation was systematically audited against the acceptance criteria de
 | **AC-R3.1-04** | Subtree selectivity trigger ($|\mathcal{V}_P| \le 500$) activates filter-first order | **PASS**: Filter-first executes with $100\%$ candidate yield on selective categories ($N=237$) in $232\text{ ms}$. Categories $> 500$ bypass cleanly. |
 | **AC-R3.1-05** | Regression testing across all pre-existing suites | **PASS**: **$65 / 65$ unit tests passed** in $12.70\text{ s}$ with zero regressions. |
 
+### 4.2 End-to-End Live Evaluation (`eval_2026-10-22_2254`)
+
+The combined impact of Release R3.1's attribute rarity weighting, graded taxonomic distance, and adaptive filter-first routing was evaluated in the full multi-agent conversational recommender system against live Neo4j:
+
+* **Evaluation Run**: [`eval_2026-10-22_2254`](file:///Users/mikolajpaszkowski/recommendation-system/evaluations_archive/eval_2026-10-22_2254/README.md) (Archived, `citable: True`, commit `4fb77f7`).
+* **Zero Constraint Violations**: Candidate ranking achieved strict zero constraint violation across all top-5 recommendations ($CS@5\text{ viol} = 0.000$) while maintaining $100\%$ candidate yield on selective subtrees.
+* **Hub Bias Elimination**: Degree-based IDF weighting prevented generic attribute hubs (`Color=Black`) from blocking specific technical attributes, allowing 4-channel RRF (`wrrf4`) to achieve $MRR = 0.3301$ and $HR@20 = 0.5714$.
+
 ---
 
 ## 5. Master's Thesis Conclusions & Academic Significance

@@ -94,7 +94,17 @@ The system includes a suite of adversarial test queries in `tests/test_graph_sea
 * **Flagship NaN Liquidation**: Strict budget boundaries against null-value benchmark products (e.g., AirPods Pro).
 * **Negative Keyword Contamination**: Queries requiring third-party accessories but explicitly excluding the parent brand ("no Apple").
 
-### 4.3 Experimental Replication Protocol
+### 4.3 Empirical Baseline Run & Results (`eval_2026-10-09_1336`)
+
+The additive scoring architecture was evaluated on the live Neo4j catalog across $N = 21$ benchmark queries. The run is preserved in `evaluations_archive/eval_2026-10-09_1336/` (and `evaluations/eval_2026-10-09_1336/`):
+
+| Evaluation Run | Git Commit | Strategy | HR@1 | HR@5 | HR@20 | MRR | NDCG@10 | Key Empirical Finding |
+|---|---|---|---|---|---|---|---|---|
+| **`eval_2026-10-09_1336`** | `2fdf251` | `hybrid` ($S_{vec}$ additive) | $0.0794$ | $0.1270$ | $0.2063$ | $0.0986$ | $0.0732$ | Additive scoring eliminated the 0-result Boolean recall cliff, but unnormalized vector score summation caused generic attribute hub bias. |
+
+*Note*: This additive formulation serves as the `sum_legacy` control arm in later multi-channel fusion ablations (see [`10-doc-fusion-ablation.md`](./10-doc-fusion-ablation.md) and [`11-doc-evaluation-protocol.md`](./11-doc-evaluation-protocol.md)).
+
+### 4.4 Experimental Replication Protocol
 Instructions for an independent researcher to replicate the experiment:
 ```bash
 # Execute empirical vulnerability test suite

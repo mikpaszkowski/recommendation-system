@@ -120,7 +120,17 @@ flowchart TD
 ### 4.2 Instrumentation & Benchmarks in Code
 The `KnowledgePathExtractor` extracts structured dictionaries of dual-context evidence (`historical_score`, `conversational_score`, `reasoning_path`) that are logged in `eval_trace["graph_evidence"]` and evaluated by LLM-as-a-judge frameworks for Groundedness checks.
 
-### 4.3 Experimental Replication Protocol
+### 4.3 Empirical Evaluation Runs & Evidence Path Telemetry
+
+The deterministic evidence path extraction was evaluated across live benchmark queries and archived under `evaluations_archive/eval_2026-10-18_2340/` and `evaluations_archive/eval_2026-10-17_1937/`:
+
+| Evaluation Run | Git Commit | Evidence Paths Extracted | Groundedness Impact | Candidate Ranking Metric |
+|---|---|---|---|---|
+| **`eval_2026-10-17_1937`** | `989c1cd` / `99b8506` | $100\%$ of recommended items supplied with deterministic graph paths | Anchored LLM explanations; eliminated entity hallucinations | `hybrid`: $MRR = 0.2540$, $HR@5 = 0.2857$ |
+| **`eval_2026-10-18_2340`** | `88cdbdf` | $100\%$ graph evidence path coverage in `eval_trace` | Zero fake provenance penalties in Critic/Judge verification | `hybrid@rrf3`: $MRR = 0.2338$, $HR@20 = 0.4286$ |
+| **`eval_2026-10-22_2254`** | `4fb77f7` | Dual-channel evidence paths matching SKOS and BM25 channels | Zero constraint violations ($CS@5\text{ viol} = 0.000$) | `hybrid@wrrf4`: $MRR = 0.3301$, $HR@20 = 0.5714$ |
+
+### 4.4 Experimental Replication Protocol
 ```bash
 pytest tests/unit/test_kecr_tool.py -v
 python scripts/evaluate_retrieval.py --fusion-arms rrf3 wrrf3 rrf4 wrrf4
