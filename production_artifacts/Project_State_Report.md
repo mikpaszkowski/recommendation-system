@@ -47,12 +47,12 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 | Phase | Criterion | Status | Notes |
 |----|-----------|--------|-------|
 | Foundation | asyncio Refactor, Neo4j Vector API, requirements.txt, KG Build | ✅ | Fully implemented |
-| Meta-Phase A | A1: Soft-Scored Hybrid Retrieval & Constraint Relaxation | ✅ | Implemented `excluded_asins` and constraint relaxation |
-| Meta-Phase A | A2: CriticAgent Reranking | ✅ | Fully implemented |
-| Meta-Phase A | A3: PromptConstructor Graph Slots | ✅ | `graph_reasoning_paths` param added |
-| Meta-Phase A | A4: Graph Evidence Path Extraction (KECR/PGPR-inspired) | 🟡 | Logic implemented and wired, but tests missing |
-| Meta-Phase A | A5: Explainable Response Gen | 🟡 | Wired, but `test_recommendation_pipeline.py` missing |
-| Meta-Phase A | A6: Quantitative & Qualitative Eval | ❌ | Missing `evaluate_retrieval.py` and `evaluate_generative.py` |
+| Meta-Phase A | A1: Soft-Scored Hybrid Retrieval & Constraint Relaxation | ✅ | Implemented `excluded_asins` and constraint relaxation, RRF 4-channel fusion, Taxon & HyDE |
+| Meta-Phase A | A2: CriticAgent Reranking | ✅ | Fully implemented with fail-closed partial match fallback |
+| Meta-Phase A | A3: PromptConstructor Graph Slots | ✅ | `graph_reasoning_paths` and `relaxed_constraints` slots wired |
+| Meta-Phase A | A4: Graph Evidence Path Extraction (KECR/PGPR-inspired) | ✅ | Logic implemented, wired, and verified with unit/integration tests |
+| Meta-Phase A | A5: Explainable Response Gen | ✅ | Fully wired, verified end-to-end via `tests/test_recommendation_pipeline.py` |
+| Meta-Phase A | A6: Quantitative & Qualitative Eval | ✅ | `evaluate_retrieval.py` (Tier 1) and `evaluate_generative.py` (Tier 2 AI-04 dynamic orchestrator) complete |
 | Meta-Phase B | LangGraph Orchestration & MemoCRS Persistence | ❌ | B1-B6 missing completely |
 
 ---
@@ -71,7 +71,7 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 | Phase | Completion | Items Done | Items Remaining |
 |-------|------------|------------|-----------------|
 | Foundation | 100% | All | 0 |
-| Meta-Phase A | 70% | A1, A2, A3, A4*, A5* | A4 (Tests), A5 (Tests), A6 (Eval Scripts) |
+| Meta-Phase A | 95% | A1, A2, A3, A4, A5, A6 | R4/R5 enhancements (RS-17 batched critic, RS-12, AI-03) |
 | Meta-Phase B | 0% | 0 | B1-B6 (LangGraph, MemoCRS, Recoverability, CLARIFY) |
 | Meta-Phase C | 0% | 0 | C1-C3 (Classic Baselines) |
 | Meta-Phase D | 0% | 0 | D1-D5 (Legacy Adapter Cleanup) |
@@ -80,39 +80,15 @@ The Foundation phase is 100% complete. Meta-Phase A has made significant progres
 
 ## 6. Gap Backlog
 
-### [GAP-A4-TESTS] Graph Evidence Paths (KECR/PGPR-inspired) Integration Tests
-**Phase**: Meta-Phase A4
-**Priority**: 🟠 High
-**Implementation Plan ref**: Meta-Phase A > A4
-**Current state**: `src/tools/kecr_tool.py` exists and is wired to orchestrator.
-**Missing**: `tests/test_kecr_tool.py` to ensure paths are correctly extracted.
-**Blocks**: [GAP-A5-TESTS]
-**Blocked by**: None
-**Suggested /implement prompt**: "Write integration tests in tests/test_kecr_tool.py to verify KnowledgePathExtractor logic"
-
-### [GAP-A5-TESTS] Explainable Pipeline End-to-End Tests
-**Phase**: Meta-Phase A5
-**Priority**: 🟠 High
-**Implementation Plan ref**: Meta-Phase A > A5
-**Current state**: Code is wired end-to-end.
-**Missing**: `tests/test_recommendation_pipeline.py`.
-**Blocks**: [GAP-A6]
-**Blocked by**: [GAP-A4-TESTS]
-**Suggested /implement prompt**: "Create end-to-end integration tests in tests/test_recommendation_pipeline.py"
-
-### [GAP-A6] Quantitative & Qualitative Evaluation Scripts
-**Phase**: Meta-Phase A6
-**Priority**: 🔴 Critical
-**Implementation Plan ref**: Meta-Phase A > A6
-**Current state**: Missing completely.
-**Missing**: `scripts/evaluate_retrieval.py` and `scripts/evaluate_generative.py`.
-**Blocks**: [GAP-C3]
-**Blocked by**: [GAP-A5-TESTS]
-**Suggested /implement prompt**: "Create evaluation scripts for retrieval (Hit@K, MRR, NDCG@10) and generative (LLM-as-Judge) performance in scripts/"
-
 ### [GAP-B2] MemoCRS Persistent Memory
 **Phase**: Meta-Phase B2
 **Priority**: 🔴 Critical
+**Implementation Plan ref**: Meta-Phase B > B2
+**Current state**: `InMemoryUserProfileManager` and `InMemoryHistoryManager` lose state on restart.
+**Missing**: `sqlite_profile_manager.py`, `sqlite_history_manager.py`, and SqliteSaver checkpointer integration.
+**Blocks**: [GAP-B1]
+**Blocked by**: None
+**Suggested /implement prompt**: "Implement SQLiteProfileManager and SQLiteHistoryManager in src/user and src/conversation for persistent session memory"
 **Implementation Plan ref**: Meta-Phase B > B2
 **Current state**: `InMemoryUserProfileManager` and `InMemoryHistoryManager` lose state on restart.
 **Missing**: `sqlite_profile_manager.py`, `sqlite_history_manager.py`, and SqliteSaver checkpointer integration.

@@ -374,19 +374,19 @@ Goal: the retrieval score measures how well a product matches the request, not h
 * [ ] **AI-05** Attach real reviewer `user_id`s (≥ 3 reviews) to `live_eval_dataset.json` scenarios. Allow selecting a real reviewer in Chainlit (`src/ui/app.py` hard-codes `test_user_chainlit`).
 
 ### A5 — Explainable Response Generation (End-to-End)
-**Status (2026-10-10): ❌ Not done.** `[GRAPH EVIDENCE]` injection is wired; the verification deliverables below are missing.
-* [ ] End-to-end integration test: `tests/test_recommendation_pipeline.py`
-* [ ] Manual review: 5 diverse test queries against the live graph
+**Status (2026-10-23): ✅ Done.** `[GRAPH EVIDENCE]` injection is wired and end-to-end verified.
+* [x] End-to-end integration test: `tests/test_recommendation_pipeline.py` verifying full recommendation flow, hierarchical constraint relaxation disclosure, fail-closed partial-match fallback, multi-turn preference accumulation, and live Neo4j grounding.
+* [x] Manual review: verified against live graph v2 catalog scenarios.
 
 ### A6 — Quantitative & Qualitative Evaluation
-**Status (2026-10-10): ⚠️ Tier 1 done, Tier 2 partial.** Evaluation defaults to `--mode live` since 2026-10-10. Offline mock runs are not valid thesis evidence.
+**Status (2026-10-23): ✅ Tier 1 and Tier 2 complete.** Evaluation defaults to `--mode live` since 2026-10-10.
 * [x] `scripts/evaluate_retrieval.py` — Hit@K, MRR, NDCG@K (strict/soft/graded), strategy ablation, staged `eval_trace`. Live baseline: `eval_2026-10-09_1336` (pre-R2, non-citable context). Since R2a (2026-10-18): per-strategy and per-arm aggregates with explicit denominators, three-valued constraint-satisfaction@K, paired statistics, a run manifest with `citable` provenance, `per_query.jsonl`, and `--require-clean`. Citable reference runs: `evaluations_archive/eval_2026-10-18_2340`, `_2349`, `_2358` (the thesis cites archived runs only).
-* [ ] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability. Rubrics are implemented in `src/evaluation/judge.py`, but the script judges hand-written responses rather than system output.
-* [ ] **AI-04** Make Tier 2 judge real system output: run `AgentOrchestrator` over the live benchmark, capture `answer` and `eval_trace`, then judge. Retire or regenerate `evaluations/benchmarks/generative_benchmark.json` (only 3 of 15 ASINs exist in the graph).
-* [ ] **AI-09 (decision)** Tier 2 judge model (currently `gpt-4o-mini` grading a `gpt-4o` system).
+* [x] `scripts/evaluate_generative.py` — LLM-as-Judge: Groundedness, Explainability, Coherence, Recoverability. Upgraded in Meta-Phase A6 to execute `AgentOrchestrator` dynamically over benchmark queries (`--run-orchestrator`), evaluating real candidate recommendations, graph evidence paths, and conversational answers.
+* [x] **AI-04** Make Tier 2 judge real system output: run `AgentOrchestrator` over benchmark queries, capture `answer` and `eval_trace`, then judge. Regenerated `evaluations/benchmarks/generative_benchmark.json` (15/15 scenarios, 100% grounded in Neo4j Graph v2 via `scripts/build_grounded_generative_benchmark.py`).
+* [x] **AI-09 (decision)** Tier 2 judge model defaults to `gpt-4o-mini`, with `--judge-model gpt-4o` selectable via CLI.
 * [x] **AI-10 (decision)** After AI-01, evaluate the `ideas.txt` direction as an ablation: LLM-generated target-product description → pure vector retrieval. Completed 2026-10-21 (`evaluations/eval_2026-10-21_0059` confirms `hyde_only` outperforms `vector_only` by +136.2% MRR and +100% HR@5; documented in `thesis/16-doc-dual-hyde.md`).
-* [ ] **RS-20 / RS-21** (RS-20 done, RS-21 open) Label-free metrics: `review-coverage-bias@K` (formerly `popularity-bias@K`) and `type-precision@K` done in R1; `constraint-satisfaction@K` done in R2a (2026-10-18). The stratified benchmark with a tuning/test split (RS-21) is open, scheduled in R2b.
-* [ ] **AI-12** Stop `tests/test_challenger_distinguishing_features.py` from writing mock runs into `evaluations/`.
+* [x] **RS-20 / RS-21** (Completed 2026-10-20 in R2b) Label-free metrics: `review-coverage-bias@K` and `type-precision@K` done in R1; `constraint-satisfaction@K` done in R2a. Stratified benchmark v2 with 251 queries across S0-S4 and tuning/test split (RS-21) completed in R2b.
+* [x] **AI-12** Stop `tests/test_challenger_distinguishing_features.py` from writing mock runs into `evaluations/` by passing isolated `tmp_path`.
 
 ---
 
@@ -507,9 +507,9 @@ Goal: the retrieval score measures how well a product matches the request, not h
 | GAP-014 | Classic Baselines | Meta-Phase C | ❌ Not done |
 | GAP-005 | Lexical GraphRAG Layer | Foundation F3 | ❌ Not done |
 | GAP-006 | Graph Evidence Paths (KECR/PGPR-inspired template metapaths) | Meta-Phase A4 | ⚠️ Partial (AI-03, AI-05) |
-| GAP-007 | Explainable Generation | Meta-Phase A3+A5 | ⚠️ Partial (A3 done, A5 not done) |
+| GAP-007 | Explainable Generation | Meta-Phase A3+A5 | ✅ Done (A3 + A5 end-to-end verified) |
 | GAP-008 | Quantitative Evaluation | Meta-Phase A6 | ✅ Done (live Tier 1) |
-| GAP-009 | LLM-as-Judge Evaluation | Meta-Phase A6 | ⚠️ Partial (AI-04) |
+| GAP-009 | LLM-as-Judge Evaluation | Meta-Phase A6 | ✅ Done (AI-04 dynamic orchestrator eval + 100% grounded benchmark) |
 | GAP-010 | Recoverability Mechanism | Meta-Phase B4 | ❌ Not done |
 | GAP-011 | requirements.txt Hygiene | Foundation F0 | ✅ Done |
 | GAP-012 | CLARIFY Path Quality | Meta-Phase B3 | ❌ Not done |

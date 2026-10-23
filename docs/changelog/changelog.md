@@ -1772,3 +1772,43 @@ W odpowiedzi na zalecenia audytu akademickiego (punkt E.5 „Uczciwe nazewnictwo
 * `thesis/4-doc-hybrid-scoring.md`, `thesis/7-doc-evaluation-framework.md`, `thesis/15-doc-taxonomic-lexical-fusion.md`, `thesis/README.md`: Dostosowanie terminologii relaksacji ograniczeń i usunięcie zmyślonych cytowań.
 * `src/tools/kecr_tool.py`: Aktualizacja docstringów modułu i klasy `KnowledgePathExtractor` oraz dodanie aliasu wstecznego `KECRTool`.
 * `src/llm_interface/prompt_constructor.py`, `src/agents/orchestrator.py`: Dostosowanie komentarzy i logów telemetrycznych.
+
+
+---
+
+## 📅 2026-10-23
+
+### Realizacja Fazy A5 i A6: Integracyjny Potok Rekomendacji E2E, Dynamiczna Ewaluacja Generatywna LLM-as-a-Judge oraz Uziemienie Benchmarku (AI-04, AI-12)
+
+Zrealizowano pozostałe kluczowe zadania badawczo-inżynieryjne w ramach **Meta-Phase A** (Fazy A5 oraz A6), zamykając lukę walidacyjną silnika rekomendacyjnego i przygotowując system do fazy konwersacyjnej (Meta-Phase B).
+
+#### 1. Faza A5: Pełny Test Integracyjny Potoku Rekomendacji Wyjaśnialnych (`tests/test_recommendation_pipeline.py`)
+* **Weryfikacja End-to-End**: Zaimplementowano kompleksowy pakiet testów integracyjnych badający pełną ścieżkę wykonania: parsowanie intencji $\to$ wieloindeksowy retrieval hybrydowy (RRF) $\to$ weryfikacja i reranking przez `CriticAgent` $\to$ ekstrakcja szablonowych metapaths (`KnowledgePathExtractor`) $\to$ wstrzyknięcie sekcji `[GRAPH EVIDENCE]` przez `PromptConstructor` $\to$ synteza końcowej odpowiedzi i generowanie kompletnego śladu telemetrycznego `eval_trace`.
+* **Przejrzystość Relaksacji Ograniczeń**: Przetestowano scenariusz niedoboru kandydatów ($< 3$), weryfikując, że poszerzone ograniczenia budżetowe/taksonomiczne trafiają do bloku `[RELAXED CONSTRAINTS]` w prompcie oraz do `eval_trace["relaxed_constraints"]`.
+* **Obsługa Odrzucenia przez Critica (GV2-05 Fail-Closed)**: Przetestowano zachowanie systemu w sytuacji, gdy CriticAgent odrzuca wszystkich kandydatów; potwierdzono wycofanie do dopasowań częściowych (`partial_match=True`) z zachowaniem transparentnego uzasadnienia i flagą `rejected_all`.
+* **Wieloturowa Akumulacja Preferencji**: Sprawdzono zachowanie pamięci sesyjnej przy negatywnych preferencjach (wykluczenie marki Razer) i upewniono się, że ograniczenia są poprawnie propagowane do zapytań wyszukiwania.
+* **Test na Żywej Bazie**: Wprowadzono test live (`test_recommendation_pipeline_live_neo4j_grounding`) pod flagą `RUN_LIVE_TESTS=1`, potwierdzający uziemienie w grafie Neo4j Graph v2.
+
+#### 2. Faza A6: Dynamiczna Ewaluacja Rzeczywistych Wyjść Orkiestratora (AI-04)
+* **Wsparcie dla Rzeczywistych Odpowiedzi Systemowych**: Rozbudowano skrypt ewaluacji Tier 2 (`scripts/evaluate_generative.py`) o parametr `--run-orchestrator`. Skrypt nie ogranicza się już do oceniania statycznych, predefiniowanych tekstów — uruchamia instancję `AgentOrchestrator` dla każdego zapytania z benchmarku, przechwytuje wygenerowaną odpowiedź, wydobyte ścieżki grafowe `graph_evidence`, kandydatów oraz `eval_trace`, po czym przekazuje je do 4-wymiarowego sędziego LLM-as-a-Judge (Groundedness, Explainability, Coherence, Recoverability).
+* **Automatyczna Detekcja**: W przypadku przekazania benchmarku bez gotowych odpowiedzi (np. `live_eval_dataset.json`), orkiestrator uruchamia się automatycznie.
+* **Elastyczność Modelu Sędziego (AI-09)**: Umożliwiono łatwy wybór modelu sędziowskiego (`--judge-model gpt-4o-mini` domyślnie, z opcją ewaluacji za pomocą `gpt-4o`).
+
+#### 3. Uziemienie Benchmarku Generatywnego w Neo4j Graph v2 (Rozwiązanie F-04)
+* **Eliminacja Fikcyjnych ASIN-ów**: W odpowiedzi na ustalenie audytu F-04 (gdzie tylko 3 z 15 produktów istniały w grafie), utworzono skrypt `scripts/build_grounded_generative_benchmark.py` oraz wygenerowano `evaluations/benchmarks/generative_benchmark_grounded.json` (i zaktualizowano `generative_benchmark.json`).
+* **100% Pokrycie Katalogowe**: Wszystkie 15 scenariuszy (reprezentujących 7 kluczowych typów: *xai_path_provenance*, *negative_feedback_recovery*, *tradeoff_disclosure_after_relaxation*, *multi_turn_coherence*, *grounded_recommendation*, pułapki proweniencyjne i atrybutowe) zostało uziemionych w rzeczywistych węzłach katalogowych Neo4j Graph v2 (Soundcore Q20, seenda Vertical Mouse, Perixx Split Keyboard, Acer Nitro 5, Apple M1, NexiGo 60FPS Webcam itd.).
+* **Kopia Zapasowa**: Oryginalny zbiór testowy zachowano jako `generative_benchmark_legacy_v1.json`.
+
+#### 4. Higiena Testów i Izolacja Środowiska (AI-12)
+* **Naprawa Zanieczyszczania Katalogu Ewaluacji**: Poprawiono test `tests/test_challenger_distinguishing_features.py::test_evaluate_retrieval_offline_pipeline`, wymuszając przekazywanie izolowanego katalogu tymczasowego (`tmp_path`) w parametrze `--output-dir`. Zapewniono, że testy jednostkowe i integracyjne nie generują fałszywych katalogów przebiegów w `evaluations/`.
+* **Nowy Zestaw Testów Generatywnych**: Utworzono `tests/test_evaluate_generative.py` weryfikujący generowanie kompletu artefaktów (manifest, podsumowanie, metryki CSV/JSON, wykresy radarowe 300 DPI) oraz 100% uziemienie benchmarku generatywnego w Neo4j.
+
+#### 5. Zaktualizowane Dokumenty i Pliki
+* `production_artifacts/Implementation_Plan.md`: Zamknięcie faz A5 i A6, aktualizacja tabeli GAP-007 i GAP-009 na stan wykonany.
+* `production_artifacts/Project_State_Report.md`: Aktualizacja statusu fazy Meta-Phase A do 95% i usunięcie z backlogu luk testowych A4, A5, A6.
+* `scripts/evaluate_generative.py`: Obsługa `--run-orchestrator` i asynchronicznego generowania wyjść.
+* `scripts/build_grounded_generative_benchmark.py`: Skrypt budujący uziemiony zbiór ewaluacyjny.
+* `evaluations/benchmarks/generative_benchmark.json`: Zaktualizowany zbiór 15 scenariuszy uziemionych w Graph v2.
+* `tests/test_recommendation_pipeline.py`: Nowy plik testów integracyjnych E2E.
+* `tests/test_evaluate_generative.py`: Nowy plik testów ewaluacji generatywnej.
+* `tests/test_challenger_distinguishing_features.py`: Izolacja katalogu wyjściowego (AI-12).
