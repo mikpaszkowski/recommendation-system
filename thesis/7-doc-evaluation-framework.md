@@ -221,7 +221,18 @@ The framework is instrumented with two benchmark datasets:
    - Multi-hop reasoning path explanations.
    - Adversarial hallucination injection scenarios.
 
-### 4.3 Experimental Replication Protocol
+### 4.3 Empirical Baseline & Verification Runs
+
+The two-tiered evaluation framework was validated across initial live baseline runs, generative judge evaluations, and subsequent multi-channel releases:
+
+| Evaluation Tier | Run ID | Git Commit | N Queries | Key Empirical Results | Thesis Status |
+|---|---|---|---|---|---|
+| **Tier 1 (IR Ranking)** | `eval_2026-10-07_0222` | `4ef1cd6` | 25 | $MRR = 0.0142$, $HR@5 = 0.0133$, $HR@20 = 0.0267$, $NDCG@10 = 0.0045$ | Initial framework calibration run (pre-fix baseline) |
+| **Tier 1 (Additive Scoring)** | `eval_2026-10-09_1336` | `2fdf251` | 21 | $MRR = 0.0986$, $HR@5 = 0.1270$, $HR@20 = 0.2063$, $NDCG@10 = 0.0732$ | Pre-R1 archived baseline in `evaluations_archive/` |
+| **Tier 2 (Generative Judge)** | `eval_2026-10-09_1333` | `2fdf251` | 10 | Groundedness: $4.80/5$, Explainability: $3.10/5$, Coherence: $4.60/5$, Composite: $4.16/5$ | Validated Inverted CoT LLM-as-a-judge scoring |
+| **Tier 1 (Unified 4-Ch RRF)** | `eval_2026-10-22_2254` | `4fb77f7` | 21 | $MRR = 0.3301$, $HR@5 = 0.4286$, $HR@20 = 0.5714$, $NDCG@10 = 0.3601$ | Citable live evidence in `evaluations_archive/` |
+
+### 4.4 Experimental Replication Protocol
 
 An independent researcher can replicate the entire evaluation suite in deterministic offline mode (zero API cost, no live Neo4j required):
 

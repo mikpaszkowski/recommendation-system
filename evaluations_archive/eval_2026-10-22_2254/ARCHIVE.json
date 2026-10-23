@@ -1,0 +1,18 @@
+{
+  "run_id": "eval_2026-10-22_2254",
+  "archived_at": "2026-10-23T01:25:57",
+  "archived_from_commit": "b44e11301d4a622f0bac3687944fa0658e2c7775",
+  "legacy": false,
+  "note": null,
+  "files": {
+    "manifest.json": "a34e38e1a2cb9b4cf10e050069e195722f76981eea9f83933fa9f272833d4ef4",
+    "summary.json": "eaf5161dbf82bf71941c1a96d23a50872b5150d4555c4fb9daed64a8adec2d44",
+    "retrieval_metrics.csv": "336f7b0ba34e33eb1cbf6f00b3a055247e7c47791e86e1a62944c384099782c2",
+    "per_query.jsonl": "b4f3fe8be819030fcfca0d2be2c2e9a0d07d184c44472bf457f4036de94021e1"
+  },
+  "execution_trace": {
+    "sha256": "5f83eb4a06f0b6d4a08b1819567e337b34382422c82454d55f2af673514f6c62",
+    "bytes": 52790098,
+    "lines": 557125
+  }
+}

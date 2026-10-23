@@ -124,6 +124,18 @@ $$\begin{array}{lcccccc}
 
 Across all title-blind strata $S_0$–$S_4$ ($n=84$), $HR@20$ increases from **`0.1548` to `0.2738`** ($+11.90\text{ pp}$, $+76.9\%$ relative gain over the aligned baseline, and nearly triple the pre-alignment baseline of $0.0952$).
 
+### 4.5 Live Multi-Agent Baseline Run (`eval_2026-10-21_0059`)
+
+To validate Stage 1 within the live end-to-end multi-agent conversational architecture (`AgentOrchestrator` + `GraphSearchTool` + `CriticAgent`), a 21-query evaluation run was executed and recorded under `evaluations/eval_2026-10-21_0059/` (commit `2e4b234`):
+
+| Evaluated Strategy / Arm | HitRate@1 | HitRate@5 | HitRate@20 | MRR | NDCG@10 | TypePrecision@5 |
+|---|---|---|---|---|---|---|
+| `hybrid@rrf3` (3-channel dense) | $0.0476$ | $0.1429$ | $0.2857$ | $0.1102$ | $0.1247$ | $0.6950$ |
+| `hybrid@wrrf4` (4-channel dense+lexical) | $0.0952$ | $0.1905$ | $0.2381$ | $0.1400$ | $0.1630$ | $0.7330$ |
+| `hybrid@wrrf4_no_hyde` | $0.0952$ | $0.1429$ | $0.2381$ | $0.1300$ | $0.1540$ | $0.7330$ |
+
+**Critical Empirical Finding**: While Stage 1 significantly improved lexical matching, telemetry tracking revealed an upstream bottleneck: **only $47.6\%$ ($10 / 21$) of target products achieved candidate admission**. Coarse or flawed product-type mapping allowed accessory categories (e.g. `Laptop Sleeves & Cases`) to absorb singular device queries, falsely dropping $52.4\%$ of valid candidates before ranking. This empirical discovery formed the direct empirical basis for Release R3.2 (W3C SKOS induction and anti-hijacking Taxon scoring).
+
 ---
 
 ## 5. Architectural Conclusions & Master's Thesis Significance

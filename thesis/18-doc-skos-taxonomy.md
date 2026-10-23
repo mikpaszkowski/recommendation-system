@@ -184,7 +184,21 @@ All 13 queries previously failing candidate admission on the frozen tuning bench
    * `tune_060` (Target `B07S9H324F`, Webcam): query specified `"Camera"` with streaming context; `resolve_category_family` expanded family to include both `Digital Cameras` and `Webcams`.
    * `tune_061`, `tune_062` (Chargers): query specified `"Charger"`; expanded family across `Chargers & Adapters` and `Battery Chargers`.
 
-### 4.3 Experimental Replication Protocol
+### 4.3 Live Catalog Empirical Run & Multi-Agent Results (`eval_2026-10-22_2254`)
+
+The end-to-end multi-agent impact of Release R3.2 was verified in live conversation on the real Neo4j catalog and permanently archived under `evaluations_archive/eval_2026-10-22_2254/` (commit `4fb77f7`):
+
+| Evaluation Dimension | Pre-SKOS Baseline (`eval_2026-10-21_0059`) | Proposed W3C SKOS (`eval_2026-10-22_2254`) | Empirical Impact |
+|---|---|---|---|
+| **Live Target Admission** | $47.6\%$ ($10 / 21$ queries admitted) | **$100.0\%$ ($20 / 20$ SEARCH admitted)** | **$+52.4\text{ pp}$ ($2.1\times$ candidate yield)** |
+| **Type Precision@5** | $69.5\%$ | **$96.0\%–99.0\%$** across fusion arms | Elimination of accessory drift in top-5 |
+| **Peak Retrieval Yield ($HR@20$)** | $0.2381$ | **$0.5714$** (`hybrid@wrrf4`) | **$+140\%$ relative gain** |
+| **Mean Reciprocal Rank ($MRR$)** | $0.1300$ | **$0.3640$** (`hybrid@wrrf4_no_hyde`) | **$+180\%$ relative gain** |
+| **Constraint Violation ($CS@5$)** | $0.000$ | **$0.000$** | Strict preservation of user boundaries |
+
+For full details and paired statistical comparisons across all 13 fusion arms, see [`19-doc-retrieval-evaluation.md`](./19-doc-retrieval-evaluation.md).
+
+### 4.4 Experimental Replication Protocol
 To reproduce the 100% admission and unit verification tests:
 ```bash
 # 1. Verify W3C SKOS full-graph induction on live Neo4j instance

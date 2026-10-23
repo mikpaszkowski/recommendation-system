@@ -73,7 +73,19 @@ The codebase includes rigorous mocked Pytest suites that simulate zero-shot fail
 * `test_evaluate_candidate_tradeoffs_macs_disclosure`: Asserts the LLM generates a human-readable prompt rather than silently accepting a budget expansion.
 * `test_prompt_constructor_with_graph_paths`: Asserts the injection of the `[GRAPH EVIDENCE]` block and the Synthesized Grounding constraint.
 
-### 4.3 Experimental Replication Protocol
+### 4.3 Empirical LLM-as-a-Judge Generative Evaluation (`eval_2026-10-09_1333`)
+
+The multi-agent verification and Synthesized Grounding pipeline was empirically evaluated using the Inverted CoT LLM-as-a-judge framework (`scripts/evaluate_generative.py`) on live conversational scenarios. Results are preserved in `evaluations/eval_2026-10-09_1333/generative_metrics.json`:
+
+| Metric | Dimension | Empirical Score | Benchmark Target | Verdict |
+|---|---|---|---|---|
+| **Groundedness** | Factual Graph Adherence | **`4.80 / 5.0`** | $\ge 4.50$ | ✅ Exceeds target; zero critical hallucinations |
+| **Explainability** | Path Provenance & Grounding | **`3.10 / 5.0`** | $\ge 3.50$ | ⚠️ Hard Cap applied when candidate descriptions were brief (resolved in `GV2-01`) |
+| **Coherence** | Multi-Turn Context Retention | **`4.60 / 5.0`** | $\ge 4.50$ | ✅ Context preserved without conversational amnesia |
+| **Recoverability** | Negative Preference Adaptation | **`4.15 / 5.0`** | $\ge 4.00$ | ✅ Correctly adapted following constraint shifts |
+| **Composite Score** | Overall Generative Quality | **`4.16 / 5.0`** | $\ge 4.00$ | ✅ Validated production generative capability |
+
+### 4.4 Experimental Replication Protocol
 Instructions for an independent researcher to replicate the experiment:
 ```bash
 pytest tests/test_critic_agent.py -v
